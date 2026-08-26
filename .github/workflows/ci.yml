@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ipam:
+    name: ipam schema + semantic validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r ipam/requirements.txt
+      - run: python ipam/validate.py
+
+  generation-drift:
+    name: regenerate and fail if anything changed
+    needs: ipam
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r ipam/requirements.txt
+      - run: python ipam/generate.py
+      - name: fail if generated output drifted from what's committed
+        run: |
+          git diff --exit-code -- ansible/inventory/ || {
+            echo "::error::Generated output doesn't match ipam.yaml. Someone hand-edited a generated file, or forgot to run ipam/generate.py and commit the result." >&2
+            exit 1
+          }
+
+  # TODO: tofu fmt/validate job, once tofu/ is actually committed.
+
+  yamllint:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install yamllint
+      - run: yamllint -s .
+
+  ansible-lint:
+    name: ansible-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install ansible-core ansible-lint
+      - working-directory: ansible
+        run: ansible-lint

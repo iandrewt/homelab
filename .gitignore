@@ -42,3 +42,15 @@ terraform.rc
 # Optional: ignore plan files saved before destroying Terraform configuration
 # Uncomment the line below if you want to ignore planout files.
 # planout
+
+# age / SOPS private key material — escrow in 1Password, never in Git (.sops.yaml).
+age-*-key.txt
+*.age
+
+# Python venvs for the ipam/ generator (ipam/requirements.txt)
+.venv/
+__pycache__/
+*.pyc
+
+# Editors / OS noise
+.DS_Store

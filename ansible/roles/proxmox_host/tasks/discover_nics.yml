@@ -1,0 +1,27 @@
+---
+- name: Find interfaces using the uplink driver
+  ansible.builtin.set_fact:
+    proxmox_host_discovered_nics: >-
+      {{ ansible_facts.interfaces
+         | map('extract', ansible_facts)
+         | selectattr('module', 'defined')
+         | selectattr('module', 'equalto', proxmox_host_uplink_driver)
+         | map(attribute='device')
+         | sort }}
+  when: proxmox_host_uplink_nics | length == 0
+
+- name: Assert the expected number of uplink NICs were found
+  ansible.builtin.assert:
+    that: proxmox_host_discovered_nics | length == (proxmox_host_use_bonding | ternary(2, 1))
+    fail_msg: >-
+      Expected {{ proxmox_host_use_bonding | ternary(2, 1) }} interface(s) on the
+      {{ proxmox_host_uplink_driver }} driver ({{ 'bonding on' if proxmox_host_use_bonding
+      else 'bonding off' }}), found {{ proxmox_host_discovered_nics }}. Set
+      proxmox_host_uplink_nics explicitly in host_vars instead of relying on discovery
+      for this host.
+  when: proxmox_host_uplink_nics | length == 0
+
+- name: Use the discovered NICs
+  ansible.builtin.set_fact:
+    proxmox_host_uplink_nics: "{{ proxmox_host_discovered_nics }}"
+  when: proxmox_host_uplink_nics | length == 0

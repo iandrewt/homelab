@@ -1,0 +1,19 @@
+---
+proxmox_host_use_bonding: true
+
+proxmox_host_uplink_nics: []
+proxmox_host_uplink_driver: ixgbe
+proxmox_host_bond_mode: 802.3ad
+proxmox_host_bond_hash_policy: layer3+4
+
+proxmox_host_mgmt_gateway_ipv4: "{{ static_ipv4.split('.')[0:3] | join('.') }}.1"
+
+# Toggle once the UniFi DHCP-reservation automation exists and is trusted -- until then,
+# static is the option that's actually known to work.
+proxmox_host_mgmt_use_dhcp: false
+
+proxmox_host_timezone: Australia/Sydney
+
+proxmox_host_tofu_user: "tofu@pve"
+proxmox_host_tofu_role: PVEAdmin
+proxmox_host_tofu_token_name: provisioning

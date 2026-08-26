@@ -1,0 +1,6 @@
+---
+- name: Configure Proxmox hosts
+  hosts: hypervisor
+  become: true
+  roles:
+    - proxmox_host

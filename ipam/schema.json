@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/iandrewt/homelab/ipam/schema.json",
+  "title": "homelab IPAM",
+  "description": "Single source of truth. Never hand-edit generated output -- edit this and regenerate.",
+  "type": "object",
+  "required": ["ipv4_supernet", "ipv6_ula_supernet", "domains", "vlans", "sites"],
+  "additionalProperties": false,
+  "properties": {
+    "ipv4_supernet": {
+      "description": "Each site gets a /16 from here; a VLAN's third octet is its ID.",
+      "type": "string"
+    },
+    "ipv6_ula_supernet": {
+      "description": "Each site gets a /48 from here; a VLAN's 4th segment is its literal ID.",
+      "type": "string"
+    },
+    "domains": {
+      "type": "object",
+      "required": ["public", "internal"],
+      "properties": {
+        "public": { "type": "string" },
+        "internal": { "type": "string" },
+        "household": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "vlans": {
+      "description": "The VLAN catalog. Same catalog everywhere; a site enables a subset of it.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["id", "ula", "gua"],
+        "properties": {
+          "id": { "type": "integer", "minimum": 1, "maximum": 255 },
+          "ula": { "type": "boolean" },
+          "gua": { "type": "boolean" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "sites": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["index", "status", "vlans"],
+        "properties": {
+          "index": {
+            "description": "Site N gets the Nth /16 and /48.",
+            "type": "integer",
+            "minimum": 0
+          },
+          "status": { "enum": ["active", "planned"] },
+          "vlans": {
+            "description": "Names from the vlans catalog that this site actually has.",
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "gua_prefix": {
+            "description": "This site's own delegated public IPv6 prefix, if it has one. Can change.",
+            "type": ["string", "null"]
+          },
+          "description": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "hosts": {
+      "description": "Physical hosts and singleton guests (pets).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["site", "kind", "role", "status"],
+        "properties": {
+          "site": { "type": "string" },
+          "vlan": { "type": ["string", "null"] },
+          "kind": { "enum": ["physical", "vm", "lxc"] },
+          "role": { "type": "string" },
+          "status": { "enum": ["active", "planned"] },
+          "ipv4": { "type": ["string", "null"] },
+          "ipv6": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

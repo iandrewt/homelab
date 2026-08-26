@@ -1,0 +1,21 @@
+---
+- name: Discover NICs
+  ansible.builtin.import_tasks: discover_nics.yml
+
+- name: Assert uplink NICs are configured
+  ansible.builtin.assert:
+    that: proxmox_host_uplink_nics | length == (proxmox_host_use_bonding | ternary(2, 1))
+    fail_msg: >-
+      proxmox_host_uplink_nics doesn't match proxmox_host_use_bonding and discovery
+      didn't run or found nothing -- set the real NIC name(s) for this host in
+      host_vars. Refusing to guess.
+
+- name: Write /etc/network/interfaces
+  ansible.builtin.template:
+    src: interfaces.j2
+    dest: /etc/network/interfaces
+    owner: root
+    group: root
+    mode: "0644"
+    validate: ifup -s -a -i %s
+  notify: apply networking
