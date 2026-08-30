@@ -14,6 +14,6 @@ frr_bgp_anycast_v4: "{{ dns_anycast_v4 }}"
 frr_bgp_anycast_v6_ula: "{{ dns_anycast_v6_ula }}"
 frr_bgp_anycast_v6_gua: "{{ dns_anycast_v6_gua }}"
 
-debian_host_upgrade_hour: 3 # staggered against ratatoskr -- see ratatoskr.yml
+debian_host_upgrade_hour: 3  # staggered against ratatoskr - see ratatoskr.yml
 
 powerdns_resolver_api_key: "{{ lookup('community.general.onepassword', 'hugin PowerDNS API key', vault=onepassword_vault, field='credential') }}"

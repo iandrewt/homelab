@@ -38,7 +38,10 @@
     cmd: >-
       zpool create -o ashift={{ proxmox_host_data_pool_ashift }}
       {{ proxmox_host_data_pool_name }}
-      {% for vdev in proxmox_host_data_pool_vdevs %}{{ '' if vdev.type | default('stripe') == 'stripe' else vdev.type }} {{ vdev.disks | join(' ') }}{{ ' ' if not loop.last else '' }}{% endfor %}
+      {% for vdev in proxmox_host_data_pool_vdevs %}
+      {{ '' if vdev.type | default('stripe') == 'stripe' else vdev.type }} {{ vdev.disks | join(' ') }}
+      {% endfor %}
+  changed_when: true
   when:
     - proxmox_host_data_pool_enabled
     - proxmox_host_data_pool_check.rc != 0

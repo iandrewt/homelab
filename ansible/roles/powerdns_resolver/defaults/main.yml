@@ -1,5 +1,5 @@
 ---
-powerdns_resolver_role: ~ # "primary" or "secondary"
+powerdns_resolver_role: ~  # "primary" or "secondary"
 
 powerdns_resolver_zone: alfheim.titmuss.zone
 

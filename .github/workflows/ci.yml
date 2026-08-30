@@ -10,10 +10,10 @@ jobs:
     name: ipam schema + semantic validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - run: pip install -r ipam/requirements.txt
       - run: python ipam/validate.py
 
@@ -22,10 +22,10 @@ jobs:
     needs: ipam
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - run: pip install -r ipam/requirements.txt
       - run: python ipam/generate.py
       - name: fail if generated output drifted from what's committed
@@ -41,7 +41,7 @@ jobs:
     name: yamllint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: pip install yamllint
       - run: yamllint -s .
 
@@ -49,7 +49,7 @@ jobs:
     name: ansible-lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: pip install ansible-core ansible-lint
       - working-directory: ansible
         run: ansible-lint

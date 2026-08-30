@@ -18,14 +18,14 @@
   ansible.builtin.import_tasks: packages.yml
   tags: [packages]
 
-- name: Authoritative server
+- name: Configure authoritative server
   ansible.builtin.import_tasks: auth.yml
   tags: [auth]
 
-- name: Recursor
+- name: Configure recursor
   ansible.builtin.import_tasks: recursor.yml
   tags: [recursor]
 
-- name: dnsdist
+- name: Configure dnsdist
   ansible.builtin.import_tasks: dnsdist.yml
   tags: [dnsdist]

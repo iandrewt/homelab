@@ -7,7 +7,7 @@
     group: root
     mode: "0640"
     validate: dnsdist --check-config -C %s
-  notify: restart dnsdist
+  notify: Restart dnsdist
 
 - name: Ensure dnsdist is running
   ansible.builtin.systemd:

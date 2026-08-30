@@ -6,4 +6,4 @@
     owner: root
     group: root
     mode: "0600"
-  notify: apply netplan
+  notify: Apply netplan

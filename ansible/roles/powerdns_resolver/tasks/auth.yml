@@ -6,7 +6,7 @@
     owner: root
     group: root
     mode: "0640"
-  notify: restart pdns
+  notify: Restart pdns
 
 - name: Check whether the zone already exists
   ansible.builtin.command: pdnsutil list-zone {{ powerdns_resolver_zone }}

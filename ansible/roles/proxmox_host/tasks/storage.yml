@@ -16,4 +16,5 @@
     cmd: >-
       pvesm set local --content
       {{ (proxmox_host_local_storage_content.stdout.split(',') + ['import']) | unique | sort | join(',') }}
+  changed_when: true
   when: "'import' not in proxmox_host_local_storage_content.stdout.split(',')"

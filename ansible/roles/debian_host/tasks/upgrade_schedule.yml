@@ -4,7 +4,7 @@
     path: /etc/systemd/system/apt-daily-upgrade.timer.d/schedule.conf
     state: absent
   when: debian_host_upgrade_hour is none
-  notify: reload and restart apt-daily-upgrade timer
+  notify: Reload and restart apt-daily-upgrade timer
 
 - name: Override apt-daily-upgrade.timer's schedule
   ansible.builtin.copy:
@@ -19,4 +19,4 @@
       OnCalendar=
       OnCalendar=*-*-* {{ '%02d' | format(debian_host_upgrade_hour) }}:00
   when: debian_host_upgrade_hour is not none
-  notify: reload and restart apt-daily-upgrade timer
+  notify: Reload and restart apt-daily-upgrade timer

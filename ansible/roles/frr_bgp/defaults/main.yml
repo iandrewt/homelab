@@ -2,7 +2,7 @@
 # No sensible defaults for any of these
 frr_bgp_local_asn: ~
 frr_bgp_peer_asn: ~
-frr_bgp_peer_address: ~ # the UDM Pro's address on this VLAN
+frr_bgp_peer_address: ~  # the UDM Pro's address on this VLAN
 
 frr_bgp_anycast_v4: ~
 frr_bgp_anycast_v6_ula: ~

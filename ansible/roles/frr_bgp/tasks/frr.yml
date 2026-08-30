@@ -9,7 +9,7 @@
     path: /etc/frr/daemons
     regexp: '^bgpd='
     line: bgpd=yes
-  notify: restart frr
+  notify: Restart frr
 
 - name: Write frr.conf
   ansible.builtin.template:
@@ -19,7 +19,7 @@
     group: frr
     mode: "0640"
     validate: vtysh -C -f %s
-  notify: restart frr
+  notify: Restart frr
 
 - name: Ensure frr is running
   ansible.builtin.systemd:

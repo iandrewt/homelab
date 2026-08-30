@@ -10,4 +10,4 @@
       PasswordAuthentication {{ debian_host_ssh_password_auth | ternary('yes', 'no') }}
       KbdInteractiveAuthentication no
     validate: sshd -t -f %s
-  notify: restart sshd
+  notify: Restart sshd

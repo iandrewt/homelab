@@ -6,7 +6,7 @@
     owner: root
     group: root
     mode: "0640"
-  notify: restart pdns-recursor
+  notify: Restart pdns-recursor
 
 - name: Remove any legacy recursor.conf so it can't shadow the YAML file
   ansible.builtin.file:

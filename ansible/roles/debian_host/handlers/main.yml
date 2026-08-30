@@ -1,10 +1,10 @@
 ---
-- name: restart sshd
+- name: Restart sshd
   ansible.builtin.systemd:
     name: ssh
     state: restarted
 
-- name: reload and restart apt-daily-upgrade timer
+- name: Reload and restart apt-daily-upgrade timer
   ansible.builtin.systemd:
     name: apt-daily-upgrade.timer
     daemon_reload: true

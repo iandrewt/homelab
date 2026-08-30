@@ -14,4 +14,4 @@ frr_bgp_anycast_v4: "{{ dns_anycast_v4 }}"
 frr_bgp_anycast_v6_ula: "{{ dns_anycast_v6_ula }}"
 frr_bgp_anycast_v6_gua: "{{ dns_anycast_v6_gua }}"
 
-debian_host_upgrade_hour: 9 # staggered against hugin -- see hugin.yml
+debian_host_upgrade_hour: 9  # staggered against hugin - see hugin.yml

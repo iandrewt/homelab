@@ -1,15 +1,15 @@
 ---
-- name: restart pdns
+- name: Restart pdns
   ansible.builtin.systemd:
     name: pdns
     state: restarted
 
-- name: restart pdns-recursor
+- name: Restart pdns-recursor
   ansible.builtin.systemd:
     name: pdns-recursor
     state: restarted
 
-- name: restart dnsdist
+- name: Restart dnsdist
   ansible.builtin.systemd:
     name: dnsdist
     state: restarted
