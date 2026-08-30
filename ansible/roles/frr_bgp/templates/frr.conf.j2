@@ -1,0 +1,34 @@
+! Managed by Ansible (frr_bgp role) - edit host_vars / this role, not this file.
+frr version 10.3
+frr defaults datacenter
+hostname {{ inventory_hostname }}
+!
+ip prefix-list ANYCAST-OUT seq 5 permit {{ frr_bgp_anycast_v4 }}/32
+!
+route-map TO-UPSTREAM permit 10
+ match ip address prefix-list ANYCAST-OUT
+!
+ipv6 prefix-list ANYCAST-OUT-V6 seq 5 permit {{ frr_bgp_anycast_v6_ula }}/128
+ipv6 prefix-list ANYCAST-OUT-V6 seq 10 permit {{ frr_bgp_anycast_v6_gua }}/128
+!
+route-map TO-UPSTREAM-V6 permit 10
+ match ipv6 address prefix-list ANYCAST-OUT-V6
+!
+router bgp {{ frr_bgp_local_asn }}
+ bgp router-id {{ static_ipv4 }}
+ neighbor {{ frr_bgp_peer_address }} remote-as {{ frr_bgp_peer_asn }}
+ !
+ address-family ipv4 unicast
+  neighbor {{ frr_bgp_peer_address }} route-map TO-UPSTREAM out
+  network {{ frr_bgp_anycast_v4 }}/32
+ exit-address-family
+ !
+ address-family ipv6 unicast
+  neighbor {{ frr_bgp_peer_address }} activate
+  neighbor {{ frr_bgp_peer_address }} route-map TO-UPSTREAM-V6 out
+  network {{ frr_bgp_anycast_v6_ula }}/128
+  network {{ frr_bgp_anycast_v6_gua }}/128
+ exit-address-family
+!
+line vty
+!

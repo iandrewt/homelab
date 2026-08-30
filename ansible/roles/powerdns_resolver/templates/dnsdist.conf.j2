@@ -1,0 +1,13 @@
+-- Managed by Ansible (powerdns_resolver role) - edit host_vars / this role, not this file.
+{% if powerdns_resolver_anycast_v4 is defined %}
+addLocal("{{ powerdns_resolver_anycast_v4 }}:53", {reusePort=true})
+{% endif %}
+{% if powerdns_resolver_anycast_v6_ula is defined %}
+addLocal("[{{ powerdns_resolver_anycast_v6_ula }}]:53", {reusePort=true})
+{% endif %}
+{% if powerdns_resolver_anycast_v6_gua is defined %}
+addLocal("[{{ powerdns_resolver_anycast_v6_gua }}]:53", {reusePort=true})
+{% endif %}
+newServer({address="127.0.0.1:53", pool=""})
+
+-- TODO: DoH/DoT/DoQ

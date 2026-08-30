@@ -1,0 +1,28 @@
+---
+- name: Install FRR
+  ansible.builtin.apt:
+    name: frr
+    state: present
+
+- name: Enable bgpd
+  ansible.builtin.lineinfile:
+    path: /etc/frr/daemons
+    regexp: '^bgpd='
+    line: bgpd=yes
+  notify: restart frr
+
+- name: Write frr.conf
+  ansible.builtin.template:
+    src: frr.conf.j2
+    dest: /etc/frr/frr.conf
+    owner: frr
+    group: frr
+    mode: "0640"
+    validate: vtysh -C -f %s
+  notify: restart frr
+
+- name: Ensure frr is running
+  ansible.builtin.systemd:
+    name: frr
+    state: started
+    enabled: true

@@ -1,0 +1,19 @@
+# Managed by Ansible (powerdns_resolver role) - edit host_vars / this role, not this
+dnssec:
+  validation: "{{ powerdns_resolver_dnssec_validation }}"
+incoming:
+  listen:
+    - 127.0.0.1
+    - ::1
+{% if powerdns_resolver_allow_from %}
+  allow_from:
+{% for subnet in powerdns_resolver_allow_from %}
+    - {{ subnet }}
+{% endfor %}
+{% endif %}
+recursor:
+  forward_zones:
+    - zone: {{ powerdns_resolver_zone }}
+      forwarders:
+        - {{ static_ipv4 }}:53
+      recurse: false

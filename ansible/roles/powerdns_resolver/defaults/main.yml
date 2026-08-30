@@ -1,0 +1,18 @@
+---
+powerdns_resolver_role: ~ # "primary" or "secondary"
+
+powerdns_resolver_zone: alfheim.titmuss.zone
+
+powerdns_resolver_peer_address: ~
+
+powerdns_resolver_lmdb_shards: 1
+
+powerdns_resolver_api_key: ~
+
+powerdns_resolver_dnssec_validation: "off"
+
+powerdns_resolver_anycast_v4: ~
+powerdns_resolver_anycast_v6_ula: ~
+powerdns_resolver_anycast_v6_gua: ~
+
+powerdns_resolver_allow_from: []

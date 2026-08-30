@@ -1,0 +1,14 @@
+---
+- name: Anycast interface
+  ansible.builtin.import_tasks: anycast_interface.yml
+  tags: [anycast]
+
+# The anycast address has to exist before FRR starts, or its `network` statement finds
+# nothing to advertise until the next reload - flush now rather than wait for the
+# handler queue to drain at end of play.
+- name: Apply the anycast interface now, not at end of play
+  ansible.builtin.meta: flush_handlers
+
+- name: FRR
+  ansible.builtin.import_tasks: frr.yml
+  tags: [frr]

@@ -4,3 +4,11 @@
   become: true
   roles:
     - proxmox_host
+
+- name: Configure DNS resolvers
+  hosts: dns_resolver
+  become: true
+  roles:
+    - debian_host
+    - frr_bgp
+    - powerdns_resolver

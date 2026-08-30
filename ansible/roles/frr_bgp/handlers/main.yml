@@ -1,0 +1,9 @@
+---
+- name: restart frr
+  ansible.builtin.systemd:
+    name: frr
+    state: restarted
+
+- name: apply netplan
+  ansible.builtin.command: netplan apply
+  changed_when: true

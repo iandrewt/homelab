@@ -1,0 +1,9 @@
+---
+- name: Write the anycast netplan config
+  ansible.builtin.template:
+    src: anycast.yaml.j2
+    dest: /etc/netplan/90-anycast.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  notify: apply netplan

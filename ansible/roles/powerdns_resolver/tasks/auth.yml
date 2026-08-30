@@ -1,0 +1,67 @@
+---
+- name: Write pdns.conf
+  ansible.builtin.template:
+    src: pdns.conf.j2
+    dest: /etc/powerdns/pdns.conf
+    owner: root
+    group: root
+    mode: "0640"
+  notify: restart pdns
+
+- name: Check whether the zone already exists
+  ansible.builtin.command: pdnsutil list-zone {{ powerdns_resolver_zone }}
+  register: powerdns_resolver_zone_check
+  changed_when: false
+  failed_when: false
+
+# Zone bootstrap runs via pdnsutil before the daemon's first start - a live daemon's
+# zone cache doesn't reliably pick up pdnsutil changes. Record content is
+# ipam/generate.py's job, applied separately.
+
+- name: Create zone (primary)
+  ansible.builtin.command:
+    cmd: pdnsutil create-zone {{ powerdns_resolver_zone }}
+  when:
+    - powerdns_resolver_role == 'primary'
+    - powerdns_resolver_zone_check.rc != 0
+  changed_when: true
+
+- name: Set zone kind to primary
+  ansible.builtin.command:
+    cmd: pdnsutil set-kind {{ powerdns_resolver_zone }} primary
+  when: powerdns_resolver_role == 'primary'
+  changed_when: false
+
+# No NS record at the apex -> in-zone queries come back REFUSED.
+- name: Ensure an NS record exists at the zone apex (primary)
+  ansible.builtin.command:
+    cmd: >-
+      pdnsutil add-record {{ powerdns_resolver_zone }} @ NS
+      {{ inventory_hostname }}.{{ powerdns_resolver_zone }}.
+  when:
+    - powerdns_resolver_role == 'primary'
+    - powerdns_resolver_zone_check.rc != 0
+  changed_when: true
+
+# Without this, API writes (external-dns) don't bump the SOA serial.
+- name: Set SOA-EDIT-API so API writes bump the serial (primary)
+  ansible.builtin.command:
+    cmd: pdnsutil set-meta {{ powerdns_resolver_zone }} SOA-EDIT-API DEFAULT
+  when: powerdns_resolver_role == 'primary'
+  changed_when: false
+
+- name: Create secondary zone
+  ansible.builtin.command:
+    cmd: >-
+      pdnsutil create-secondary-zone {{ powerdns_resolver_zone }}
+      {{ powerdns_resolver_peer_address }}:53
+  when:
+    - powerdns_resolver_role == 'secondary'
+    - powerdns_resolver_zone_check.rc != 0
+  changed_when: true
+
+- name: Ensure pdns is running
+  ansible.builtin.systemd:
+    name: pdns
+    state: started
+    enabled: true
