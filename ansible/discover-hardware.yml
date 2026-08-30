@@ -1,0 +1,66 @@
+---
+# Read-only. Reports what's physically present so a human can write host_vars with
+# confidence (proxmox_host_uplink_nics, proxmox_host_data_pool_vdevs) instead of
+# guessing, or running lsblk/ls/ethtool by hand across several SSH sessions.
+# Run it once after first boot, or again any time before growing a data pool or changing NICs.
+- name: Report hardware facts for host_vars
+  hosts: debian
+  become: true
+  tasks:
+    - name: Disks
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          boot_disk=$(lsblk -no PKNAME "$(findmnt -no SOURCE /)" 2>/dev/null || true)
+          for dev in $(lsblk -dno NAME,TYPE | awk '$2 == "disk" {print $1}'); do
+            size=$(lsblk -dno SIZE "/dev/$dev")
+            model=$(lsblk -dno MODEL "/dev/$dev" | sed 's/ *$//')
+            rota=$(lsblk -dno ROTA "/dev/$dev")
+            partitions=$(lsblk -no NAME "/dev/$dev" | tail -n +2 | wc -l)
+            signature=$(blkid -o value -s TYPE "/dev/$dev" 2>/dev/null || true)
+            by_id=$(for link in /dev/disk/by-id/*; do
+              if [ "$(readlink -f "$link")" = "/dev/$dev" ]; then echo "$link"; fi
+            done | paste -sd, -)
+
+            echo "$dev  (${size:-?}, ${model:-unknown model}, $([ "$rota" = "1" ] && echo HDD || echo SSD))"
+            if [ "$dev" = "$boot_disk" ]; then
+              echo "  BOOT DISK -- do not use for a data pool"
+            fi
+            if [ "$partitions" -gt 0 ]; then
+              echo "  has $partitions partition(s) -- not empty"
+            elif [ -n "$signature" ]; then
+              echo "  has a $signature signature -- not empty"
+            else
+              echo "  no partitions, no filesystem/pool signature -- looks unused"
+            fi
+            echo "  by-id: ${by_id:-(none found)}"
+            echo
+          done
+        executable: /bin/bash
+      register: discover_hardware_disks
+      changed_when: false
+
+    - name: NICs
+      ansible.builtin.shell:
+        cmd: |
+          set -euo pipefail
+          for dev in $(ls /sys/class/net | grep -v ^lo$); do
+            driver=$(basename "$(readlink -f "/sys/class/net/$dev/device/driver" 2>/dev/null)" 2>/dev/null || echo unknown)
+            mac=$(cat "/sys/class/net/$dev/address" 2>/dev/null || echo unknown)
+            state=$(cat "/sys/class/net/$dev/operstate" 2>/dev/null || echo unknown)
+            speed=$(cat "/sys/class/net/$dev/speed" 2>/dev/null || echo '?')
+            echo "$dev  driver=$driver  mac=$mac  link=$state  speed=${speed}Mb/s"
+          done
+        executable: /bin/bash
+      register: discover_hardware_nics
+      changed_when: false
+
+    - name: Report
+      ansible.builtin.debug:
+        msg: |
+          === {{ inventory_hostname }} ===
+
+          -- Disks --
+          {{ discover_hardware_disks.stdout }}
+          -- NICs --
+          {{ discover_hardware_nics.stdout }}

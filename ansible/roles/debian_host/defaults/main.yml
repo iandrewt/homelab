@@ -1,0 +1,10 @@
+---
+debian_host_timezone: Australia/Sydney
+
+debian_host_ssh_permit_root_login: prohibit-password # key-only, never a password
+debian_host_ssh_password_auth: false
+
+# Hour (0-23) apt-daily-upgrade.timer should fire. Unset: Debian's stock 06:00 stands.
+# Set per-host in host_vars for anything that shouldn't share an upgrade window with
+# its own redundancy pair.
+debian_host_upgrade_hour: ~

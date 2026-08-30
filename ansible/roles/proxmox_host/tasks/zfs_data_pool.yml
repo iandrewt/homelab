@@ -1,0 +1,44 @@
+---
+- name: Check whether the data pool already exists
+  ansible.builtin.command:
+    cmd: zpool list {{ proxmox_host_data_pool_name }}
+  register: proxmox_host_data_pool_check
+  changed_when: false
+  failed_when: false
+  when: proxmox_host_data_pool_enabled
+
+- name: Assert the pool structure is configured for this host
+  ansible.builtin.assert:
+    that: proxmox_host_data_pool_vdevs | length > 0
+    fail_msg: >-
+      proxmox_host_data_pool_enabled is true but proxmox_host_data_pool_vdevs is empty -
+      set the real /dev/disk/by-id paths for this host in host_vars. Refusing to guess.
+  when:
+    - proxmox_host_data_pool_enabled
+    - proxmox_host_data_pool_check.rc != 0
+
+- name: Assert every disk is a stable /dev/disk/by-id path
+  ansible.builtin.assert:
+    that: >-
+      proxmox_host_data_pool_vdevs
+      | map(attribute='disks')
+      | flatten
+      | reject('match', '^/dev/disk/by-id/')
+      | length == 0
+    fail_msg: >-
+      Every disk in proxmox_host_data_pool_vdevs must be a /dev/disk/by-id/* path, not
+      /dev/sdX - device letters aren't stable across reboots/rescans, and a wrong disk
+      here means a wrong disk in the pool.
+  when:
+    - proxmox_host_data_pool_enabled
+    - proxmox_host_data_pool_check.rc != 0
+
+- name: Create the data pool
+  ansible.builtin.command:
+    cmd: >-
+      zpool create -o ashift={{ proxmox_host_data_pool_ashift }}
+      {{ proxmox_host_data_pool_name }}
+      {% for vdev in proxmox_host_data_pool_vdevs %}{{ '' if vdev.type | default('stripe') == 'stripe' else vdev.type }} {{ vdev.disks | join(' ') }}{{ ' ' if not loop.last else '' }}{% endfor %}
+  when:
+    - proxmox_host_data_pool_enabled
+    - proxmox_host_data_pool_check.rc != 0

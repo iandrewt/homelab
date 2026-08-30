@@ -1,0 +1,12 @@
+---
+- name: Hygiene
+  ansible.builtin.import_tasks: hygiene.yml
+  tags: [hygiene]
+
+- name: Upgrade schedule
+  ansible.builtin.import_tasks: upgrade_schedule.yml
+  tags: [hygiene]
+
+- name: SSH hardening
+  ansible.builtin.import_tasks: ssh.yml
+  tags: [ssh]

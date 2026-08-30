@@ -1,0 +1,13 @@
+---
+- name: Harden sshd (key-only, no root password login)
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/10-debian-host-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      PermitRootLogin {{ debian_host_ssh_permit_root_login }}
+      PasswordAuthentication {{ debian_host_ssh_password_auth | ternary('yes', 'no') }}
+      KbdInteractiveAuthentication no
+    validate: sshd -t -f %s
+  notify: restart sshd

@@ -2,12 +2,15 @@
 - name: Repos
   ansible.builtin.import_tasks: repos.yml
   tags: [repos]
-- name: Hygiene
-  ansible.builtin.import_tasks: hygiene.yml
-  tags: [hygiene]
 - name: OpenTofu API user
   ansible.builtin.import_tasks: api_user.yml
   tags: [api_user]
+- name: Storage
+  ansible.builtin.import_tasks: storage.yml
+  tags: [storage]
+- name: ZFS data pool
+  ansible.builtin.import_tasks: zfs_data_pool.yml
+  tags: [zfs_data_pool]
 # Last, deliberately: everything above is safe to lose SSH partway through and resume.
 # This one can cut your own access if it's wrong.
 - name: Network

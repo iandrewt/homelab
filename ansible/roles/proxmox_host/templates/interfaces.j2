@@ -1,4 +1,4 @@
-# Managed by Ansible (proxmox_host role) -- edit ipam.yaml / this role, not this file.
+# Managed by Ansible (proxmox_host role) - edit ipam.yaml / this role, not this file.
 {% set bridge_uplink = 'bond0' if proxmox_host_use_bonding else proxmox_host_uplink_nics[0] %}
 
 auto lo

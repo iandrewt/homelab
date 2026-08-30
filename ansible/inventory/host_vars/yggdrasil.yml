@@ -1,0 +1,14 @@
+---
+ansible_user: debian
+
+# TODO: real NIC names, once racked -- run ansible/discover-hardware.yml against this
+# host and pick the two on the 10G driver (ixgbe on the hardware this is planned for).
+proxmox_host_uplink_nics: []
+
+# 4x1TB SSDs, striped mirror pairs, separate from the boot disk.
+# TODO: real /dev/disk/by-id paths, once the disks are physically installed -- run
+# ansible/discover-hardware.yml against this host and pick the four unused SSDs.
+# See docs/bootstrap/proxmox-storage.md.
+proxmox_host_data_pool_enabled: true
+proxmox_host_data_pool_name: data
+proxmox_host_data_pool_vdevs: []

@@ -1,0 +1,22 @@
+---
+- name: Remove any upgrade-schedule override
+  ansible.builtin.file:
+    path: /etc/systemd/system/apt-daily-upgrade.timer.d/schedule.conf
+    state: absent
+  when: debian_host_upgrade_hour is none
+  notify: reload and restart apt-daily-upgrade timer
+
+- name: Override apt-daily-upgrade.timer's schedule
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/schedule.conf
+    owner: root
+    group: root
+    mode: "0644"
+    # OnCalendar= accumulates across drop-ins rather than replacing -- the empty
+    # assignment clears the base unit's 06:00 before setting this host's own.
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar=*-*-* {{ '%02d' | format(debian_host_upgrade_hour) }}:00
+  when: debian_host_upgrade_hour is not none
+  notify: reload and restart apt-daily-upgrade timer

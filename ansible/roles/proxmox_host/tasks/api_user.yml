@@ -3,14 +3,14 @@
   ansible.builtin.command: pveum user list --output-format json
   register: proxmox_host_pveum_users
   changed_when: false
-  check_mode: false  # read-only; needed so --check has real data for the `when` below
+  check_mode: false
 
 - name: "Create the OpenTofu service account: {{ proxmox_host_tofu_user }}"
   ansible.builtin.command: pveum user add {{ proxmox_host_tofu_user }}
   changed_when: true
   when: proxmox_host_tofu_user not in (proxmox_host_pveum_users.stdout | from_json | map(attribute='userid'))
 
-- name: "Grant a role on / (safe to re-assert -- Proxmox ACLs are idempotent): {{ proxmox_host_tofu_role }}"
+- name: "Grant a role on /"
   ansible.builtin.command: pveum aclmod / -user {{ proxmox_host_tofu_user }} -role {{ proxmox_host_tofu_role }}
   changed_when: false
 
@@ -18,7 +18,7 @@
   ansible.builtin.command: pveum user token list {{ proxmox_host_tofu_user }} --output-format json
   register: proxmox_host_pveum_tokens
   changed_when: false
-  check_mode: false  # read-only; needed so --check has real data for the `when` below
+  check_mode: false
 
 - name: "Create the API token: {{ proxmox_host_tofu_token_name }}"
   ansible.builtin.command: >-
@@ -29,10 +29,8 @@
   no_log: true
   when: proxmox_host_tofu_token_name not in (proxmox_host_pveum_tokens.stdout | from_json | map(attribute='tokenid'))
 
-# The secret is shown exactly once, at creation, and Proxmox never returns it again --
+# The secret is shown exactly once, at creation, and Proxmox never returns it again -
 # it has to be captured here or the token is useless and has to be recreated.
-# Deliberately a task, not a handler: this needs to run inline, immediately after the
-# token is created, not batched at end-of-play.
 - name: Show the new token secret (save it into 1Password now)  # noqa: no-handler
   ansible.builtin.debug:
     msg: "{{ (proxmox_host_pveum_new_token.stdout | from_json).value }}"

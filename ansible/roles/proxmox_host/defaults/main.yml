@@ -2,17 +2,23 @@
 proxmox_host_use_bonding: true
 
 proxmox_host_uplink_nics: []
-proxmox_host_uplink_driver: ixgbe
 proxmox_host_bond_mode: 802.3ad
 proxmox_host_bond_hash_policy: layer3+4
 
-proxmox_host_mgmt_gateway_ipv4: "{{ static_ipv4.split('.')[0:3] | join('.') }}.1"
+proxmox_host_mgmt_use_dhcp: true
 
-# Toggle once the UniFi DHCP-reservation automation exists and is trusted -- until then,
-# static is the option that's actually known to work.
-proxmox_host_mgmt_use_dhcp: false
+proxmox_host_data_pool_enabled: false
+proxmox_host_data_pool_name: data
+proxmox_host_data_pool_ashift: 12
 
-proxmox_host_timezone: Australia/Sydney
+# Required (non-empty) whenever the pool is enabled. e.g. striped mirror pairs:
+#   - type: mirror
+#     disks: [/dev/disk/by-id/..., /dev/disk/by-id/...]
+#   - type: mirror
+#     disks: [/dev/disk/by-id/..., /dev/disk/by-id/...]
+# Always /dev/disk/by-id paths, never /dev/sdX - device letters aren't stable across
+# reboots/rescans, and a wrong disk here claims its entire contents.
+proxmox_host_data_pool_vdevs: []
 
 proxmox_host_tofu_user: "tofu@pve"
 proxmox_host_tofu_role: PVEAdmin
