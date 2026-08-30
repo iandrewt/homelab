@@ -8,7 +8,14 @@ from pathlib import Path
 import yaml
 from jsonschema import Draft202012Validator
 
-from addressing import site_ipv4_supernet, site_ipv6_supernet, vlan_ipv4_cidr, vlan_ipv6_ula_cidr
+from addressing import (
+    site_bgp_ipv4_pool,
+    site_bgp_ipv6_pool,
+    site_ipv4_supernet,
+    site_ipv6_supernet,
+    vlan_ipv4_cidr,
+    vlan_ipv6_ula_cidr,
+)
 
 ROOT = Path(__file__).parent
 
@@ -54,6 +61,22 @@ def check_semantics(data) -> list[str]:
                     vlan_ipv4_cidr(site_v4, vlans[vlan_name]["id"])
                     if vlans[vlan_name]["ula"]:
                         vlan_ipv6_ula_cidr(site_v6, vlans[vlan_name]["id"])
+            dns_anycast = site.get("dns_anycast") or {}
+            if dns_anycast.get("ipv4"):
+                bgp_v4 = site_bgp_ipv4_pool(site_v4)
+                if ipaddress.ip_address(dns_anycast["ipv4"]) not in bgp_v4:
+                    errors.append(f"sites.{name}.dns_anycast.ipv4: {dns_anycast['ipv4']} isn't inside {bgp_v4}")
+            if dns_anycast.get("ipv6_ula"):
+                bgp_v6 = site_bgp_ipv6_pool(site_v6)
+                if ipaddress.ip_address(dns_anycast["ipv6_ula"]) not in bgp_v6:
+                    errors.append(f"sites.{name}.dns_anycast.ipv6_ula: {dns_anycast['ipv6_ula']} isn't inside {bgp_v6}")
+            if dns_anycast.get("ipv6_gua"):
+                if not site.get("gua_prefix"):
+                    errors.append(f"sites.{name}.dns_anycast.ipv6_gua: set but the site has no gua_prefix")
+                else:
+                    bgp_gua = site_bgp_ipv6_pool(ipaddress.ip_network(site["gua_prefix"]))
+                    if ipaddress.ip_address(dns_anycast["ipv6_gua"]) not in bgp_gua:
+                        errors.append(f"sites.{name}.dns_anycast.ipv6_gua: {dns_anycast['ipv6_gua']} isn't inside {bgp_gua}")
         except ValueError as exc:
             errors.append(f"sites.{name}: {exc}")
 

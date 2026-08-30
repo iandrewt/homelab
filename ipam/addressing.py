@@ -8,14 +8,19 @@ Per site, per family:
   - IPv6 ULA: site N gets the Nth /48 out of ipv6_ula_supernet. A VLAN's /64 is that /48
     with the VLAN ID spliced in as the 4th hextet's literal text (VLAN 40 ->
     ...:40::/64)
-  - IPv6 GUA: UniFi assigns each VLAN's /64 itself, sequentially by creation order --
+  - IPv6 GUA: UniFi assigns each VLAN's /64 itself, sequentially by creation order -
     not derivable, not handled here.
+  - The BGP-reserved pool (both families) is the *last* subnet of that size within the
+    site's own supernet - last /20 of the /16 for IPv4, last /56 of the /48 for IPv6.
 """
 import ipaddress
 
 # Last /20 of each site's IPv4 /16 -> VLAN IDs must stay in 0-239.
 BGP_IPV4_PREFIXLEN = 20
 BGP_IPV4_RESERVED_FROM = 256 - 2 ** (24 - BGP_IPV4_PREFIXLEN)  # 240
+
+# Last /56 of each site's IPv6 ULA /48.
+BGP_IPV6_PREFIXLEN = 56
 
 
 def site_ipv4_supernet(ipv4_supernet: str, index: int) -> ipaddress.IPv4Network:
@@ -26,6 +31,18 @@ def site_ipv4_supernet(ipv4_supernet: str, index: int) -> ipaddress.IPv4Network:
 def site_ipv6_supernet(ipv6_ula_supernet: str, index: int) -> ipaddress.IPv6Network:
     base = ipaddress.ip_network(ipv6_ula_supernet)
     return next(n for i, n in enumerate(base.subnets(new_prefix=48)) if i == index)
+
+
+def site_bgp_ipv4_pool(site_ipv4_16: ipaddress.IPv4Network) -> ipaddress.IPv4Network:
+    if site_ipv4_16.prefixlen != 16:
+        raise ValueError(f"expected a /16, got {site_ipv4_16}")
+    return list(site_ipv4_16.subnets(new_prefix=BGP_IPV4_PREFIXLEN))[-1]
+
+
+def site_bgp_ipv6_pool(site_ipv6_48: ipaddress.IPv6Network) -> ipaddress.IPv6Network:
+    if site_ipv6_48.prefixlen != 48:
+        raise ValueError(f"expected a /48, got {site_ipv6_48}")
+    return list(site_ipv6_48.subnets(new_prefix=BGP_IPV6_PREFIXLEN))[-1]
 
 
 def vlan_ipv4_cidr(site_ipv4_16: ipaddress.IPv4Network, vlan_id: int) -> ipaddress.IPv4Network:

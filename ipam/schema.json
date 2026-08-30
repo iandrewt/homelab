@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/iandrewt/homelab/ipam/schema.json",
   "title": "homelab IPAM",
-  "description": "Single source of truth. Never hand-edit generated output -- edit this and regenerate.",
+  "description": "Single source of truth. Never hand-edit generated output - edit this and regenerate.",
   "type": "object",
   "required": ["ipv4_supernet", "ipv6_ula_supernet", "domains", "vlans", "sites"],
   "additionalProperties": false,
@@ -60,6 +60,16 @@
             "description": "This site's own delegated public IPv6 prefix, if it has one. Can change.",
             "type": ["string", "null"]
           },
+          "dns_anycast": {
+            "description": "BGP-advertised DNS resolver VIP(s). Must fall in this site's reserved BGP pool - addressing.py's site_bgp_ipv4_pool/site_bgp_ipv6_pool, the latter applied to the ULA supernet for ipv6_ula and to gua_prefix for ipv6_gua.",
+            "type": "object",
+            "properties": {
+              "ipv4": { "type": "string" },
+              "ipv6_ula": { "type": "string" },
+              "ipv6_gua": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
           "description": { "type": "string" }
         },
         "additionalProperties": false
@@ -76,6 +86,7 @@
           "vlan": { "type": ["string", "null"] },
           "kind": { "enum": ["physical", "vm", "lxc"] },
           "role": { "type": "string" },
+          "os": { "type": "string" },
           "status": { "enum": ["active", "planned"] },
           "ipv4": { "type": ["string", "null"] },
           "ipv6": { "type": ["string", "null"] }
