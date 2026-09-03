@@ -40,7 +40,7 @@
   no_log: true
   when: proxmox_host_tofu_token_name not in (proxmox_host_pveum_tokens.stdout | from_json | map(attribute='tokenid'))
 
-- name: "Grant {{ proxmox_host_tofu_role }} on / to the user"
+- name: "Grant a role on / to the user: {{ proxmox_host_tofu_role }}"
   ansible.builtin.command: >-
     pveum aclmod / -user {{ proxmox_host_tofu_user }}
     -role {{ proxmox_host_tofu_role }}
@@ -58,7 +58,7 @@
     -role PVEDatastoreAdmin
   changed_when: false
 
-- name: "Grant {{ proxmox_host_tofu_role }} on / to the token"
+- name: "Grant a role on / to the token: {{ proxmox_host_tofu_role }}"
   ansible.builtin.command: >-
     pveum aclmod / -token {{ proxmox_host_tofu_user }}!{{ proxmox_host_tofu_token_name }}
     -role {{ proxmox_host_tofu_role }}
