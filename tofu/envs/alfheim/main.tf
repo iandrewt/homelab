@@ -16,7 +16,7 @@ resource "proxmox_download_file" "debian_13_genericcloud" {
   datastore_id = "local"
   node_name    = local.proxmox_node
   url          = "https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2"
-  file_name    = "debian-13-genericcloud-amd64.qcow2.img"
+  file_name    = "debian-13-genericcloud-amd64.qcow2"
 }
 
 module "hugin" {

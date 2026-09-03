@@ -1,3 +1,26 @@
+locals {
+  mac_address = format("bc:24:11:00:%02x:%02x", floor(var.vm_id / 256), var.vm_id % 256)
+}
+
+# need to set a vendor_data_file with a cloud-config snippet that installs and enables qemu-guest-agent.
+resource "proxmox_virtual_environment_file" "qemu_guest_agent" {
+  content_type = "snippets"
+  datastore_id = "local"
+  node_name    = var.node_name
+
+  source_raw {
+    file_name = "${var.hostname}-qemu-guest-agent.yaml"
+    data      = <<-EOF
+      #cloud-config
+      package_update: true
+      packages:
+        - qemu-guest-agent
+      runcmd:
+        - systemctl enable --now qemu-guest-agent
+    EOF
+  }
+}
+
 resource "proxmox_virtual_environment_vm" "this" {
   node_name   = var.node_name
   vm_id       = var.vm_id
@@ -37,7 +60,9 @@ resource "proxmox_virtual_environment_vm" "this" {
   }
 
   rng {
-    source = "/dev/urandom"
+    source    = "/dev/urandom"
+    max_bytes = 1024
+    period    = 1000
   }
 
   efi_disk {
@@ -59,8 +84,9 @@ resource "proxmox_virtual_environment_vm" "this" {
   }
 
   network_device {
-    bridge  = var.bridge
-    vlan_id = var.vlan_id
+    bridge      = var.bridge
+    vlan_id     = var.vlan_id
+    mac_address = local.mac_address
   }
 
   # Cloud images output to the serial console, not a VGA framebuffer.
@@ -95,6 +121,8 @@ resource "proxmox_virtual_environment_vm" "this" {
       username = var.ci_username
       keys     = var.ssh_public_keys
     }
+
+    vendor_data_file_id = proxmox_virtual_environment_file.qemu_guest_agent.id
   }
 
   lifecycle {
@@ -106,6 +134,11 @@ resource "proxmox_virtual_environment_vm" "this" {
     precondition {
       condition     = contains(["auto", "dhcp"], var.ipv6_cidr) || var.ipv6_gateway != null
       error_message = "ipv6_gateway is required unless ipv6_cidr is \"auto\" or \"dhcp\"."
+    }
+
+    precondition {
+      condition     = var.vm_id <= 65535
+      error_message = "vm_id must fit in two bytes - it's spliced directly into the locally-administered MAC address."
     }
   }
 }

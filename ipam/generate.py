@@ -58,6 +58,8 @@ def build_inventory(data: dict) -> dict:
             all_vars["dns_anycast_v6_ula"] = dns_anycast["ipv6_ula"]
         if dns_anycast.get("ipv6_gua"):
             all_vars["dns_anycast_v6_gua"] = dns_anycast["ipv6_gua"]
+        if site.get("gua_prefix"):
+            all_vars["site_gua_prefix"] = site["gua_prefix"]
 
     return {
         "all": {

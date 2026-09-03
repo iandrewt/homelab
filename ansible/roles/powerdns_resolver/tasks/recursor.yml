@@ -4,7 +4,7 @@
     src: recursor.yml.j2
     dest: /etc/powerdns/recursor.yml
     owner: root
-    group: root
+    group: pdns
     mode: "0640"
   notify: Restart pdns-recursor
 

@@ -11,6 +11,10 @@ incoming:
     - {{ subnet }}
 {% endfor %}
 {% endif %}
+outgoing:
+  source_address:
+    - 0.0.0.0
+    - "::"
 recursor:
   forward_zones:
     - zone: {{ powerdns_resolver_zone }}

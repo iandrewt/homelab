@@ -4,12 +4,16 @@
     src: pdns.conf.j2
     dest: /etc/powerdns/pdns.conf
     owner: root
-    group: root
+    group: pdns
     mode: "0640"
   notify: Restart pdns
 
+# become_user: pdns throughout this file - pdnsutil writes directly to the lmdb backend
+# files, and pdns_server itself runs as the unprivileged pdns user. Anything pdnsutil
+# creates as root, pdns_server then can't open.
 - name: Check whether the zone already exists
   ansible.builtin.command: pdnsutil list-zone {{ powerdns_resolver_zone }}
+  become_user: pdns
   register: powerdns_resolver_zone_check
   changed_when: false
   failed_when: false
@@ -21,6 +25,7 @@
 - name: Create zone (primary)
   ansible.builtin.command:
     cmd: pdnsutil create-zone {{ powerdns_resolver_zone }}
+  become_user: pdns
   when:
     - powerdns_resolver_role == 'primary'
     - powerdns_resolver_zone_check.rc != 0
@@ -29,6 +34,7 @@
 - name: Set zone kind to primary
   ansible.builtin.command:
     cmd: pdnsutil set-kind {{ powerdns_resolver_zone }} primary
+  become_user: pdns
   when: powerdns_resolver_role == 'primary'
   changed_when: false
 
@@ -38,6 +44,7 @@
     cmd: >-
       pdnsutil add-record {{ powerdns_resolver_zone }} @ NS
       {{ inventory_hostname }}.{{ powerdns_resolver_zone }}.
+  become_user: pdns
   when:
     - powerdns_resolver_role == 'primary'
     - powerdns_resolver_zone_check.rc != 0
@@ -47,6 +54,7 @@
 - name: Set SOA-EDIT-API so API writes bump the serial (primary)
   ansible.builtin.command:
     cmd: pdnsutil set-meta {{ powerdns_resolver_zone }} SOA-EDIT-API DEFAULT
+  become_user: pdns
   when: powerdns_resolver_role == 'primary'
   changed_when: false
 
@@ -55,6 +63,7 @@
     cmd: >-
       pdnsutil create-secondary-zone {{ powerdns_resolver_zone }}
       {{ powerdns_resolver_peer_address }}:53
+  become_user: pdns
   when:
     - powerdns_resolver_role == 'secondary'
     - powerdns_resolver_zone_check.rc != 0
