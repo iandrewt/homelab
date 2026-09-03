@@ -1,7 +1,5 @@
 ---
-- name: Repos
-  ansible.builtin.import_tasks: repos.yml
-  tags: [repos]
+# Repos deliberately run from site.yml's pre_tasks, not here - see the comment there.
 - name: OpenTofu API user
   ansible.builtin.import_tasks: api_user.yml
   tags: [api_user]
@@ -11,6 +9,9 @@
 - name: ZFS data pool
   ansible.builtin.import_tasks: zfs_data_pool.yml
   tags: [zfs_data_pool]
+- name: AppArmor dhclient fix
+  ansible.builtin.import_tasks: apparmor_dhclient.yml
+  tags: [apparmor]
 # Last, deliberately: everything above is safe to lose SSH partway through and resume.
 # This one can cut your own access if it's wrong.
 - name: Network

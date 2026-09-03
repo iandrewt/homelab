@@ -1,20 +1,35 @@
 # Managed by Ansible (proxmox_host role) - edit ipam.yaml / this role, not this file.
 {% set bridge_uplink = 'bond0' if proxmox_host_use_bonding else proxmox_host_uplink_nics[0] %}
+{% set mgmt_iface = proxmox_host_mgmt_interface if proxmox_host_mgmt_interface else 'vmbr0.' ~ vlan_id %}
 
 auto lo
 iface lo inet loopback
 
 {% for nic in proxmox_host_uplink_nics %}
+auto {{ nic }}
 iface {{ nic }} inet manual
+
 {% endfor %}
+auto {{ mgmt_iface }}
+{% if proxmox_host_mgmt_use_dhcp %}
+iface {{ mgmt_iface }} inet dhcp
+	up ip -6 addr add {{ static_ipv6 }}/64 dev {{ mgmt_iface }}
+	down ip -6 addr del {{ static_ipv6 }}/64 dev {{ mgmt_iface }}
+{% else %}
+iface {{ mgmt_iface }} inet static
+	address {{ static_ipv4 }}/24
+	gateway {{ proxmox_host_mgmt_gateway_ipv4 }}
+iface {{ mgmt_iface }} inet6 static
+	address {{ static_ipv6 }}/64
+{% endif %}
 
 {% if proxmox_host_use_bonding %}
 auto bond0
 iface bond0 inet manual
 	bond-slaves {{ proxmox_host_uplink_nics | join(' ') }}
+	bond-miimon 100
 	bond-mode {{ proxmox_host_bond_mode }}
 	bond-xmit-hash-policy {{ proxmox_host_bond_hash_policy }}
-	bond-miimon 100
 
 {% endif %}
 auto vmbr0
@@ -23,17 +38,5 @@ iface vmbr0 inet manual
 	bridge-stp off
 	bridge-vlan-aware yes
 	bridge-vids 2-4094
-
-auto vmbr0.{{ vlan_id }}
-{% if proxmox_host_mgmt_use_dhcp %}
-iface vmbr0.{{ vlan_id }} inet dhcp
-{% else %}
-iface vmbr0.{{ vlan_id }} inet static
-	address {{ static_ipv4 }}/24
-	gateway {{ proxmox_host_mgmt_gateway_ipv4 }}
-{% endif %}
-iface vmbr0.{{ vlan_id }} inet6 static
-	address {{ static_ipv6 }}/64
-	accept_ra 1
 
 source /etc/network/interfaces.d/*

@@ -6,3 +6,7 @@
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true
+
+- name: Reload dhclient AppArmor profile
+  ansible.builtin.command: apparmor_parser -r /etc/apparmor.d/usr.sbin.dhclient
+  changed_when: true

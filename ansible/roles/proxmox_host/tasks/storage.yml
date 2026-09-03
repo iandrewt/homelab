@@ -1,7 +1,4 @@
 ---
-# The "import" content type (needed by OpenTofu's proxmox_download_file + a VM disk's
-# import_from, tofu/envs/alfheim/main.tf) isn't enabled on "local" by default - has to
-# be added to the storage's existing content list, not just assumed present.
 - name: Read local storage's current content types
   ansible.builtin.shell:
     cmd: |
@@ -11,10 +8,12 @@
   changed_when: false
   register: proxmox_host_local_storage_content
 
-- name: Allow the "import" content type on "local" storage
+- name: Allow the "import" and "snippets" content types on "local" storage
   ansible.builtin.command:
     cmd: >-
       pvesm set local --content
-      {{ (proxmox_host_local_storage_content.stdout.split(',') + ['import']) | unique | sort | join(',') }}
+      {{ (proxmox_host_local_storage_content.stdout.split(',') + ['import', 'snippets']) | unique | sort | join(',') }}
   changed_when: true
-  when: "'import' not in proxmox_host_local_storage_content.stdout.split(',')"
+  when: >-
+    'import' not in proxmox_host_local_storage_content.stdout.split(',') or
+    'snippets' not in proxmox_host_local_storage_content.stdout.split(',')

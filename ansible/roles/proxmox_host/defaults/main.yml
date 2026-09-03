@@ -7,6 +7,12 @@ proxmox_host_bond_hash_policy: layer3+4
 
 proxmox_host_mgmt_use_dhcp: true
 
+# Empty (default): mgmt lives on a VLAN subinterface of the bond (vmbr0.<vlan_id>) -
+# the only option for a host with no NIC to spare for a dedicated mgmt link. Set to a
+# real NIC name to give mgmt its own physical, untagged interface instead, off the
+# bond/bridge entirely.
+proxmox_host_mgmt_interface: ""
+
 proxmox_host_data_pool_enabled: false
 proxmox_host_data_pool_name: data
 proxmox_host_data_pool_ashift: 12
