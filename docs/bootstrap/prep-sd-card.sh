@@ -1,30 +1,29 @@
 #!/usr/bin/env bash
-# Flashes the latest Debian raspi arm64 image to an SD card and drops a NoCloud
-# cloud-init seed on its boot (ESP) partition.
+# Flashes the latest Raspberry Pi OS Lite arm64 image to an SD card and drops a NoCloud
+# cloud-init seed on its boot partition.
 set -euo pipefail
 
-CODENAME="trixie"
 TIMEZONE="Australia/Sydney"
 DRY_RUN=false
-ESP_TYPE_GUID="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"
+IMAGES_BASE_URL="https://downloads.raspberrypi.com/raspios_lite_arm64/images"
 
 usage() {
   cat <<'EOF'
 Usage: prep-sd-card.sh --device /dev/sdX --hostname NAME
                         (--ssh-key PATH | --ssh-key-op "op://vault/item/public key")
-                        [--codename trixie] [--timezone TZ] [--dry-run]
+                        [--timezone TZ] [--dry-run]
 
   --device      Target block device, e.g. /dev/sdb. Check with lsblk first.
   --hostname    Hostname for the new host.
   --ssh-key     Path to a public key file to authorize on the image's own default
-                "debian" user
+                "pi" user.
   --ssh-key-op  1Password secret reference to read the public key from instead
                 (needs the op CLI signed in, or OP_SERVICE_ACCOUNT_TOKEN set).
-  --codename    Debian release codename. Defaults to trixie - always fetches
-                whatever cloud.debian.org/images/cloud/<codename>/latest/ currently
-                points at, not a pinned version.
   --timezone    Defaults to Australia/Sydney.
   --dry-run     Print what would happen, write nothing.
+
+Always fetches whatever downloads.raspberrypi.com/raspios_lite_arm64/images/ currently
+lists as the latest dated build, not a pinned version.
 EOF
 }
 
@@ -39,7 +38,6 @@ while [[ $# -gt 0 ]]; do
     --hostname) HOSTNAME="$2"; shift 2 ;;
     --ssh-key) SSH_KEY_PATH="$2"; shift 2 ;;
     --ssh-key-op) SSH_KEY_OP="$2"; shift 2 ;;
-    --codename) CODENAME="$2"; shift 2 ;;
     --timezone) TIMEZONE="$2"; shift 2 ;;
     --dry-run) DRY_RUN=true; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -84,52 +82,65 @@ else
   SSH_KEY_CONTENT=$(cat "${SSH_KEY_PATH}")
 fi
 
-BASE_URL="https://cloud.debian.org/images/cloud/${CODENAME}/latest"
-SUMS=$(curl -fsSL "${BASE_URL}/SHA512SUMS")
-TARBALL_LINE=$(grep 'raspi-arm64\.tar\.xz$' <<<"${SUMS}")
-if [[ -z "${TARBALL_LINE}" ]]; then
-  echo "No raspi-arm64.tar.xz entry found for codename '${CODENAME}' at ${BASE_URL}" >&2
+# Dated subdirectories, e.g. raspios_lite_arm64-2026-06-19/ - lexicographic sort is
+# chronological sort for ISO dates, so the last one is the latest.
+LATEST_DIR=$(curl -fsSL "${IMAGES_BASE_URL}/" | grep -oE 'raspios_lite_arm64-[0-9]{4}-[0-9]{2}-[0-9]{2}/' | sort -u | tail -1)
+if [[ -z "${LATEST_DIR}" ]]; then
+  echo "Couldn't find any raspios_lite_arm64-* directories at ${IMAGES_BASE_URL}/" >&2
   exit 1
 fi
-TARBALL_SHA=$(awk '{print $1}' <<<"${TARBALL_LINE}")
-TARBALL_NAME=$(awk '{print $2}' <<<"${TARBALL_LINE}")
-IMAGE_URL="${BASE_URL}/${TARBALL_NAME}"
+
+IMAGE_NAME=$(curl -fsSL "${IMAGES_BASE_URL}/${LATEST_DIR}" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}-raspios-[a-z]+-arm64-lite\.img\.xz' | sort -u | head -1)
+if [[ -z "${IMAGE_NAME}" ]]; then
+  echo "Couldn't find a .img.xz image in ${IMAGES_BASE_URL}/${LATEST_DIR}" >&2
+  exit 1
+fi
+IMAGE_URL="${IMAGES_BASE_URL}/${LATEST_DIR}${IMAGE_NAME}"
 
 if [[ "${DRY_RUN}" = true ]]; then
-  echo "--dry-run: would fetch ${IMAGE_URL}, verify sha512, flash to ${DEVICE}, seed hostname=${HOSTNAME}"
+  echo "--dry-run: would fetch ${IMAGE_URL}, verify sha256, flash to ${DEVICE}, seed hostname=${HOSTNAME}"
   exit 0
 fi
 
 WORKDIR=$(mktemp -d)
-trap 'rm -rf "${WORKDIR}"' EXIT
+cleanup() {
+  if [[ -n "${MOUNT_POINT:-}" ]] && mountpoint -q "${MOUNT_POINT}" 2>/dev/null; then
+    sudo umount "${MOUNT_POINT}" 2>/dev/null || true
+  fi
+  rm -rf "${WORKDIR}"
+}
+trap cleanup EXIT
 
 echo "Downloading ${IMAGE_URL}"
-curl -fL -o "${WORKDIR}/${TARBALL_NAME}" "${IMAGE_URL}"
+curl -fL -o "${WORKDIR}/${IMAGE_NAME}" "${IMAGE_URL}"
+curl -fsSL -o "${WORKDIR}/${IMAGE_NAME}.sha256" "${IMAGE_URL}.sha256"
 
 echo "Verifying checksum"
-(cd "${WORKDIR}" && echo "${TARBALL_SHA}  ${TARBALL_NAME}" | sha512sum -c -)
+(cd "${WORKDIR}" && sha256sum -c "${IMAGE_NAME}.sha256")
 
 echo "Extracting"
-tar xJf "${WORKDIR}/${TARBALL_NAME}" -C "${WORKDIR}" disk.raw
+xz -d "${WORKDIR}/${IMAGE_NAME}"
+IMAGE_RAW="${WORKDIR}/${IMAGE_NAME%.xz}"
 
 echo "Writing to ${DEVICE}"
-dd if="${WORKDIR}/disk.raw" of="${DEVICE}" bs=4M status=progress conv=fsync
-partprobe "${DEVICE}" 2>/dev/null || true
+sudo dd if="${IMAGE_RAW}" of="${DEVICE}" bs=4M status=progress conv=fsync
+sudo partprobe "${DEVICE}" 2>/dev/null || true
 udevadm settle
 
-# GPT partition number varies by image (this one puts the ESP at 15, hybrid-MBR'd for
-# Pi 3B's non-UEFI boot ROM) - find it by GPT partition type GUID instead of assuming
-# a number.
-BOOT_PART=$(lsblk -no PATH,PARTTYPE "${DEVICE}" | awk -v t="${ESP_TYPE_GUID}" 'tolower($2)==t {print $1}')
+# Classic MBR, boot is always the first partition.
+BOOT_PART=$(lsblk -no PATH "${DEVICE}" | sed -n '2p')
 if [[ -z "${BOOT_PART}" ]]; then
-  echo "Couldn't find the ESP partition by type GUID - check manually with lsblk." >&2
+  echo "Couldn't find the boot partition - check manually with lsblk." >&2
   exit 1
 fi
 
 MOUNT_POINT="${WORKDIR}/boot"
 mkdir -p "${MOUNT_POINT}"
-mount "${BOOT_PART}" "${MOUNT_POINT}"
-trap 'umount "${MOUNT_POINT}" 2>/dev/null || true; rm -rf "${WORKDIR}"' EXIT
+# uid=/gid= makes the mounted FAT filesystem owned by the invoking user, so the
+# meta-data/user-data writes below don't need sudo either.
+_UID=$(id -u)
+_GID=$(id -g)
+sudo mount -o "uid=${_UID},gid=${_GID}" "${BOOT_PART}" "${MOUNT_POINT}"
 
 cat > "${MOUNT_POINT}/meta-data" <<EOF
 instance-id: ${HOSTNAME}
@@ -139,14 +150,18 @@ EOF
 cat > "${MOUNT_POINT}/user-data" <<EOF
 #cloud-config
 hostname: ${HOSTNAME}
+enable_ssh: true
+users:
+  - default
 ssh_authorized_keys:
   - ${SSH_KEY_CONTENT}
 ssh_pwauth: false
 timezone: ${TIMEZONE}
+runcmd:
+  - usermod --shell /bin/bash pi
 EOF
 
 sync
-umount "${MOUNT_POINT}"
-trap 'rm -rf "${WORKDIR}"' EXIT
+sudo umount "${MOUNT_POINT}"
 
 echo "Done. Insert into the Pi and power on."

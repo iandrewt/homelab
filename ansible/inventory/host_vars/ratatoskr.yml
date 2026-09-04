@@ -1,5 +1,5 @@
 ---
-ansible_user: debian
+ansible_user: pi
 
 powerdns_resolver_role: secondary
 powerdns_resolver_peer_address: "{{ hostvars['hugin'].static_ipv4 }}"
