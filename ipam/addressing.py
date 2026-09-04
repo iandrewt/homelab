@@ -60,3 +60,15 @@ def vlan_ipv6_ula_cidr(site_ipv6_48: ipaddress.IPv6Network, vlan_id: int) -> ipa
         raise ValueError(f"VLAN ID {vlan_id} doesn't fit as a literal 4-digit hextet")
     prefix_hextets = ":".join(site_ipv6_48.network_address.exploded.split(":")[:3])
     return ipaddress.ip_network(f"{prefix_hextets}:{vlan_id}::/64")
+
+
+def reverse_zone(supernet: ipaddress.IPv4Network | ipaddress.IPv6Network) -> str:
+    if isinstance(supernet, ipaddress.IPv4Network):
+        if supernet.prefixlen % 8:
+            raise ValueError(f"{supernet} isn't octet-aligned")
+        octets = str(supernet.network_address).split(".")[: supernet.prefixlen // 8]
+        return ".".join(reversed(octets)) + ".in-addr.arpa"
+    if supernet.prefixlen % 4:
+        raise ValueError(f"{supernet} isn't nibble-aligned")
+    nibbles = supernet.network_address.exploded.replace(":", "")[: supernet.prefixlen // 4]
+    return ".".join(reversed(nibbles)) + ".ip6.arpa"

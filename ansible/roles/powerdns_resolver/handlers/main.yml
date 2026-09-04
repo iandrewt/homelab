@@ -13,3 +13,11 @@
   ansible.builtin.systemd:
     name: dnsdist
     state: restarted
+
+- name: Wipe recursor cache
+  ansible.builtin.command:
+    cmd: >-
+      rec_control wipe-cache
+      {{ ([powerdns_resolver_zone] + powerdns_resolver_reverse_zones) | map('regex_replace', '$', '$.') | join(' ') }}
+  become: true
+  changed_when: true

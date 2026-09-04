@@ -17,7 +17,9 @@ outgoing:
     - "::"
 recursor:
   forward_zones:
-    - zone: {{ powerdns_resolver_zone }}
+{% for zone in [powerdns_resolver_zone] + powerdns_resolver_reverse_zones %}
+    - zone: {{ zone }}
       forwarders:
         - {{ static_ipv4 }}:53
       recurse: false
+{% endfor %}

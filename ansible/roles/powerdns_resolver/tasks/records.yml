@@ -1,5 +1,5 @@
 ---
-- name: Apply DNS records from ipam.yaml (primary)
+- name: Apply forward DNS records from ipam.yaml (primary)
   ansible.builtin.uri:
     url: "http://{{ static_ipv4 }}:8081/api/v1/servers/localhost/zones/{{ powerdns_resolver_zone }}"
     method: PATCH
@@ -9,7 +9,40 @@
     body:
       rrsets: "{{ dns_records }}"
     status_code: 204
+  notify: Wipe recursor cache
   when:
     - powerdns_resolver_role == 'primary'
     - dns_records is defined
+  changed_when: true
+
+- name: Apply IPv4 PTR records from ipam.yaml (primary)
+  ansible.builtin.uri:
+    url: "http://{{ static_ipv4 }}:8081/api/v1/servers/localhost/zones/{{ ipv4_reverse_zone }}"
+    method: PATCH
+    headers:
+      X-API-Key: "{{ powerdns_resolver_api_key }}"
+    body_format: json
+    body:
+      rrsets: "{{ ptr_records_v4 }}"
+    status_code: 204
+  notify: Wipe recursor cache
+  when:
+    - powerdns_resolver_role == 'primary'
+    - ptr_records_v4 is defined
+  changed_when: true
+
+- name: Apply IPv6 PTR records from ipam.yaml (primary)
+  ansible.builtin.uri:
+    url: "http://{{ static_ipv4 }}:8081/api/v1/servers/localhost/zones/{{ ipv6_reverse_zone }}"
+    method: PATCH
+    headers:
+      X-API-Key: "{{ powerdns_resolver_api_key }}"
+    body_format: json
+    body:
+      rrsets: "{{ ptr_records_v6 }}"
+    status_code: 204
+  notify: Wipe recursor cache
+  when:
+    - powerdns_resolver_role == 'primary'
+    - ptr_records_v6 is defined
   changed_when: true
