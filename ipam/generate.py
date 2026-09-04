@@ -2,7 +2,7 @@
 """Derive artifacts from ipam.yaml. Never hand-edit anything this writes - edit
 ipam.yaml and rerun. CI fails the build if the working tree changes afterwards.
 
-TODO: DNS zone data, DHCP reservations once the VLAN catalog is populated.
+TODO: DHCP reservations once the VLAN catalog is populated.
 """
 from pathlib import Path
 
@@ -50,7 +50,8 @@ def build_inventory(data: dict) -> dict:
     # Only meaningful while every Ansible-managed host is at one site -- if that ever
     # changes, this needs to become per-site vars instead of one blanket "all" value.
     if len(sites_seen) == 1:
-        site = data["sites"][next(iter(sites_seen))]
+        site_name = next(iter(sites_seen))
+        site = data["sites"][site_name]
         dns_anycast = site.get("dns_anycast") or {}
         if dns_anycast.get("ipv4"):
             all_vars["dns_anycast_v4"] = dns_anycast["ipv4"]
@@ -60,6 +61,25 @@ def build_inventory(data: dict) -> dict:
             all_vars["dns_anycast_v6_gua"] = dns_anycast["ipv6_gua"]
         if site.get("gua_prefix"):
             all_vars["site_gua_prefix"] = site["gua_prefix"]
+
+        dns_records = []
+        for name, host in data.get("hosts", {}).items():
+            if host["site"] != site_name:
+                continue
+            record_name = fqdn(name, host["site"], internal_domain) + "."
+            for family, rtype in (("ipv4", "A"), ("ipv6", "AAAA")):
+                if host.get(family):
+                    dns_records.append(
+                        {
+                            "name": record_name,
+                            "type": rtype,
+                            "ttl": 3600,
+                            "changetype": "REPLACE",
+                            "records": [{"content": host[family], "disabled": False}],
+                        }
+                    )
+        if dns_records:
+            all_vars["dns_records"] = dns_records
 
     return {
         "all": {

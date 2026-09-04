@@ -22,6 +22,10 @@
   ansible.builtin.import_tasks: auth.yml
   tags: [auth]
 
+- name: Apply DNS records
+  ansible.builtin.import_tasks: records.yml
+  tags: [records]
+
 - name: Configure recursor
   ansible.builtin.import_tasks: recursor.yml
   tags: [recursor]
