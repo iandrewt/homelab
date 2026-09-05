@@ -1,7 +1,7 @@
 # Source of truth for the network. Validated against schema.json in CI.
 
 ipv4_supernet: 10.176.0.0/14
-ipv6_ula_supernet: "fd1b:134f:fb00::/40"
+ipv6_ula_supernet: "fd1b:134f:4b00::/40"
 
 domains:
   public: titmuss.au
@@ -29,7 +29,7 @@ sites:
     gua_prefix: "2001:db8:cca5::/48"
     dns_anycast:
       ipv4: 10.176.240.53
-      ipv6_ula: "fd1b:134f:fb00:ff00::53"
+      ipv6_ula: "fd1b:134f:4b00:ff00::53"
       ipv6_gua: "2001:db8:cca5:ff00::53"
   vanaheim:
     index: 1
@@ -48,7 +48,7 @@ hosts:
     os: debian
     status: planned
     ipv4: 10.176.10.10
-    ipv6: "fd1b:134f:fb00:10::10"
+    ipv6: "fd1b:134f:4b00:10::10"
   hugin:
     site: alfheim
     vlan: servers
@@ -57,7 +57,7 @@ hosts:
     os: debian
     status: planned
     ipv4: 10.176.20.11
-    ipv6: "fd1b:134f:fb00:20::11"
+    ipv6: "fd1b:134f:4b00:20::11"
   ratatoskr:
     site: alfheim
     vlan: servers
@@ -66,7 +66,7 @@ hosts:
     os: debian
     status: planned
     ipv4: 10.176.20.12
-    ipv6: "fd1b:134f:fb00:20::12"
+    ipv6: "fd1b:134f:4b00:20::12"
   mimir:
     site: alfheim
     vlan: servers
@@ -74,7 +74,7 @@ hosts:
     role: nas
     status: planned
     ipv4: 10.176.20.13
-    ipv6: "fd1b:134f:fb00:20::13"
+    ipv6: "fd1b:134f:4b00:20::13"
   saga:
     site: alfheim
     vlan: servers
@@ -82,4 +82,4 @@ hosts:
     role: nas-replica
     status: planned
     ipv4: 10.176.20.14
-    ipv6: "fd1b:134f:fb00:20::14"
+    ipv6: "fd1b:134f:4b00:20::14"

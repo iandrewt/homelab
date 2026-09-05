@@ -1,9 +1,0 @@
----
-- name: Install PowerDNS packages
-  ansible.builtin.apt:
-    name:
-      - pdns-server
-      - pdns-backend-lmdb
-      - pdns-recursor
-      - dnsdist
-    state: present

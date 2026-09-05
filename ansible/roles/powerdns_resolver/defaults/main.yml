@@ -5,7 +5,8 @@ powerdns_resolver_zone: alfheim.titmuss.zone
 
 powerdns_resolver_reverse_zones: []
 
-powerdns_resolver_peer_address: ~
+powerdns_resolver_peer_addresses: []
+powerdns_resolver_peer_fqdn: ~
 
 powerdns_resolver_lmdb_shards: 1
 

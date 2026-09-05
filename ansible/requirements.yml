@@ -1,3 +1,14 @@
 ---
 collections:
   - name: community.general
+
+roles:
+  - name: PowerDNS.pdns
+    src: https://github.com/PowerDNS/pdns-ansible
+    version: v1.11.0
+  - name: PowerDNS.pdns_recursor
+    src: https://github.com/PowerDNS/pdns_recursor-ansible
+    version: v2.2.0
+  - name: PowerDNS.dnsdist
+    src: https://github.com/PowerDNS/dnsdist-ansible
+    version: v1.7.3

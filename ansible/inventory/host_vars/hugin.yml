@@ -2,7 +2,9 @@
 ansible_user: debian
 
 powerdns_resolver_role: primary
-powerdns_resolver_peer_address: "{{ hostvars['ratatoskr'].static_ipv4 }}"
+powerdns_resolver_peer_addresses:
+  - "{{ hostvars['ratatoskr'].static_ipv4 }}"
+  - "{{ hostvars['ratatoskr'].static_ipv6 }}"
 powerdns_resolver_anycast_v4: "{{ frr_bgp_anycast_v4 }}"
 powerdns_resolver_anycast_v6_ula: "{{ frr_bgp_anycast_v6_ula }}"
 powerdns_resolver_anycast_v6_gua: "{{ frr_bgp_anycast_v6_gua }}"

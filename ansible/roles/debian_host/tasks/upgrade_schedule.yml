@@ -21,7 +21,7 @@
     owner: root
     group: root
     mode: "0644"
-    # OnCalendar= accumulates across drop-ins rather than replacing -- the empty
+    # OnCalendar= accumulates across drop-ins rather than replacing - the empty
     # assignment clears the base unit's 06:00 before setting this host's own.
     content: |
       [Timer]

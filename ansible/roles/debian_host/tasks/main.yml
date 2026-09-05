@@ -1,4 +1,9 @@
 ---
+- name: Network
+  ansible.builtin.import_tasks: network.yml
+  tags: [network]
+  when: debian_host_use_netplan
+
 - name: Hygiene
   ansible.builtin.import_tasks: hygiene.yml
   tags: [hygiene]

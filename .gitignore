@@ -54,3 +54,6 @@ __pycache__/
 
 # Editors / OS noise
 .DS_Store
+
+# ansible-galaxy role/collection installs
+ansible/roles/PowerDNS.*/
