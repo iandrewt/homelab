@@ -2,18 +2,5 @@
 ansible_user: pi
 
 powerdns_resolver_role: secondary
-powerdns_resolver_peer_addresses:
-  - "{{ hostvars['hugin'].static_ipv4 }}"
-  - "{{ hostvars['hugin'].static_ipv6 }}"
-powerdns_resolver_anycast_v4: "{{ frr_bgp_anycast_v4 }}"
-powerdns_resolver_anycast_v6_ula: "{{ frr_bgp_anycast_v6_ula }}"
-powerdns_resolver_anycast_v6_gua: "{{ frr_bgp_anycast_v6_gua }}"
-
-frr_bgp_local_asn: 65010
-frr_bgp_peer_asn: 65000
-frr_bgp_peer_address: 10.176.20.1
-frr_bgp_anycast_v4: "{{ dns_anycast_v4 }}"
-frr_bgp_anycast_v6_ula: "{{ dns_anycast_v6_ula }}"
-frr_bgp_anycast_v6_gua: "{{ dns_anycast_v6_gua }}"
 
 debian_host_upgrade_hour: 9  # staggered against hugin - see hugin.yml
