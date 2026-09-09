@@ -1,0 +1,102 @@
+# yaml-language-server: $schema=schema.json
+name: alfheim
+site: alfheim
+endpoint: https://yggdrasil.alfheim.titmuss.zone:8006/
+
+onepassword_vault: Homelab
+onepassword_item_prefix: alfheim Proxmox
+
+ssh_username: tofu
+timezone: Australia/Sydney
+mac_prefix: "BC:24:11"
+bridge: vmbr0
+
+firewall:
+  management_sources:
+    - 10.176.10.0/24
+    - 10.176.30.0/24
+    - "fd1b:134f:4b00:10::/64"
+    - "fd1b:134f:4b00:30::/64"
+
+# oidc:
+#   realm: entra
+#   issuer_url: https://login.microsoftonline.com/<tenant-id>/v2.0
+#   client_id: <application-id>
+#   username_claim: email
+
+storages:
+  local:
+    type: directory
+    path: /var/lib/vz
+    content: [snippets, backup]
+
+  images:
+    type: nfs
+    server: mimir.alfheim.titmuss.zone
+    export: /mnt/tank/infra/proxmox
+    options: vers=4.2
+    content: [import, iso, vztmpl]
+
+  tank:
+    type: zfspool
+    pool: tank
+    content: [images, rootdir]
+
+  nvme:
+    type: zfspool
+    pool: nvme
+    content: [images]
+
+guest_defaults:
+  disk_storage: tank
+  snippet_storage: local
+
+nodes:
+  yggdrasil:
+    uplinks: [eno1, eno2]
+    bond_mode: 802.3ad
+    bond_xmit_hash_policy: layer3+4
+
+    management:
+      uplink: eno3
+
+    pools:
+      tank:
+        raidlevel: raid10
+        devices:
+          - /dev/disk/by-id/wwn-0x5002538fc242310d
+          - /dev/disk/by-id/wwn-0x5002538fc24230c7
+          - /dev/disk/by-id/wwn-0x5002538fc2423113
+          - /dev/disk/by-id/wwn-0x5002538fc24230cb
+      nvme:
+        raidlevel: single
+        devices:
+          - /dev/disk/by-id/nvme-eui.0025385301b095c0
+
+image_storage: images
+images:
+  debian-13-genericcloud:
+    url: https://cloud.debian.org/images/cloud/trixie/latest/debian-13-genericcloud-amd64.qcow2
+    file_name: debian-13-genericcloud-amd64.qcow2
+    content_type: import
+    # TODO: pin a checksum
+
+workloads:
+  platform:
+    comment: "Long-lived singleton VMs: DNS resolvers and friends."
+
+  # Each integration is something running inside the workload that needs its own
+  # Proxmox credentials. It gets a user, a privsep token, and one role per ACL entry -
+  # a Proxmox ACL grants a role on a path, so privileges are declared per path.
+  # talos:
+  #   comment: "Talos Kubernetes cluster."
+  #   integrations:
+  #     csi:
+  #       comment: "proxmox-csi-plugin: provisions and attaches PVs."
+  #       acls:
+  #         /pool/talos: [VM.Audit, VM.Config.Disk]
+  #         /storage/nvme: [Datastore.Allocate, Datastore.AllocateSpace, Datastore.Audit]
+  #     ccm:
+  #       comment: "proxmox-cloud-controller-manager: labels nodes with their topology."
+  #       acls:
+  #         /pool/talos: [VM.Audit]

@@ -1,0 +1,470 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/iandrewt/homelab/tofu/clusters/schema.json",
+  "title": "Proxmox cluster facts",
+  "description": "Cluster configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "name",
+    "site",
+    "endpoint",
+    "onepassword_vault",
+    "onepassword_item_prefix",
+    "ssh_username",
+    "timezone",
+    "mac_prefix",
+    "firewall",
+    "bridge",
+    "storages",
+    "guest_defaults",
+    "nodes",
+    "image_storage",
+    "images",
+    "workloads"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "site": {
+      "description": "Site in ipam.yaml.",
+      "type": "string"
+    },
+    "endpoint": {
+      "type": "string",
+      "format": "uri"
+    },
+    "onepassword_vault": {
+      "type": "string"
+    },
+    "onepassword_item_prefix": {
+      "description": "Token items are titled \"<prefix> <token> token\".",
+      "type": "string"
+    },
+    "ssh_username": {
+      "description": "Linux account the OpenTofu provider connects as. Created by the proxmox_host Ansible role, not a PVE user - a pam-realm PVE user needs the Linux account to exist first.",
+      "type": "string"
+    },
+    "timezone": {
+      "description": "tzdata name.",
+      "type": "string"
+    },
+    "mac_prefix": {
+      "description": "Three-octet OUI. Defaults to BC:24:11",
+      "type": "string",
+      "pattern": "^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){2}$"
+    },
+    "firewall": {
+      "description": "Datacenter firewall policy. INPUT and FORWARD default to DROP, so management_sources is the only way in to 8006 and 22.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "management_sources"
+      ],
+      "properties": {
+        "management_sources": {
+          "description": "CIDRs allowed to reach the GUI and SSH. Must include wherever tofu and ansible actually run from.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "bridge": {
+      "description": "Bridge to place VMs on.",
+      "type": "string"
+    },
+    "oidc": {
+      "description": "OIDC realm, such as Entra.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "realm",
+        "issuer_url",
+        "client_id"
+      ],
+      "properties": {
+        "realm": {
+          "type": "string"
+        },
+        "issuer_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "client_id": {
+          "type": "string"
+        },
+        "username_claim": {
+          "type": "string"
+        }
+      }
+    },
+    "nodes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "uplinks",
+          "pools"
+        ],
+        "properties": {
+          "uplinks": {
+            "description": "NICs carrying VM traffic, bonded if more than one.",
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string"
+            }
+          },
+          "bond_mode": {
+            "type": "string"
+          },
+          "bond_xmit_hash_policy": {
+            "type": "string"
+          },
+          "pools": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "raidlevel",
+                "devices"
+              ],
+              "properties": {
+                "raidlevel": {
+                  "enum": [
+                    "single",
+                    "mirror",
+                    "raid10",
+                    "raidz",
+                    "raidz2",
+                    "raidz3"
+                  ]
+                },
+                "devices": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^/dev/disk/by-id/"
+                  }
+                },
+                "ashift": {
+                  "type": "integer"
+                },
+                "compression": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "vlan_aware": {
+            "description": "False for a flat network with no VLANs.",
+            "type": "boolean"
+          },
+          "vids": {
+            "type": "string"
+          },
+          "management": {
+            "description": "How management is carried. `uplink` gives it a NIC and its own `mgmt` bridge - the only topology where a workload token cannot reach it. Omit on a node with no NIC to spare and management shares the VM bridge, tagged or not. Addressing comes from ipam.yaml, never from here.",
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "uplink": {
+                "description": "NIC given over to management. Must not appear in uplinks.",
+                "type": "string"
+              },
+              "tagged": {
+                "description": "Only when sharing the VM bridge: true for a pure-trunk port, false when the port carries the management VLAN natively.",
+                "type": "boolean"
+              }
+            },
+            "not": {
+              "required": [
+                "uplink",
+                "tagged"
+              ]
+            }
+          }
+        },
+        "allOf": [
+          {
+            "$comment": "A tagged management subinterface needs a VLAN-aware bridge.",
+            "if": {
+              "required": [
+                "vlan_aware"
+              ],
+              "properties": {
+                "vlan_aware": {
+                  "const": false
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "management": {
+                  "properties": {
+                    "tagged": {
+                      "const": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "$comment": "Bond settings are silently ignored with a single uplink.",
+            "if": {
+              "properties": {
+                "uplinks": {
+                  "maxItems": 1
+                }
+              }
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "bond_mode"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "bond_xmit_hash_policy"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "file_name"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "content_type": {
+            "enum": [
+              "import",
+              "iso",
+              "vztmpl"
+            ]
+          },
+          "checksum": {
+            "type": "string"
+          },
+          "checksum_algorithm": {
+            "type": "string"
+          }
+        },
+        "dependentRequired": {
+          "checksum": [
+            "checksum_algorithm"
+          ],
+          "checksum_algorithm": [
+            "checksum"
+          ]
+        }
+      }
+    },
+    "workloads": {
+      "description": "Naming a group here creates its pool, its privsep token and its ACLs. Anything running inside the group that needs the Proxmox API itself is an integration, and gets its own identity.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "comment"
+        ],
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "integrations": {
+            "description": "In-workload components needing their own Proxmox credentials, keyed by a short name. Each gets a user, a privsep token, and one role per ACL entry.",
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "comment",
+                "acls"
+              ],
+              "properties": {
+                "comment": {
+                  "type": "string"
+                },
+                "acls": {
+                  "description": "Privileges granted, keyed by ACL path. Nothing is granted implicitly, so the group's own pool is listed like anything else. A /storage/<id> path must name a key of `storages`, a /pool/<id> a workload group.",
+                  "type": "object",
+                  "minProperties": 1,
+                  "propertyNames": {
+                    "pattern": "^/$|^/(access|nodes|pool|sdn|storage|vms)(/[^/]+)*$"
+                  },
+                  "additionalProperties": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "storages": {
+      "description": "Storages this cluster defines, keyed by Proxmox storage ID. A definition is complete here rather than split between this file and the cluster layer's HCL.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "content"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "directory",
+              "nfs",
+              "zfspool"
+            ]
+          },
+          "content": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "enum": [
+                "images",
+                "rootdir",
+                "iso",
+                "vztmpl",
+                "backup",
+                "snippets",
+                "import"
+              ]
+            }
+          },
+          "path": {
+            "description": "directory only.",
+            "type": "string"
+          },
+          "server": {
+            "description": "nfs only.",
+            "type": "string"
+          },
+          "export": {
+            "description": "nfs only.",
+            "type": "string"
+          },
+          "options": {
+            "description": "nfs only. vers=4.2 keeps rpcbind unnecessary, which lets the CIS control stay on.",
+            "type": "string"
+          },
+          "pool": {
+            "description": "zfspool only. The ZFS pool backing it - needn't match the storage ID, and must exist in some node's pools.",
+            "type": "string"
+          },
+          "thin_provision": {
+            "description": "zfspool only. Defaults true.",
+            "type": "boolean"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "directory"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "path"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "nfs"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "server",
+                "export"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "zfspool"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "pool"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "guest_defaults": {
+      "description": "Defaults for guests built on this cluster. A workload state may point an individual guest elsewhere.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disk_storage",
+        "snippet_storage"
+      ],
+      "properties": {
+        "disk_storage": {
+          "description": "Must be a key of `storages`.",
+          "type": "string"
+        },
+        "snippet_storage": {
+          "description": "Must be a key of `storages`, and must be node-local - bpg uploads snippets over SSH.",
+          "type": "string"
+        }
+      }
+    },
+    "image_storage": {
+      "description": "Storage the image library lives on. Must be a key of `storages`.",
+      "type": "string"
+    }
+  }
+}
