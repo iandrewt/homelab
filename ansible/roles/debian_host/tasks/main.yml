@@ -12,6 +12,10 @@
   ansible.builtin.import_tasks: upgrade_schedule.yml
   tags: [hygiene]
 
+- name: Service accounts
+  ansible.builtin.import_tasks: service_accounts.yml
+  tags: [service_accounts]
+
 - name: SSH hardening
   ansible.builtin.import_tasks: ssh.yml
   tags: [ssh]

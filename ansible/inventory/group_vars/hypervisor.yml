@@ -1,0 +1,21 @@
+---
+# Ansible reaches this node as root, using the key answer.toml planted at install, and
+# Proxmox uses root SSH for migration and cluster work. CIS 5.1.21 would set this to `no`.
+debian_host_sshd_options:
+  PermitRootLogin: prohibit-password
+deb13cis_rule_5_1_21: false
+
+debian_host_service_accounts:
+  - name: tofu
+    comment: OpenTofu provider SSH access
+    ssh_key: "{{ lookup('community.general.onepassword', 'proxmox tofu SSH key',
+                        vault=onepassword_vault, field='public key') }}"
+    sudo_commands:
+      - /usr/sbin/pvesm apiinfo
+      - /usr/bin/tee /var/lib/vz/snippets/[a-zA-Z0-9_][a-zA-Z0-9_.-]*
+
+# Control 5.2.4 would strip that NOPASSWD and every workload apply would fail at snippet upload.
+deb13cis_sudoers_exclude_nopasswd_list:
+  - tofu
+
+deb13cis_config_aide: false

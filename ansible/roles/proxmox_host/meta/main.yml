@@ -1,5 +1,0 @@
----
-dependencies:
-  - role: debian_host
-    vars:
-      debian_host_use_netplan: false

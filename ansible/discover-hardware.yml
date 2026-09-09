@@ -1,8 +1,4 @@
 ---
-# Read-only. Reports what's physically present so a human can write host_vars with
-# confidence (proxmox_host_uplink_nics, proxmox_host_data_pool_vdevs) instead of
-# guessing, or running lsblk/ls/ethtool by hand across several SSH sessions.
-# Run it once after first boot, or again any time before growing a data pool or changing NICs.
 - name: Report hardware facts for host_vars
   hosts: debian
   become: true

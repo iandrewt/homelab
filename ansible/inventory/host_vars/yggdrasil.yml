@@ -1,22 +1,4 @@
 ---
+# Ansible connects as root, using the key answer.toml planted at install time. sshd keeps
+# PermitRootLogin prohibit-password via group_vars/hypervisor.yml, so this is key-only.
 ansible_user: root
-
-proxmox_host_uplink_nics: [eno1, eno2]
-
-# 1G rNDC port, untagged/access VLAN 10 on the switch - mgmt lives on its own physical
-# link, off the 10G bond entirely.
-proxmox_host_mgmt_interface: eno3
-
-# 4x1TB SSDs, striped mirror pairs, separate from the boot disk.
-# See docs/bootstrap/proxmox-storage.md.
-proxmox_host_data_pool_enabled: true
-proxmox_host_data_pool_name: data
-proxmox_host_data_pool_vdevs:
-  - type: mirror
-    disks:
-      - /dev/disk/by-id/wwn-0x5002538fc242310d
-      - /dev/disk/by-id/wwn-0x5002538fc24230c7
-  - type: mirror
-    disks:
-      - /dev/disk/by-id/wwn-0x5002538fc2423113
-      - /dev/disk/by-id/wwn-0x5002538fc24230cb

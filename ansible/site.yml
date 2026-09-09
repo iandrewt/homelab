@@ -2,15 +2,10 @@
 - name: Configure Proxmox hosts
   hosts: hypervisor
   become: true
-  pre_tasks:
-    # Must run before the proxmox_host role's debian_host dependency, which does its own
-    # apt update as part of hygiene - otherwise that update hits the still-enabled,
-    # subscription-only enterprise repo first and fails.
-    - name: Fix apt repos before any apt cache update
-      ansible.builtin.import_tasks: roles/proxmox_host/tasks/repos.yml
-      tags: [repos]
   roles:
-    - proxmox_host
+    - role: debian_host
+      vars:
+        debian_host_use_netplan: false  # Proxmox uses ifupdown2
 
 - name: Configure DNS resolvers
   hosts: dns_resolver
