@@ -4,3 +4,9 @@ ansible_user: pi
 powerdns_resolver_role: secondary
 
 debian_host_upgrade_hour: 9  # staggered against hugin - see hugin.yml
+
+# overkill for a Pi 3B
+deb13cis_config_aide: false
+
+deb13cis_sudoers_exclude_nopasswd_list:
+  - pi

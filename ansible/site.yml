@@ -1,4 +1,10 @@
 ---
+- name: CIS Debian 13 baseline
+  hosts: debian
+  become: true
+  roles:
+    - DEBIAN13-CIS
+
 - name: Configure Proxmox hosts
   hosts: hypervisor
   become: true

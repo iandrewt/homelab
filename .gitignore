@@ -57,3 +57,7 @@ __pycache__/
 
 # ansible-galaxy role/collection installs
 ansible/roles/PowerDNS.*/
+ansible/roles/DEBIAN13-CIS/
+
+# ansible-lint / ansible-galaxy scratch
+.ansible/

@@ -6,3 +6,6 @@ powerdns_resolver_api_key: "{{ lookup('community.general.onepassword', 'hugin Po
                                       vault=onepassword_vault, field='credential') }}"
 
 debian_host_upgrade_hour: 3  # staggered against ratatoskr - see ratatoskr.yml
+
+deb13cis_sudoers_exclude_nopasswd_list:
+  - debian
