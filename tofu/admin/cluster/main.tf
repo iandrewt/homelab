@@ -1,0 +1,96 @@
+locals {
+  ipam = jsondecode(file("${path.module}/../../clusters/generated/${terraform.workspace}.json"))
+
+  pool_nodes = {
+    for pool in toset(flatten([for _, n in local.cluster.nodes : keys(n.pools)])) :
+    pool => sort([for name, n in local.cluster.nodes : name if contains(keys(n.pools), pool)])
+  }
+}
+
+resource "proxmox_cluster_options" "this" {
+  language = "en"
+  keyboard = "en-us"
+  console  = "xtermjs"
+
+  mac_prefix = local.cluster.mac_prefix
+
+  max_workers = 5
+
+  # TODO: email_from, once there's somewhere for notifications to go.
+}
+
+module "node" {
+  source   = "../../modules/proxmox-node"
+  for_each = local.cluster.nodes
+
+  name        = each.key
+  uplinks     = each.value.uplinks
+  bridge_name = local.cluster.bridge
+  time_zone   = local.cluster.timezone
+
+  vlan_aware = try(each.value.vlan_aware, true)
+
+  bond_mode             = each.value.bond_mode
+  bond_xmit_hash_policy = each.value.bond_xmit_hash_policy
+
+  management = merge(
+    local.ipam.nodes[each.key],
+    {
+      uplink  = try(each.value.management.uplink, null)
+      vlan_id = try(each.value.management.tagged, false) ? local.ipam.nodes[each.key].vlan_id : null
+    },
+  )
+
+  pools = each.value.pools
+}
+
+# --- Network -----------------------------------------------------------------------
+
+import {
+  for_each = local.cluster.nodes
+  to       = module.node[each.key].proxmox_network_linux_bridge.this
+  id       = "${each.key}:${local.cluster.bridge}"
+}
+
+# --- Storage -----------------------------------------------------------------------
+
+# The installer always names its directory storage `local`
+import {
+  to = proxmox_storage_directory.this["local"]
+  id = "local"
+}
+
+resource "proxmox_storage_directory" "this" {
+  for_each = { for id, s in local.cluster.storages : id => s if s.type == "directory" }
+
+  id      = each.key
+  path    = each.value.path
+  content = each.value.content
+  shared  = false
+}
+
+resource "proxmox_storage_nfs" "this" {
+  for_each = { for id, s in local.cluster.storages : id => s if s.type == "nfs" }
+
+  id      = each.key
+  server  = each.value.server
+  export  = each.value.export
+  content = each.value.content
+  options = try(each.value.options, null)
+  nodes   = sort(keys(local.cluster.nodes))
+
+  create_subdirs = true
+}
+
+resource "proxmox_storage_zfspool" "this" {
+  for_each = { for id, s in local.cluster.storages : id => s if s.type == "zfspool" }
+
+  id       = each.key
+  zfs_pool = each.value.pool
+  nodes    = local.pool_nodes[each.value.pool]
+
+  content        = each.value.content
+  thin_provision = try(each.value.thin_provision, true)
+
+  depends_on = [module.node]
+}
