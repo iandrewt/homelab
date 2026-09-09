@@ -1,15 +1,25 @@
 #!/usr/bin/env python3
-"""Derive artifacts from ipam.yaml. Never hand-edit anything this writes - edit
-ipam.yaml and rerun. CI fails the build if the working tree changes afterwards.
+"""Derive artifacts from ipam.yaml: the Ansible inventory, and a per-cluster addressing
+extract for OpenTofu. Never hand-edit anything this writes - edit ipam.yaml and rerun.
+CI fails the build if the working tree changes afterwards.
+
+Run from anywhere: python3 tools/generate.py
 
 TODO: DHCP reservations once the VLAN catalog is populated.
 """
 import ipaddress
-from pathlib import Path
+import json
 
 import yaml
 
-from addressing import reverse_zone, site_ipv4_supernet, site_ipv6_supernet
+from paths import ANSIBLE_INVENTORY, CLUSTER_EXTRACTS, CLUSTERS, IPAM, REPO
+from addressing import (
+    reverse_zone,
+    site_ipv4_supernet,
+    site_ipv6_supernet,
+    vlan_ipv4_cidr,
+    vlan_ipv6_ula_cidr,
+)
 
 
 class IndentedDumper(yaml.SafeDumper):
@@ -17,10 +27,18 @@ class IndentedDumper(yaml.SafeDumper):
         return super().increase_indent(flow, False)
 
 
-ROOT = Path(__file__).parent
-INVENTORY_OUT = ROOT.parent / "ansible" / "inventory" / "hosts.yml"
-
 ANSIBLE_MANAGED_ROLES = {"hypervisor", "dns-resolver"}
+
+
+def cluster_sites() -> dict[str, str]:
+    """Which clusters get an ipam extract, and from which site. Read from the cluster
+    files rather than listed here as well - a second list could disagree with them, and
+    adding a cluster should mean touching one file.
+    """
+    return {
+        path.stem: yaml.safe_load(path.read_text())["site"]
+        for path in sorted(CLUSTERS.glob("*.yaml"))
+    }
 
 
 def fqdn(name: str, site: str, internal_domain: str) -> str:
@@ -42,7 +60,16 @@ def build_inventory(data: dict) -> dict:
             "role": host["role"],
         }
         if host.get("vlan"):
-            host_vars["vlan_id"] = data["vlans"][host["vlan"]]["id"]
+            vlan_id = data["vlans"][host["vlan"]]["id"]
+            host_vars["vlan_id"] = vlan_id
+            # .1 / ::1 of the host's own VLAN. Emitted so nothing downstream has to
+            # hand-write a router address ipam already knows.
+            site_index = data["sites"][host["site"]]["index"]
+            v4_net = vlan_ipv4_cidr(site_ipv4_supernet(data["ipv4_supernet"], site_index), vlan_id)
+            host_vars["gateway_ipv4"] = str(v4_net.network_address + 1)
+            if data["vlans"][host["vlan"]]["ula"]:
+                v6_net = vlan_ipv6_ula_cidr(site_ipv6_supernet(data["ipv6_ula_supernet"], site_index), vlan_id)
+                host_vars["gateway_ipv6"] = str(v6_net.network_address + 1)
         if host.get("ipv4"):
             host_vars["static_ipv4"] = host["ipv4"]
         if host.get("ipv6"):
@@ -140,17 +167,85 @@ def build_inventory(data: dict) -> dict:
     }
 
 
+def build_tofu_ipam(data: dict, site_name: str) -> dict:
+    internal_domain = data["domains"]["internal"]
+    site = data["sites"][site_name]
+    site_ipv4_16 = site_ipv4_supernet(data["ipv4_supernet"], site["index"])
+    site_ipv6_48 = site_ipv6_supernet(data["ipv6_ula_supernet"], site["index"])
+    dns_anycast = site.get("dns_anycast") or {}
+
+    hosts, nodes = {}, {}
+    for name, host in data.get("hosts", {}).items():
+        if host["site"] != site_name:
+            continue
+        # Hypervisors for their management addressing, guests because OpenTofu builds
+        # them. A physical non-hypervisor is neither.
+        is_node = host["role"] == "hypervisor"
+        if not is_node and host.get("kind") != "vm":
+            continue
+
+        vlan_id = data["vlans"][host["vlan"]]["id"]
+        v4_net = vlan_ipv4_cidr(site_ipv4_16, vlan_id)
+        v6_net = vlan_ipv6_ula_cidr(site_ipv6_48, vlan_id)
+        # .1 / ::1 of the VLAN is the UDM Pro, consistent with frr_bgp_peer_address.
+        v4_gateway = str(v4_net.network_address + 1)
+        v6_gateway = str(v6_net.network_address + 1)
+
+        if host["role"] == "dns-resolver":
+            # A resolver can't be pointed at the anycast VIP it serves - and at
+            # cloud-init time it isn't running yet either. Use the gateway.
+            dns_servers = [v4_gateway, v6_gateway]
+        else:
+            dns_servers = [a for a in (dns_anycast.get("ipv4"), dns_anycast.get("ipv6_ula")) if a]
+
+        entry = {
+            "vlan_id": vlan_id,
+            "ipv4_address": f"{host['ipv4']}/{v4_net.prefixlen}",
+            "ipv6_address": f"{host['ipv6']}/{v6_net.prefixlen}",
+            "ipv4_gateway": v4_gateway,
+        }
+
+        if host["role"] == "hypervisor":
+            # No IPv6 gateway: the router advertises a link-local next-hop, so the
+            # default route is discovered rather than pinned to an address that changes
+            # whenever the prefix does.
+            nodes[name] = entry
+        else:
+            hosts[name] = entry | {
+                "dns_servers": dns_servers,
+                "search_domains": [f"{site_name}.{internal_domain}", internal_domain],
+            }
+
+    return {"hosts": hosts, "nodes": nodes}
+
+
 def main() -> int:
-    data = yaml.safe_load((ROOT / "ipam.yaml").read_text())
+    data = yaml.safe_load(IPAM.read_text())
     inventory = build_inventory(data)
 
-    INVENTORY_OUT.parent.mkdir(parents=True, exist_ok=True)
+    ANSIBLE_INVENTORY.parent.mkdir(parents=True, exist_ok=True)
     header = (
-        "# GENERATED by ipam/generate.py from ipam/ipam.yaml. Do not hand-edit -\n"
+        "# GENERATED by tools/generate.py from ipam/ipam.yaml. Do not hand-edit -\n"
         "# edit the source and regenerate. CI fails the build if this drifts.\n"
     )
-    INVENTORY_OUT.write_text(header + yaml.dump(inventory, Dumper=IndentedDumper, sort_keys=False))
-    print(f"wrote {INVENTORY_OUT.relative_to(ROOT.parent)}")
+    ANSIBLE_INVENTORY.write_text(header + yaml.dump(inventory, Dumper=IndentedDumper, sort_keys=False))
+    print(f"wrote {ANSIBLE_INVENTORY.relative_to(REPO)}")
+
+    CLUSTER_EXTRACTS.mkdir(parents=True, exist_ok=True)
+    sites = cluster_sites()
+    for cluster_name, site_name in sites.items():
+        if site_name not in data["sites"]:
+            raise SystemExit(f"tofu/clusters/{cluster_name}.yaml names site {site_name!r}, which isn't in ipam.yaml")
+        out = CLUSTER_EXTRACTS / f"{cluster_name}.json"
+        out.write_text(json.dumps(build_tofu_ipam(data, site_name), indent=2, sort_keys=True) + "\n")
+        print(f"wrote {out.relative_to(REPO)}")
+
+    # Deleting a cluster file used to mean editing a list here too, which is what stopped
+    # its extract being left behind. Nothing prompts for that now, so prune.
+    for stale in sorted(set(CLUSTER_EXTRACTS.glob("*.json")) - {CLUSTER_EXTRACTS / f"{c}.json" for c in sites}):
+        stale.unlink()
+        print(f"removed {stale.relative_to(REPO)}")
+
     return 0
 
 

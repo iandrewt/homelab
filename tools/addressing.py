@@ -1,5 +1,4 @@
-"""Pure functions turning a site index / VLAN ID into real CIDRs. No state, no I/O --
-importable from generate.py, validate.py, or a REPL.
+"""Pure functions turning a site index / VLAN ID into real CIDRs.
 
 Per site, per family:
   - IPv4: site N gets the Nth /16 out of ipv4_supernet. A VLAN's third octet is its ID,

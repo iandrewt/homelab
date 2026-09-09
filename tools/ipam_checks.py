@@ -1,13 +1,10 @@
-#!/usr/bin/env python3
-"""Schema and semantic validation for ipam.yaml. Run in CI on every commit."""
+"""Schema and semantic checks for ipam.yaml"""
 import ipaddress
-import json
-import sys
-from pathlib import Path
 
 import yaml
-from jsonschema import Draft202012Validator
 
+import schema
+from paths import IPAM, IPAM_SCHEMA
 from addressing import (
     site_bgp_ipv4_pool,
     site_bgp_ipv6_pool,
@@ -16,23 +13,6 @@ from addressing import (
     vlan_ipv4_cidr,
     vlan_ipv6_ula_cidr,
 )
-
-ROOT = Path(__file__).parent
-
-
-def load():
-    schema = json.loads((ROOT / "schema.json").read_text())
-    data = yaml.safe_load((ROOT / "ipam.yaml").read_text())
-    return schema, data
-
-
-def check_schema(schema, data) -> list[str]:
-    validator = Draft202012Validator(schema)
-    return [
-        f"schema: {'.'.join(str(p) for p in err.path) or '<root>'}: {err.message}"
-        for err in sorted(validator.iter_errors(data), key=str)
-    ]
-
 
 def check_semantics(data) -> list[str]:
     errors = []
@@ -105,20 +85,9 @@ def check_semantics(data) -> list[str]:
     return errors
 
 
-def main() -> int:
-    schema, data = load()
-    errors = check_schema(schema, data)
-    if not errors:
-        errors = check_semantics(data)
+def check() -> list[str]:
+    data = yaml.safe_load(IPAM.read_text())
 
-    if errors:
-        for e in errors:
-            print(f"FAIL: {e}", file=sys.stderr)
-        return 1
-
-    print("ipam.yaml: valid")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+    # Semantics assume the shape holds, so don't run them over a file that failed schema.
+    errors = schema.errors(IPAM_SCHEMA, data, "ipam.yaml")
+    return errors or check_semantics(data)
