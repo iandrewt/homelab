@@ -6,36 +6,77 @@ on:
   pull_request:
 
 jobs:
-  ipam:
-    name: ipam schema + semantic validation
+  validate:
+    name: schema + semantic validation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
-      - run: pip install -r ipam/requirements.txt
-      - run: python ipam/validate.py
+      - run: pip install -r requirements.txt
+      - run: python tools/validate.py
 
   generation-drift:
     name: regenerate and fail if anything changed
-    needs: ipam
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: "3.14"
-      - run: pip install -r ipam/requirements.txt
-      - run: python ipam/generate.py
+      - run: pip install -r requirements.txt
+      - run: python tools/generate.py
       - name: fail if generated output drifted from what's committed
         run: |
-          git diff --exit-code -- ansible/inventory/ || {
-            echo "::error::Generated output doesn't match ipam.yaml. Someone hand-edited a generated file, or forgot to run ipam/generate.py and commit the result." >&2
+          git diff --exit-code -- ansible/inventory/ tofu/clusters/generated/ || {
+            echo "::error::Generated output doesn't match ipam.yaml. Someone hand-edited a generated file, or forgot to run tools/generate.py and commit the result." >&2
             exit 1
           }
 
-  # TODO: tofu fmt/validate job, once tofu/ is actually committed.
+  tofu:
+    name: tofu fmt + validate
+    runs-on: ubuntu-latest
+    env:
+      # State encryption is resolved during init, so a passphrase has to exist even to
+      # validate. Nothing is written, so the value is irrelevant - but pbkdf2 enforces a
+      # 16-character minimum.
+      TF_VAR_tofu_state_passphrase: ci-validate-only-not-a-real-secret
+    steps:
+      - uses: actions/checkout@v7
+      - uses: opentofu/setup-opentofu@v1
+      - run: tofu fmt -check -recursive tofu/
+      - name: validate the admin tree against every cluster
+        run: |
+          set -euo pipefail
+          for layer in $(find tofu/admin -name tofu.tf -printf '%h\n' | sort); do
+            echo "::group::$layer"
+            tofu -chdir="$layer" init -backend=false -input=false
+            for cluster in tofu/clusters/*.yaml; do
+              name=$(basename "$cluster" .yaml)
+              echo "--- $name"
+              TF_WORKSPACE="$name" tofu -chdir="$layer" validate
+            done
+            echo "::endgroup::"
+          done
+
+      - name: validate every workload
+        run: |
+          set -euo pipefail
+          for wl in $(find tofu/workloads -name tofu.tf -printf '%h\n' | sort); do
+            echo "::group::$wl"
+            tofu -chdir="$wl" init -backend=false -input=false
+            tofu -chdir="$wl" validate
+            echo "::endgroup::"
+          done
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: shellcheck bootstrap/proxmox/prepare-iso.sh bootstrap/raspberry-pi/*.sh
 
   yamllint:
     name: yamllint
@@ -51,5 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - run: pip install ansible-core ansible-lint
+      - run: ansible-galaxy collection install -r ansible/requirements.yml
+      - run: ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles
       - working-directory: ansible
         run: ansible-lint
