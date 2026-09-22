@@ -8,6 +8,11 @@ deb13cis_rule_1_4_2: false
 deb13cis_rule_6_2_1_3: false
 deb13cis_rule_6_2_1_4: false
 
+# arm64 has no chown, lchown, create_module or query_module, which these two don't filter
+# out - and auditctl stops at the first bad rule, so every rule after it goes unloaded
+deb13cis_rule_6_2_3_19: false
+deb13cis_rule_6_2_3_34: false
+
 # overkill for a Pi.
 deb13cis_config_aide: false
 deb13cis_rule_6_3_2: false
