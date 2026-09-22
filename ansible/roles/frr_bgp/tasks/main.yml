@@ -1,13 +1,23 @@
 ---
-- name: Anycast interface
-  ansible.builtin.import_tasks: anycast_interface.yml
-  tags: [anycast]
+- name: Assert there is something to advertise, and an identity to advertise it under
+  ansible.builtin.assert:
+    that:
+      - (frr_bgp_service_addresses + frr_bgp_anycast_addresses) | length > 0
+      - frr_bgp_router_id | length > 0
+      - not frr_bgp_anycast_addresses or frr_bgp_anycast_service is not none
+    fail_msg: >-
+      frr_bgp needs at least one service or anycast address, a router ID (defaulted from
+      an IPv4 service address, so set frr_bgp_router_id on a host without one), and
+      frr_bgp_anycast_service whenever it has anycast addresses.
 
-# The anycast address has to exist before FRR starts, or its `network` statement finds
-# nothing to advertise until the next reload - flush now rather than wait for the
-# handler queue to drain at end of play.
-- name: Apply the anycast interface now, not at end of play
-  ansible.builtin.meta: flush_handlers
+- name: Addresses
+  ansible.builtin.import_tasks: addresses.yml
+  tags: [addresses]
+
+- name: Anycast lifecycle
+  ansible.builtin.import_tasks: anycast.yml
+  when: frr_bgp_anycast_addresses | length > 0
+  tags: [anycast]
 
 - name: FRR
   ansible.builtin.import_tasks: frr.yml

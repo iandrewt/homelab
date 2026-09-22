@@ -1,0 +1,15 @@
+---
+- name: Write the anycast unit
+  ansible.builtin.template:
+    src: anycast.service.j2
+    dest: /etc/systemd/system/anycast.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart anycast
+
+- name: Raise anycast0 whenever the fronted service runs
+  ansible.builtin.systemd_service:
+    name: anycast.service
+    enabled: true
+    daemon_reload: true

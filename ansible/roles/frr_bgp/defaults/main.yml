@@ -1,9 +1,12 @@
 ---
-# No sensible defaults for any of these
+# No sensible defaults for these
 frr_bgp_local_asn: ~
 frr_bgp_peer_asn: ~
-frr_bgp_peer_address: ~  # the UDM Pro's address on this VLAN
+frr_bgp_peer_address: ~  # the router's address on this VLAN
+frr_bgp_community: ~
 
-frr_bgp_anycast_v4: ~
-frr_bgp_anycast_v6_ula: ~
-frr_bgp_anycast_v6_gua: ~
+frr_bgp_service_addresses: []
+frr_bgp_anycast_addresses: []
+frr_bgp_anycast_service: ~
+
+frr_bgp_router_id: "{{ frr_bgp_service_addresses | reject('search', ':') | first | default('') }}"

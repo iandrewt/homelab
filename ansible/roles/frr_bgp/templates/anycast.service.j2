@@ -1,0 +1,14 @@
+# Managed by Ansible (frr_bgp role).
+[Unit]
+Description=anycast0 up while {{ frr_bgp_anycast_service }} runs
+BindsTo={{ frr_bgp_anycast_service }} sys-subsystem-net-devices-anycast0.device
+After={{ frr_bgp_anycast_service }} sys-subsystem-net-devices-anycast0.device
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/ip link set anycast0 up
+ExecStop=/usr/sbin/ip link set anycast0 down
+
+[Install]
+UpheldBy={{ frr_bgp_anycast_service }}

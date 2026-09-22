@@ -1,34 +1,48 @@
 ! Managed by Ansible (frr_bgp role) - edit host_vars / this role, not this file.
+{% set advertised = frr_bgp_service_addresses + frr_bgp_anycast_addresses %}
+{% set families = {
+     'ipv4': {'keyword': 'ip', 'length': 32, 'addresses': advertised | reject('search', ':') | list},
+     'ipv6': {'keyword': 'ipv6', 'length': 128, 'addresses': advertised | select('search', ':') | list},
+   } %}
 frr version 10.3
 frr defaults datacenter
 hostname {{ inventory_hostname }}
 !
-ip prefix-list ANYCAST-OUT seq 5 permit {{ frr_bgp_anycast_v4 }}/32
+{% for afi, family in families.items() if family.addresses %}
+{% for address in family.addresses %}
+{{ family.keyword }} prefix-list ADVERTISED-{{ afi | upper }} seq {{ loop.index * 5 }} permit {{ address }}/{{ family.length }}
+{% endfor %}
 !
-route-map TO-UPSTREAM permit 10
- match ip address prefix-list ANYCAST-OUT
+route-map TO-UPSTREAM-{{ afi | upper }} permit 10
+ match {{ family.keyword }} address prefix-list ADVERTISED-{{ afi | upper }}
+ set community {{ frr_bgp_community }}
+exit
 !
-ipv6 prefix-list ANYCAST-OUT-V6 seq 5 permit {{ frr_bgp_anycast_v6_ula }}/128
-ipv6 prefix-list ANYCAST-OUT-V6 seq 10 permit {{ frr_bgp_anycast_v6_gua }}/128
-!
-route-map TO-UPSTREAM-V6 permit 10
- match ipv6 address prefix-list ANYCAST-OUT-V6
+{% endfor %}
+route-map NOTHING deny 10
+exit
 !
 router bgp {{ frr_bgp_local_asn }}
- bgp router-id {{ static_ipv4 }}
+ bgp router-id {{ frr_bgp_router_id }}
+ bgp ebgp-requires-policy
+ bgp network import-check
+ no bgp default ipv4-unicast
  neighbor {{ frr_bgp_peer_address }} remote-as {{ frr_bgp_peer_asn }}
+{% if ':' in frr_bgp_peer_address %}
+ neighbor {{ frr_bgp_peer_address }} capability extended-nexthop
+{% endif %}
+{% for afi, family in families.items() if family.addresses %}
  !
- address-family ipv4 unicast
-  neighbor {{ frr_bgp_peer_address }} route-map TO-UPSTREAM out
-  network {{ frr_bgp_anycast_v4 }}/32
- exit-address-family
- !
- address-family ipv6 unicast
+ address-family {{ afi }} unicast
+{% for address in family.addresses %}
+  network {{ address }}/{{ family.length }}
+{% endfor %}
   neighbor {{ frr_bgp_peer_address }} activate
-  neighbor {{ frr_bgp_peer_address }} route-map TO-UPSTREAM-V6 out
-  network {{ frr_bgp_anycast_v6_ula }}/128
-  network {{ frr_bgp_anycast_v6_gua }}/128
+  neighbor {{ frr_bgp_peer_address }} send-community
+  neighbor {{ frr_bgp_peer_address }} route-map NOTHING in
+  neighbor {{ frr_bgp_peer_address }} route-map TO-UPSTREAM-{{ afi | upper }} out
  exit-address-family
+{% endfor %}
 !
 line vty
 !
