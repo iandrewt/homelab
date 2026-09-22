@@ -35,25 +35,28 @@ def test_an_ordinary_host_takes_its_resolvers_and_search_list_from_the_lease(sna
     """UniFi hands both out; a seed that named them too would be a second place to change
     when either moves - so the seed says nothing about DNS beyond listening to the lease."""
     host = ethernet(seed.network_config(site_of(snapshot)))
-    assert set(host) == {"match", "dhcp4", "dhcp6", "ipv6-address-generation",
+    assert set(host) == {"match", "dhcp4", "dhcp6", "emit-lldp",
                          "dhcp4-overrides", "dhcp6-overrides"}
     assert host["dhcp4-overrides"] == {"use-domains": True}
 
 
-def test_a_resolver_asks_itself_then_its_gateway_never_the_vip(snapshot):
-    """Nothing a resolver needs to build itself may come from the VIP it will serve."""
+def test_both_families_override_alike(snapshot):
+    """networkd shares one [DHCP] section between them, so netplan rejects the whole file
+    when the two disagree - and a missing one counts as disagreeing."""
+    site = site_of(snapshot)
+    for resolver in (None, site.resolvers["ratatoskr"]):
+        host = ethernet(seed.network_config(site, resolver=resolver))
+        assert host["dhcp4-overrides"] == host["dhcp6-overrides"]
+
+
+def test_a_resolver_asks_its_gateway_never_the_vip(snapshot):
+    """Nothing a resolver needs to build itself may come from the VIP it will serve, and
+    the lease will hand out the VIP by DHCP and RA alike."""
     site = site_of(snapshot)
     resolver = ethernet(seed.network_config(site, resolver=site.resolvers["ratatoskr"]))
-    assert resolver["nameservers"]["addresses"] == ["127.0.0.1", "10.0.110.1", "2001:db8:0:110::1"]
-    # networkd rejects the file outright when the two disagree
-    assert resolver["dhcp4-overrides"] == resolver["dhcp6-overrides"] == {
-        "use-domains": True, "use-dns": False
-    }
-
-
-def test_the_seed_asks_for_the_address_netbox_records(snapshot):
-    """NetworkManager picks stable-privacy unless told, which changes on every reinstall."""
-    assert "ipv6-address-generation: eui64" in seed.network_config(site_of(snapshot))
+    assert resolver["nameservers"]["addresses"] == ["10.0.110.1", "2001:db8:0:110::1"]
+    assert resolver["dhcp4-overrides"] == {"use-domains": True, "use-dns": False}
+    assert resolver["ra-overrides"] == {"use-dns": False}
 
 
 def test_the_seed_carries_no_address_of_its_own(snapshot):

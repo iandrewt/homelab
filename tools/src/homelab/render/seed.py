@@ -30,21 +30,14 @@ def cloud_config(payload: dict) -> str:
 
 
 def network_config(site, *, resolver=None) -> str:
-    ethernet = {
-        "match": {"name": "e*"},
-        "dhcp4": True,
-        "dhcp6": True,
-        # NetworkManager otherwise picks stable-privacy
-        "ipv6-address-generation": "eui64",
-    }
+    ethernet = {"match": {"name": "e*"}, "dhcp4": True, "dhcp6": True, "emit-lldp": True}
 
     overrides = {"use-domains": True}
     if resolver:
         vlan = site.vlan(resolver.vlan)
         ethernet["nameservers"] = {
-            "addresses": ["127.0.0.1", str(vlan.gateway_ipv4), str(vlan.gateway_ipv6)]
+            "addresses": [str(vlan.gateway_ipv4), str(vlan.gateway_ipv6)]
         }
-        # networkd drops the lease's servers; NetworkManager keeps them, but after these
         overrides["use-dns"] = False
         ethernet["ra-overrides"] = {"use-dns": False}
     ethernet["dhcp4-overrides"] = dict(overrides)
