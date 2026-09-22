@@ -4,7 +4,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.112"
+      version = "~> 0.114"
     }
     onepassword = {
       source  = "1Password/onepassword"
@@ -16,12 +16,12 @@ terraform {
   backend "local" {}
 
   encryption {
-    key_provider "pbkdf2" "primary" {
-      passphrase = var.tofu_state_passphrase
+    key_provider "external" "primary" {
+      command = ["uv", "run", "homelab", "tofu-key"]
     }
 
     method "aes_gcm" "primary" {
-      keys = key_provider.pbkdf2.primary
+      keys = key_provider.external.primary
     }
 
     state {
@@ -34,12 +34,6 @@ terraform {
       enforced = true
     }
   }
-}
-
-variable "tofu_state_passphrase" {
-  description = "State/plan encryption passphrase. Supply as TF_VAR_tofu_state_passphrase, never a .tfvars file."
-  type        = string
-  sensitive   = true
 }
 
 locals {

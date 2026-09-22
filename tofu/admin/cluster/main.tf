@@ -1,6 +1,4 @@
 locals {
-  ipam = jsondecode(file("${path.module}/../../clusters/generated/${terraform.workspace}.json"))
-
   pool_nodes = {
     for pool in toset(flatten([for _, n in local.cluster.nodes : keys(n.pools)])) :
     pool => sort([for name, n in local.cluster.nodes : name if contains(keys(n.pools), pool)])
@@ -24,7 +22,6 @@ module "node" {
   for_each = local.cluster.nodes
 
   name        = each.key
-  uplinks     = each.value.uplinks
   bridge_name = local.cluster.bridge
   time_zone   = local.cluster.timezone
 
@@ -33,13 +30,18 @@ module "node" {
   bond_mode             = each.value.bond_mode
   bond_xmit_hash_policy = each.value.bond_xmit_hash_policy
 
-  management = merge(
-    local.ipam.nodes[each.key],
-    {
-      uplink  = try(each.value.management.uplink, null)
-      vlan_id = try(each.value.management.tagged, false) ? local.ipam.nodes[each.key].vlan_id : null
-    },
-  )
+  uplinks         = module.netbox.nodes[each.key].uplinks
+  vids            = module.netbox.nodes[each.key].vids
+  vlan_interfaces = module.netbox.nodes[each.key].vlan_interfaces
+
+  management = {
+    uplink       = try(each.value.management.uplink, null)
+    vlan_id      = try(each.value.management.tagged, false) ? module.netbox.nodes[each.key].management.vlan_id : null
+    ipv4_address = module.netbox.nodes[each.key].management.ipv4_address
+    ipv4_gateway = module.netbox.nodes[each.key].management.ipv4_gateway
+    ipv6_address = module.netbox.nodes[each.key].management.ipv6_address
+    ipv6_gateway = module.netbox.nodes[each.key].management.ipv6_gateway
+  }
 
   pools = each.value.pools
 }

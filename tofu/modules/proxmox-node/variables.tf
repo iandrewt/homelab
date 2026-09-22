@@ -25,9 +25,56 @@ variable "vlan_aware" {
 }
 
 variable "vids" {
-  description = "VLAN IDs the bridge will pass. Ignored when vlan_aware is false."
-  type        = string
-  default     = "2-4094"
+  description = "VLAN IDs the bridge passes, from its tagged VLANs in NetBox. Empty passes every VLAN. Ignored when vlan_aware is false."
+  type        = list(number)
+  default     = []
+
+  validation {
+    condition     = alltrue([for v in var.vids : v > 0 && v < 4095])
+    error_message = "VLAN IDs must be 1-4094."
+  }
+}
+
+variable "vlan_interfaces" {
+  description = "Tagged interfaces on the bridge, keyed by VLAN ID, giving the host itself L2 on that VLAN - storage, for one."
+  type = map(object({
+    ipv4_address = optional(string)
+    ipv6_address = optional(string)
+    comment      = optional(string)
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for vid, _ in var.vlan_interfaces : can(tonumber(vid)) && tonumber(vid) > 0 && tonumber(vid) < 4095])
+    error_message = "vlan_interfaces keys must be VLAN IDs, 1-4094."
+  }
+
+  validation {
+    condition     = alltrue([for i in var.vlan_interfaces : i.ipv4_address != null || i.ipv6_address != null])
+    error_message = "A VLAN interface with no address of its own does nothing."
+  }
+
+  validation {
+    condition     = alltrue([for i in var.vlan_interfaces : i.ipv4_address == null || can(cidrnetmask(i.ipv4_address))])
+    error_message = "vlan_interfaces ipv4_address must be CIDR notation."
+  }
+
+  # The bridge only passes what its vids list names, so an interface on any other VLAN
+  # comes up and silently receives nothing.
+  validation {
+    condition     = length(var.vids) == 0 || alltrue([for vid, _ in var.vlan_interfaces : contains(var.vids, tonumber(vid))])
+    error_message = "Every vlan_interfaces VLAN has to be in vids."
+  }
+
+  validation {
+    condition     = length(var.vlan_interfaces) == 0 || var.vlan_aware
+    error_message = "A tagged interface on the bridge needs a VLAN-aware bridge."
+  }
+
+  validation {
+    condition     = var.management.vlan_id == null || !contains(keys(var.vlan_interfaces), tostring(var.management.vlan_id))
+    error_message = "management.vlan_id is also a vlan_interfaces key - that VLAN would be configured twice."
+  }
 }
 
 variable "bond_mode" {

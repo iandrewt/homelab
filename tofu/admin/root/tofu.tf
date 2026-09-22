@@ -4,7 +4,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.112"
+      version = "~> 0.114"
     }
     onepassword = {
       source  = "1Password/onepassword"
@@ -16,12 +16,12 @@ terraform {
   backend "local" {}
 
   encryption {
-    key_provider "pbkdf2" "primary" {
-      passphrase = var.tofu_state_passphrase
+    key_provider "external" "primary" {
+      command = ["uv", "run", "homelab", "tofu-key"]
     }
 
     method "aes_gcm" "primary" {
-      keys = key_provider.pbkdf2.primary
+      keys = key_provider.external.primary
     }
 
     state {
@@ -36,30 +36,14 @@ terraform {
   }
 }
 
-variable "tofu_state_passphrase" {
-  description = "State/plan encryption passphrase. Supply as TF_VAR_tofu_state_passphrase, never a .tfvars file."
-  type        = string
-  sensitive   = true
-}
-
 locals {
   cluster = yamldecode(file("${path.module}/../../clusters/${terraform.workspace}.yaml"))
 }
 
 provider "onepassword" {}
 
-ephemeral "onepassword_item" "token" {
-  vault = local.cluster.onepassword_vault
-  title = "${local.cluster.onepassword_item_prefix} root token"
-}
-
 provider "proxmox" {
-  endpoint  = local.cluster.endpoint
-  api_token = ephemeral.onepassword_item.token.password
-  insecure  = true # self-signed until there's an ACME account
-
-  ssh {
-    agent    = true
-    username = local.cluster.ssh_username
-  }
+  endpoint = local.cluster.endpoint
+  username = "root@pam"
+  insecure = true # self-signed until there's an ACME account
 }

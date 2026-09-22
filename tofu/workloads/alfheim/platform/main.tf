@@ -1,7 +1,6 @@
 locals {
-  # Identity map over the cluster's own nodes. Going through it to name a node means a
-  # typo is a "key not found" error at validate, rather than a confusing API failure at
-  # apply - which is what the cluster file's VM list used to catch in CI.
+  # Naming a node through this map turns a typo into a validate-time "key not found"
+  # rather than an API failure at apply.
   node = { for n in keys(local.cluster.nodes) : n => n }
 
   image = {
@@ -20,9 +19,9 @@ module "hugin" {
 
   node_name   = local.node["yggdrasil"]
   pool_id     = local.pool
-  vm_id       = 200
   hostname    = "hugin"
-  description = "DNS resolver (primary)."
+  region      = local.cluster_name
+  description = "DNS resolver."
   tags        = ["dns-resolver"]
 
   image_file_id = local.image["debian-13-genericcloud"]
@@ -35,21 +34,21 @@ module "hugin" {
   memory_mb    = 1024
   disk_size_gb = 8
 
-  vlan_id = local.ipam.hosts["hugin"].vlan_id
+  vm_id   = 200
+  vlan_id = module.netbox.vlans["Servers"]
+  dhcp4   = true
 
-  enable_dhcpv4 = true
-  enable_dhcpv6 = true
-
-  static_ip_addresses = [
-    local.ipam.hosts["hugin"].ipv6_address,
-  ]
-
-  dns_servers    = local.ipam.hosts["hugin"].dns_servers
-  search_domains = local.ipam.hosts["hugin"].search_domains
+  # Nothing a resolver needs to build itself may come from the VIP it will serve: its own
+  # recursor first, refused until it exists, then the gateway. Other guests take the lease's.
+  dns_servers = ["127.0.0.1", cidrhost(module.netbox.vlan_prefix["Servers"], 1)]
 
   ssh_public_keys = [data.onepassword_item.control_ssh_key.public_key]
 }
 
 output "vm_ids" {
   value = { hugin = module.hugin.vm_id }
+}
+
+output "macs" {
+  value = { hugin = module.hugin.mac_address }
 }

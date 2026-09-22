@@ -66,7 +66,6 @@ locals {
     }
   }
 
-  # tools/validate.py rejects a cluster file where these two could collide
   identities = merge(local.workload_identities, local.integration_identities)
 
   identity_acls = merge([

@@ -12,9 +12,8 @@ locals {
   mgmt_untagged  = !local.mgmt_dedicated && var.management.vlan_id == null
 }
 
-# Two appliers, because destroy runs in reverse dependency order. This one is created
-# first and destroyed last, so it is what activates the staged *deletions*; it has
-# nothing to do on create, since nothing is staged yet.
+# Destroy runs in reverse dependency order, so this one - created first, destroyed last -
+# is what activates the staged deletions. Nothing is staged yet on create.
 resource "proxmox_network_applier" "finalizer" {
   node_name = var.name
   on_create = false
@@ -38,7 +37,7 @@ resource "proxmox_network_linux_bridge" "this" {
   name       = var.bridge_name
   ports      = [coalesce(one(proxmox_network_linux_bond.this[*].name), var.uplinks[0])]
   vlan_aware = var.vlan_aware
-  vids       = var.vlan_aware ? var.vids : null
+  vids       = var.vlan_aware && length(var.vids) > 0 ? join(" ", [for v in var.vids : tostring(v)]) : null
   comment    = "VM traffic. Managed by OpenTofu."
 
   address  = local.mgmt_untagged ? var.management.ipv4_address : null
@@ -88,9 +87,26 @@ resource "proxmox_network_linux_vlan" "management" {
   depends_on = [proxmox_network_applier.finalizer]
 }
 
+resource "proxmox_network_linux_vlan" "this" {
+  for_each = var.vlan_interfaces
+
+  node_name = var.name
+  name      = "${var.bridge_name}.${each.key}"
+  interface = proxmox_network_linux_bridge.this.name
+  vlan      = tonumber(each.key)
+  autostart = true
+  comment   = coalesce(each.value.comment, "Managed by OpenTofu.")
+
+  address  = each.value.ipv4_address
+  address6 = each.value.ipv6_address
+
+  reload     = false
+  depends_on = [proxmox_network_applier.finalizer]
+}
+
 resource "proxmox_network_applier" "this" {
-  node_name  = var.name
-  on_pending = true
+  node_name = var.name
+  # on_pending = true
   on_destroy = false
 
   depends_on = [
@@ -98,6 +114,7 @@ resource "proxmox_network_applier" "this" {
     proxmox_network_linux_bridge.this,
     proxmox_network_linux_bridge.management,
     proxmox_network_linux_vlan.management,
+    proxmox_network_linux_vlan.this,
   ]
 }
 

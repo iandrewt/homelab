@@ -1,6 +1,20 @@
 locals {
-  # <prefix>:00:<vmid as two bytes>.
   mac_address = format("%s:00:%02x:%02x", lower(var.mac_prefix), floor(var.vm_id / 256), var.vm_id % 256)
+
+  static_addresses = [for a in [var.ipv4_address, var.ipv6_address] : a if a != null]
+
+  # The search list comes from the lease, which networkd ignores unless told. It shares one
+  # [DHCP] section between the families, so the two overrides have to agree.
+  dhcp_overrides = merge(
+    { use-domains = true },
+    length(var.dns_servers) > 0 ? { use-dns = false } : {},
+  )
+
+  overrides = merge(
+    var.dhcp4 ? { dhcp4-overrides = local.dhcp_overrides } : {},
+    var.dhcp6 ? { dhcp6-overrides = local.dhcp_overrides } : {},
+    length(var.dns_servers) > 0 && var.accept_ra ? { ra-overrides = { use-dns = false } } : {},
+  )
 }
 
 resource "random_id" "vm_instance_id" {
@@ -14,11 +28,15 @@ resource "proxmox_virtual_environment_file" "meta_data" {
 
   source_raw {
     file_name = "${var.hostname}-meta-data.yaml"
-    data = yamlencode({
-      instance-id    = random_id.vm_instance_id.hex
-      local-hostname = var.hostname
-      public-keys    = var.ssh_public_keys
-    })
+    data = yamlencode(merge({
+      instance-id       = random_id.vm_instance_id.hex
+      local-hostname    = var.hostname
+      public-keys       = var.ssh_public_keys
+      cloud-name        = "homelab"
+      availability-zone = var.node_name
+      },
+      var.region != null ? { region = var.region } : {},
+    ))
   }
 }
 
@@ -49,31 +67,24 @@ resource "proxmox_virtual_environment_file" "network_config" {
     data = yamlencode({
       version = 2
       ethernets = {
-        eth0 = {
-          match = {
-            macaddress = local.mac_address
-          }
-          dhcp4     = var.enable_dhcpv4
-          dhcp6     = var.enable_dhcpv6
-          accept-ra = var.accept_ra
+        eth0 = merge(
+          {
+            match     = { macaddress = local.mac_address }
+            dhcp4     = var.dhcp4
+            dhcp6     = var.dhcp6
+            accept-ra = var.accept_ra
 
-          addresses = var.static_ip_addresses
-          routes = [for route in [
-            var.ipv4_gateway != null ? {
-              to  = "default"
-              via = var.ipv4_gateway
-            } : null,
-            var.ipv6_gateway != null ? {
-              to  = "default"
-              via = var.ipv6_gateway
-            } : null
-          ] : route if route != null]
+            addresses = local.static_addresses
+            routes = [for route in [
+              var.ipv4_gateway != null ? { to = "default", via = var.ipv4_gateway } : null,
+              var.ipv6_gateway != null ? { to = "default", via = var.ipv6_gateway } : null,
+            ] : route if route != null]
 
-          nameservers = {
-            addresses = var.dns_servers
-            search    = var.search_domains
-          }
-        }
+          },
+          length(var.dns_servers) > 0 ? { nameservers = { addresses = var.dns_servers } } : {},
+          var.ipv6_token != null ? { ipv6-address-token = var.ipv6_token } : {},
+          local.overrides,
+        )
       }
     })
   }

@@ -4,11 +4,15 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "~> 0.112"
+      version = "~> 0.114"
     }
     onepassword = {
       source  = "1Password/onepassword"
       version = "~> 3.3"
+    }
+    netbox = {
+      source  = "e-breuninger/netbox"
+      version = "~> 5.8"
     }
     random = {
       source  = "hashicorp/random"
@@ -20,12 +24,12 @@ terraform {
   backend "local" {}
 
   encryption {
-    key_provider "pbkdf2" "primary" {
-      passphrase = var.tofu_state_passphrase
+    key_provider "external" "primary" {
+      command = ["uv", "run", "homelab", "tofu-key"]
     }
 
     method "aes_gcm" "primary" {
-      keys = key_provider.pbkdf2.primary
+      keys = key_provider.external.primary
     }
 
     state {
@@ -40,21 +44,32 @@ terraform {
   }
 }
 
-variable "tofu_state_passphrase" {
-  description = "State/plan encryption passphrase. Supply as TF_VAR_tofu_state_passphrase, never a .tfvars file."
-  type        = string
-  sensitive   = true
-}
-
 locals {
   cluster_name = "alfheim"
   pool         = "platform"
 
   cluster = yamldecode(file("${path.module}/../../../clusters/${local.cluster_name}.yaml"))
-  ipam    = jsondecode(file("${path.module}/../../../clusters/generated/${local.cluster_name}.json"))
+}
+
+provider "netbox" {
+  server_url = ephemeral.onepassword_item.netbox.hostname
+  api_token  = ephemeral.onepassword_item.netbox.credential
+}
+
+module "netbox" {
+  source = "../../../modules/netbox-site"
+
+  site_slug        = local.cluster.site
+  nodes            = keys(try(local.cluster.nodes, {}))
+  management_vlans = try(local.cluster.firewall.management_vlans, [])
 }
 
 provider "onepassword" {}
+
+ephemeral "onepassword_item" "netbox" {
+  vault = local.cluster.onepassword_vault
+  title = "tofu NetBox API token"
+}
 
 ephemeral "onepassword_item" "token" {
   vault = local.cluster.onepassword_vault

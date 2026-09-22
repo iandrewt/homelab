@@ -16,7 +16,7 @@ resource "proxmox_virtual_environment_cluster_firewall" "this" {
 
 resource "proxmox_virtual_environment_firewall_alias" "management" {
   for_each = {
-    for cidr in local.cluster.firewall.management_sources :
+    for cidr in module.netbox.management_sources :
     "mgmt-${replace(replace(replace(cidr, ".", "-"), ":", ""), "/", "-")}" => cidr
   }
 

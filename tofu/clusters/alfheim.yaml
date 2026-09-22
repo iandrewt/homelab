@@ -12,11 +12,7 @@ mac_prefix: "BC:24:11"
 bridge: vmbr0
 
 firewall:
-  management_sources:
-    - 10.176.10.0/24
-    - 10.176.30.0/24
-    - "fd1b:134f:4b00:10::/64"
-    - "fd1b:134f:4b00:30::/64"
+  management_vlans: [Management, Trusted]
 
 # oidc:
 #   realm: entra
@@ -53,7 +49,6 @@ guest_defaults:
 
 nodes:
   yggdrasil:
-    uplinks: [eno1, eno2]
     bond_mode: 802.3ad
     bond_xmit_hash_policy: layer3+4
 

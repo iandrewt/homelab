@@ -3,16 +3,27 @@ variable "node_name" {
 }
 
 variable "vm_id" {
-  description = "Proxmox VMID. Must be unique in the cluster."
+  description = "Proxmox VMID. Must be unique in the cluster. Nothing derives from it."
   type        = number
+
+  validation {
+    condition     = var.vm_id >= 100
+    error_message = "Proxmox reserves VMIDs below 100."
+  }
 }
 
 variable "hostname" {
   type = string
 }
 
+variable "region" {
+  description = "Reported as meta-data region. The cluster, matching what proxmox-cloud-controller-manager calls a region."
+  type        = string
+  default     = null
+}
+
 variable "mac_prefix" {
-  description = "Three-octet OUI the VM's MAC is derived under. Must match the cluster's mac_prefix."
+  description = "Three-octet OUI the VM's MAC derives under. From the cluster file."
   type        = string
 
   validation {
@@ -89,22 +100,39 @@ variable "vlan_id" {
   default     = null
 }
 
-variable "enable_dhcpv4" {
-  description = "Whether to enable DHCPv4 on the VM's network interface."
+variable "dhcp4" {
+  description = "Ask for an IPv4 lease."
   type        = bool
   default     = true
 }
 
-variable "enable_dhcpv6" {
-  description = "Whether to enable DHCPv6 on the VM's network interface."
+variable "dhcp6" {
+  description = "Ask for an IPv6 lease."
   type        = bool
-  default     = true
+  default     = false
 }
 
-variable "static_ip_addresses" {
-  description = "List of static IP addresses to assign to the VM's network interface. Must be in CIDR notation."
-  type        = list(string)
-  default     = []
+variable "ipv4_address" {
+  description = "Static IPv4 in CIDR notation. Null when dhcp4 is on."
+  type        = string
+  default     = null
+}
+
+variable "ipv6_address" {
+  description = "Static IPv6 in CIDR notation. Prefer ipv6_token unless something binds to the address at boot."
+  type        = string
+  default     = null
+}
+
+variable "ipv6_token" {
+  description = "SLAAC interface identifier, e.g. \"::11\". Yields <prefix>::11 under every advertised prefix."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.ipv6_token == null || can(regex("^::[0-9a-fA-F:]+$", var.ipv6_token))
+    error_message = "ipv6_token must be an interface identifier written as ::n."
+  }
 }
 
 variable "ipv4_gateway" {
@@ -126,13 +154,7 @@ variable "accept_ra" {
 }
 
 variable "dns_servers" {
-  description = "List of DNS servers to configure on the VM."
-  type        = list(string)
-  default     = []
-}
-
-variable "search_domains" {
-  description = "List of search domains to configure on the VM."
+  description = "DNS servers to use instead of the lease's. Only a resolver should need this."
   type        = list(string)
   default     = []
 }
