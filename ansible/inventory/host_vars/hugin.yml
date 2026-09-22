@@ -1,9 +1,7 @@
 ---
 ansible_user: debian
 
-powerdns_resolver_role: primary
-powerdns_resolver_api_key: "{{ lookup('community.general.onepassword', 'hugin PowerDNS API key',
-                                      vault=onepassword_vault, field='credential') }}"
+powerdns_resolver_role: secondary
 
 debian_host_upgrade_hour: 3  # staggered against ratatoskr - see ratatoskr.yml
 

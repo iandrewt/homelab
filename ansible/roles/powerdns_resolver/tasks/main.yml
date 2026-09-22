@@ -14,27 +14,34 @@
       string "None" in pdns.conf. Set it via a 1Password lookup in host_vars.
   when: powerdns_resolver_role == 'primary'
 
-- name: Capture the ipam-generated zone/record provisioning lists
-  ansible.builtin.set_fact:
-    powerdns_resolver_provision_zones: "{{ pdns_provision_zones | default([]) }}"
-    powerdns_resolver_provision_records: "{{ pdns_provision_records | default([]) }}"
-    powerdns_resolver_provision_zone_metadata: "{{ pdns_provision_zone_metadata | default([]) }}"
+- name: Zones and records
+  ansible.builtin.import_tasks: zones.yml
 
 - name: Compute the peer's notify addresses
   ansible.builtin.set_fact:
     powerdns_resolver_peer_notify_addresses: >-
-      {{ (powerdns_resolver_peer_notify_addresses | default([]))
-         + [(('[' ~ item ~ ']:53') if ':' in item else (item ~ ':53'))] }}
-  loop: "{{ powerdns_resolver_peer_addresses }}"
+      {{ (powerdns_resolver_peer_addresses | reject('search', ':') | map('regex_replace', '$', ':53') | list)
+         + (powerdns_resolver_peer_addresses | select('search', ':') | map('regex_replace', '^', '[')
+            | map('regex_replace', '$', ']:53') | list) }}
+
+# The API listens on `::`, where an IPv4 client arrives as ::ffff:a.b.c.d - and PowerDNS
+# matches its ACL against that mapped form, never the plain IPv4 one.
+- name: Write the API's allowed sources as the dual-stack socket reports them
+  ansible.builtin.set_fact:
+    powerdns_resolver_api_acl: >-
+      ::1/128{% for net in powerdns_resolver_api_allow_from %},{{
+        net if ':' in net else '::ffff:' ~ net.split('/')[0] ~ '/' ~ (96 + net.split('/')[1] | int)
+      }}{% endfor %}
 
 - name: Compute the authoritative server's pdns_config
   ansible.builtin.set_fact:
     powerdns_resolver_pdns_config: >-
       {{
-        {'local-address': static_ipv4 ~ ',' ~ static_ipv6, 'local-port': 53}
+        {'local-address': powerdns_resolver_service_v4 ~ ',' ~ powerdns_resolver_service_v6,
+         'local-port': 53}
         | combine(
-            {'primary': true, 'webserver': true, 'webserver-address': static_ipv6,
-             'webserver-port': 8081, 'webserver-allow-from': '::/0', 'api': true,
+            {'primary': true, 'webserver': true, 'webserver-address': '::',
+             'webserver-port': 8081, 'webserver-allow-from': powerdns_resolver_api_acl, 'api': true,
              'api-key': powerdns_resolver_api_key,
              'also-notify': powerdns_resolver_peer_notify_addresses | join(','),
              'allow-axfr-ips': powerdns_resolver_peer_addresses | join(',')}
@@ -47,17 +54,19 @@
 - name: Build the recursor's forward_zones list
   ansible.builtin.set_fact:
     powerdns_resolver_forward_zones: >-
-      {{ (powerdns_resolver_forward_zones | default([]))
-         + [{'zone': item, 'forwarders': ['[' ~ static_ipv6 ~ ']:53'], 'recurse': false}] }}
-  loop: "{{ [powerdns_resolver_zone] + powerdns_resolver_reverse_zones }}"
+      {{ powerdns_resolver_zones | map(attribute='name') | map('community.general.dict_kv', 'zone')
+         | map('combine', {'forwarders': ['[' ~ powerdns_resolver_service_v6 ~ ']:53'], 'recurse': false})
+         | list }}
 
 - name: Build the secondary's create-secondary-zone commands
   ansible.builtin.set_fact:
     powerdns_resolver_secondary_zone_commands: >-
       {{ (powerdns_resolver_secondary_zone_commands | default([]))
-         + [{'args': 'create-secondary-zone ' ~ item ~ ' ' ~ (powerdns_resolver_peer_notify_addresses | join(' ')),
-             'unless': 'list-zone ' ~ item}] }}
-  loop: "{{ [powerdns_resolver_zone] + powerdns_resolver_reverse_zones }}"
+         + [{'args': 'create-secondary-zone ' ~ item.name ~ ' ' ~ (powerdns_resolver_peer_notify_addresses | join(' ')),
+             'unless': 'list-zone ' ~ item.name}] }}
+  loop: "{{ powerdns_resolver_zones }}"
+  loop_control:
+    label: "{{ item.name }}"
   when: powerdns_resolver_role == 'secondary'
 
 - name: Configure the authoritative server
@@ -65,7 +74,7 @@
     name: PowerDNS.pdns
   vars:
     pdns_config: "{{ powerdns_resolver_pdns_config }}"
-    pdns_api_url: "http://[{{ static_ipv6 }}]:8081/api/v1/servers/localhost"
+    pdns_api_url: "http://[::1]:8081/api/v1/servers/localhost"
     pdns_backends:
       lmdb:
         filename: /var/lib/powerdns/pdns.lmdb
@@ -73,19 +82,9 @@
     pdns_lmdb_databases_locations:
       - /var/lib/powerdns/pdns.lmdb
     pdns_provision: true
-    pdns_provision_zones: "{{ powerdns_resolver_provision_zones if powerdns_resolver_role == 'primary' else [] }}"
-    pdns_provision_records: "{{ powerdns_resolver_provision_records if powerdns_resolver_role == 'primary' else [] }}"
-    pdns_provision_zone_metadata: "{{ powerdns_resolver_provision_zone_metadata if powerdns_resolver_role == 'primary' else [] }}"
+    pdns_provision_zones: "{{ (powerdns_resolver_provision_zones | default([])) if powerdns_resolver_role == 'primary' else [] }}"
+    pdns_provision_records: "{{ (powerdns_resolver_provision_records | default([])) if powerdns_resolver_role == 'primary' else [] }}"
     pdns_provision_pdnsutils: "{{ powerdns_resolver_secondary_zone_commands | default([]) }}"
-
-- name: Wipe the primary's recursor cache
-  ansible.builtin.command:
-    cmd: >-
-      rec_control wipe-cache
-      {{ ([powerdns_resolver_zone] + powerdns_resolver_reverse_zones) | map('regex_replace', '$', '$.') | join(' ') }}
-  become: true
-  when: powerdns_resolver_role == 'primary'
-  changed_when: true
 
 - name: Configure the recursor
   ansible.builtin.include_role:
@@ -94,9 +93,9 @@
     pdns_rec_config:
       dnssec:
         validation: "{{ powerdns_resolver_dnssec_validation }}"
-      incoming: >-
-        {{ {'listen': ['127.0.0.1', '::1']}
-           | combine({'allow_from': powerdns_resolver_allow_from} if powerdns_resolver_allow_from else {}) }}
+      incoming:
+        listen: ['127.0.0.1', '::1']
+        allow_from: "{{ powerdns_resolver_allow_from }}"
       outgoing:
         source_address:
           - 0.0.0.0
@@ -104,12 +103,23 @@
       recursor:
         forward_zones: "{{ powerdns_resolver_forward_zones }}"
 
+# The recursor caches the authoritative answers it forwarded for, so a changed record
+# isn't seen until its TTL runs out otherwise.
+- name: Wipe the primary's recursor cache for its own zones
+  ansible.builtin.command:
+    # `name$` wipes everything under name, not just the name itself
+    cmd: >-
+      rec_control wipe-cache
+      {% for zone in powerdns_resolver_zones %}{{ zone.name }}$ {% endfor %}
+  become: true
+  when: powerdns_resolver_role == 'primary'
+  changed_when: false
+
 - name: Build dnsdist's anycast listen address list
   ansible.builtin.set_fact:
     powerdns_resolver_dnsdist_locals: >-
       {{ ([powerdns_resolver_anycast_v4 ~ ':53'] if powerdns_resolver_anycast_v4 is not none else [])
-         + (['[' ~ powerdns_resolver_anycast_v6_ula ~ ']:53'] if powerdns_resolver_anycast_v6_ula is not none else [])
-         + (['[' ~ powerdns_resolver_anycast_v6_gua ~ ']:53'] if powerdns_resolver_anycast_v6_gua is not none else []) }}
+         + (['[' ~ powerdns_resolver_anycast_v6 ~ ']:53'] if powerdns_resolver_anycast_v6 is not none else []) }}
 
 - name: Configure dnsdist
   ansible.builtin.include_role:
@@ -122,13 +132,33 @@
       {% for local in powerdns_resolver_dnsdist_locals %}
       {{ 'setLocal' if loop.first else 'addLocal' }}("{{ local }}", {reusePort=true})
       {% endfor %}
+      {% if not powerdns_resolver_cross_site_ipv6 %}
+      {%   for owner in powerdns_resolver_sites.values() if owner.forward_zone %}
+      {%     set others = powerdns_resolver_sites.values() | rejectattr('slug', 'eq', owner.slug)
+                          | map(attribute='vlans') | map('dict2items') | flatten | map(attribute='value') %}
+      {%     set clients = (others | map(attribute='ipv4') | list) + (others | map(attribute='ipv6') | select | list) %}
+      {%     set zone = (powerdns_resolver_zones | selectattr('name', 'eq', owner.forward_zone) | first) %}
+      {%     if clients %}
+      -- {{ owner.slug }}'s IPv6 addresses aren't reachable from another site
+      do
+        local clients = newNMG()
+      {%       for net in clients %}
+        clients:addMask("{{ net }}")
+      {%       endfor %}
+        local zone = newSuffixMatchNode()
+        zone:add("{{ owner.forward_zone }}.")
+        addAction(
+          AndRule({QTypeRule(DNSQType.AAAA), SuffixMatchNodeRule(zone), NetmaskGroupRule(clients)}),
+          NegativeAndSOAAction(false, "{{ owner.forward_zone }}.", 300, "{{ zone.nameservers | first }}.",
+                               "hostmaster.{{ owner.forward_zone }}.", 1, 3600, 600, 86400, 300)
+        )
+      end
+      {%     endif %}
+      {%   endfor %}
+      {% endif %}
     dnsdist_servers:
       - "[::1]:53"
     dnsdist_controlsocket: "::1"
-    dnsdist_acls: "{{ [site_gua_prefix] if site_gua_prefix is defined else [] }}"
-    # The packaged unit has no After=/Wants= on networking at all - on a cold boot
-    # it can start before the anycast address exists yet, and setLocal() to a
-    # not-yet-present address throws, aborting the rest of the Lua config script.
-    dnsdist_unit_overrides:
-      After: network-online.target
-      Wants: network-online.target
+    # addACL appends, so dnsdist's built-in private ranges still apply - this only adds
+    # the site's public prefix, which those defaults can't know about.
+    dnsdist_acls: "{{ [powerdns_resolver_gua_prefix] if powerdns_resolver_gua_prefix else [] }}"

@@ -1,0 +1,37 @@
+---
+# NetBox holds every record, SOA included. The SOA is only written when a zone is
+# created: after that PowerDNS bumps the serial itself on every change through the API.
+
+- name: Declare every zone, with its name servers and NetBox's SOA
+  ansible.builtin.set_fact:
+    powerdns_resolver_provision_zones: >-
+      {{ (powerdns_resolver_provision_zones | default([])) + [{
+           'name': item.name ~ '.',
+           'kind': 'Master',
+           'soa_edit_api': 'DEFAULT',
+           'nameservers': item.nameservers | map('regex_replace', '$', '.') | list,
+           'rrsets': item.rrsets | selectattr('type', 'eq', 'SOA')
+                     | map('combine', {'records': [{'content': soa.records | first, 'disabled': false}]})
+                     | list,
+         }] }}
+  vars:
+    soa: "{{ item.rrsets | selectattr('type', 'eq', 'SOA') | first }}"
+  loop: "{{ powerdns_resolver_zones }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Build every other RRset
+  ansible.builtin.set_fact:
+    powerdns_resolver_provision_records: >-
+      {{ (powerdns_resolver_provision_records | default([])) + [{
+           'zone': item.0.name ~ '.',
+           'name': item.1.name,
+           'type': item.1.type,
+           'ttl': item.1.ttl,
+           'records': item.1.records | map('community.general.dict_kv', 'content')
+                      | map('combine', {'disabled': false}) | list,
+         }] }}
+  loop: "{{ powerdns_resolver_zones | subelements('rrsets') }}"
+  loop_control:
+    label: "{{ item.1.name }} {{ item.1.type }}"
+  when: item.1.type != 'SOA'

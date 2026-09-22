@@ -1,21 +1,31 @@
 ---
 powerdns_resolver_role: ~  # "primary" or "secondary"
 
-powerdns_resolver_zone: alfheim.titmuss.zone
-
-powerdns_resolver_reverse_zones: []
-
-powerdns_resolver_peer_addresses: []
-powerdns_resolver_peer_fqdn: ~
-
 powerdns_resolver_lmdb_shards: 1
 
 powerdns_resolver_api_key: ~
 
+powerdns_resolver_api_allow_from: []
+
 powerdns_resolver_dnssec_validation: "off"
 
-powerdns_resolver_anycast_v4: ~
-powerdns_resolver_anycast_v6_ula: ~
-powerdns_resolver_anycast_v6_gua: ~
+powerdns_resolver_service_v4: ~
+powerdns_resolver_service_v6: ~
 
-powerdns_resolver_allow_from: []
+powerdns_resolver_anycast_v4: ~
+powerdns_resolver_anycast_v6: ~
+
+# The recursor's only clients: dnsdist, which health-checks it over ::1, and the host itself.
+# Who may ask the resolvers is dnsdist's ACL, not this.
+powerdns_resolver_allow_from: [127.0.0.0/8, "::1/128"]
+powerdns_resolver_gua_prefix: ~
+
+# [{name, nameservers, rrsets: [{name, type, ttl, records}]}]
+powerdns_resolver_zones: []
+
+# {slug: {forward_zone, vlans: {name: {ipv4, ipv6}}}}
+powerdns_resolver_sites: {}
+
+# Site Magic carries IPv4 only, so a client at one site is never handed another site's
+# AAAA records. Set once the tunnel carries IPv6 too.
+powerdns_resolver_cross_site_ipv6: false

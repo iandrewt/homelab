@@ -1,16 +1,32 @@
 ---
-frr_bgp_local_asn: 65010
-frr_bgp_peer_asn: 65000
-frr_bgp_peer_address: "{{ gateway_ipv4 }}"
+dns_resolver: "{{ netbox_site.resolvers[inventory_hostname] }}"
 
-frr_bgp_anycast_v4: "{{ dns_anycast_v4 }}"
-frr_bgp_anycast_v6_ula: "{{ dns_anycast_v6_ula }}"
-frr_bgp_anycast_v6_gua: "{{ dns_anycast_v6_gua }}"
-powerdns_resolver_anycast_v4: "{{ dns_anycast_v4 }}"
-powerdns_resolver_anycast_v6_ula: "{{ dns_anycast_v6_ula }}"
-powerdns_resolver_anycast_v6_gua: "{{ dns_anycast_v6_gua }}"
+frr_bgp_local_asn: "{{ netbox_site.pools.dns.speaker_asn }}"
+frr_bgp_peer_asn: "{{ netbox_site.router_asn }}"
+frr_bgp_community: "{{ netbox_site.pools.dns.community }}"
+frr_bgp_peer_address: "{{ netbox_site.vlans[dns_resolver.vlan].gateway_ipv4 }}"
 
-dns_resolver_peers: "{{ groups['dns_resolver'] | difference([inventory_hostname])
-                        | map('extract', hostvars) | list }}"
-powerdns_resolver_peer_addresses: "{{ dns_resolver_peers | map(attribute='static_ipv4') | list
-                                    + dns_resolver_peers | map(attribute='static_ipv6') | list }}"
+frr_bgp_service_addresses: ["{{ dns_resolver.ipv4 }}", "{{ dns_resolver.ipv6 }}"]
+frr_bgp_anycast_addresses: ["{{ netbox_site.anycast.ipv4 }}", "{{ netbox_site.anycast.ipv6 }}"]
+frr_bgp_anycast_service: dnsdist.service
+
+powerdns_resolver_anycast_v4: "{{ netbox_site.anycast.ipv4 }}"
+powerdns_resolver_anycast_v6: "{{ netbox_site.anycast.ipv6 }}"
+powerdns_resolver_service_v4: "{{ dns_resolver.ipv4 }}"
+powerdns_resolver_service_v6: "{{ dns_resolver.ipv6 }}"
+powerdns_resolver_gua_prefix: "{{ netbox_site.gua_prefix }}"
+
+# Peers are reached at their service addresses, which the router advertises back to us
+powerdns_resolver_peer_addresses: >-
+  {{ netbox_site.resolvers | dict2items | rejectattr('key', 'eq', inventory_hostname)
+     | map(attribute='value') | map(attribute='ipv4') | list
+   + netbox_site.resolvers | dict2items | rejectattr('key', 'eq', inventory_hostname)
+     | map(attribute='value') | map(attribute='ipv6') | list }}
+
+powerdns_resolver_api_allow_from: >-
+  {{ ['Trusted', 'Servers'] | map('extract', netbox_site.vlans) | map(attribute='ipv4') | list
+   + ['Trusted', 'Servers'] | map('extract', netbox_site.vlans) | map(attribute='ipv6') | select | list
+   + [netbox_site.pools['kubernetes-pods'].ipv4, netbox_site.pools['kubernetes-pods'].ipv6] | select | list }}
+
+powerdns_resolver_zones: "{{ netbox_zones }}"
+powerdns_resolver_sites: "{{ netbox_sites }}"
