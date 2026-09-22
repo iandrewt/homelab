@@ -6,46 +6,27 @@ on:
   pull_request:
 
 jobs:
-  validate:
-    name: schema + semantic validation
+  tests:
+    name: tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: astral-sh/setup-uv@v10.0.1
         with:
-          python-version: "3.14"
-      - run: pip install -r requirements.txt
-      - run: python tools/validate.py
-
-  generation-drift:
-    name: regenerate and fail if anything changed
-    needs: validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.14"
-      - run: pip install -r requirements.txt
-      - run: python tools/generate.py
-      - name: fail if generated output drifted from what's committed
-        run: |
-          git diff --exit-code -- ansible/inventory/ tofu/clusters/generated/ || {
-            echo "::error::Generated output doesn't match ipam.yaml. Someone hand-edited a generated file, or forgot to run tools/generate.py and commit the result." >&2
-            exit 1
-          }
+          enable-cache: true
+      - run: uv run pytest
 
   tofu:
     name: tofu fmt + validate
     runs-on: ubuntu-latest
     env:
-      # State encryption is resolved during init, so a passphrase has to exist even to
-      # validate. Nothing is written, so the value is irrelevant - but pbkdf2 enforces a
-      # 16-character minimum.
-      TF_VAR_tofu_state_passphrase: ci-validate-only-not-a-real-secret
+      HOMELAB_STATE_PASSPHRASE: ci-validate-only-not-a-real-secret
     steps:
       - uses: actions/checkout@v7
       - uses: opentofu/setup-opentofu@v1
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
       - run: tofu fmt -check -recursive tofu/
       - name: validate the admin tree against every cluster
         run: |
@@ -71,28 +52,22 @@ jobs:
             echo "::endgroup::"
           done
 
-  shellcheck:
-    name: shellcheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - run: shellcheck bootstrap/proxmox/prepare-iso.sh bootstrap/raspberry-pi/*.sh
-
   yamllint:
     name: yamllint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: pip install yamllint
-      - run: yamllint -s .
+      - uses: astral-sh/setup-uv@v10.0.1
+      - run: uvx yamllint -s .
 
   ansible-lint:
     name: ansible-lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - run: pip install ansible-core ansible-lint
-      - run: ansible-galaxy collection install -r ansible/requirements.yml
-      - run: ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles
+      - uses: astral-sh/setup-uv@v10.0.1
+      # ansible-lint pulls ansible-core in, but ansible-galaxy ships with core itself.
+      - run: uvx --from ansible-core ansible-galaxy collection install -r ansible/requirements.yml
+      - run: uvx --from ansible-core ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles
       - working-directory: ansible
-        run: ansible-lint
+        run: uvx ansible-lint

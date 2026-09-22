@@ -1,12 +1,17 @@
 version: 2
 updates:
-  - package-ecosystem: "terraform"
+  - package-ecosystem: "opentofu"
     directories:
       - "/tofu/**/*"
     schedule:
       interval: "weekly"
 
   - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+
+  - package-ecosystem: "uv"
     directory: "/"
     schedule:
       interval: "weekly"
