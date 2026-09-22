@@ -30,6 +30,13 @@ IMAGE_REPAIR = {
     "runcmd": ["usermod --shell /bin/bash pi"],
 }
 
+# rpi-cloud-init-mods makes NetworkManager netplan's default renderer in /usr/lib/netplan;
+# a file of the same name in /etc/netplan shadows it.
+NETPLAN_DEFAULT = (
+    "etc/netplan/00-network-manager-all.yaml",
+    "network:\n  version: 2\n  renderer: networkd\n",
+)
+
 
 def register(subparsers) -> None:
     parser = subparsers.add_parser(
@@ -60,7 +67,7 @@ def register(subparsers) -> None:
 
 
 def main(args: argparse.Namespace) -> int:
-    require("sudo", "dd", "lsblk", "mount", "umount")
+    require("sudo", "dd", "lsblk", "mount", "umount", "chroot")
 
     try:
         ipam = load()
@@ -80,7 +87,8 @@ def main(args: argparse.Namespace) -> int:
 
     if args.dry_run:
         say(f"would fetch {url}")
-        say(f"would flash {args.device} and seed hostname={args.hostname}")
+        say(f"would flash {args.device}, swap NetworkManager for systemd-networkd and "
+            f"systemd-resolved, and seed hostname={args.hostname}")
         for name, body in documents(
             site, args.hostname, "<ssh key>", args.user_data
         ).items():
@@ -94,6 +102,7 @@ def main(args: argparse.Namespace) -> int:
         work = Path(tmp)
         compressed = _fetch(url, work)
         _write(compressed, device)
+        _bake(work, device)
         _seed(work, args, site, ssh_key, device)
 
     say("done - insert into the Pi and power on")
@@ -165,6 +174,54 @@ def _write(compressed: Path, device: Path) -> None:
 
     subprocess.run(["sudo", "partprobe", str(device)], check=False, capture_output=True)
     subprocess.run(["udevadm", "settle"], check=False)
+
+
+def _bake(work: Path, device: Path) -> None:
+    """Puts the image on the network stack every other host runs, before it first boots.
+
+    networkd hands DNS to resolved and nothing else, and resolved isn't in the image - so
+    a Pi that booted on networkd first could never fetch it.
+    """
+    say("replacing NetworkManager with systemd-networkd and systemd-resolved")
+    root = work / "root"
+    root.mkdir()
+    table = run("lsblk", "-no", "PATH,FSTYPE", str(device), capture=True)
+    run("sudo", "mount", str(blockdev.root_partition(device, table)), str(root))
+    try:
+        run("sudo", "mount", "-t", "proc", "proc", str(root / "proc"))
+        run("sudo", "mount", "--bind", "/sys", str(root / "sys"))
+        run("sudo", "mount", "--bind", "/dev", str(root / "dev"))
+        try:
+            _in_image(root, "true")
+        except BootstrapError:
+            raise BootstrapError(
+                "can't run the image's arm64 binaries: this needs a static qemu-aarch64 "
+                "registered with binfmt_misc (Arch: qemu-user-static-binfmt)"
+            ) from None
+
+        resolv = root / "etc/resolv.conf"
+        run("sudo", "cp", "--remove-destination", "/etc/resolv.conf", str(resolv))
+        _in_image(root, "apt-get", "update")
+        _in_image(root, "apt-get", "install", "-y", "systemd-resolved")
+        _in_image(
+            root, "apt-get", "purge", "-y", "--autoremove",
+            "network-manager", "avahi-daemon", "libnss-mdns",
+        )
+        _in_image(root, "apt-get", "clean")
+        run("sudo", "ln", "-sfn", "../run/systemd/resolve/stub-resolv.conf", str(resolv))
+
+        path, body = NETPLAN_DEFAULT
+        run("sudo", "install", "-m", "0600", "/dev/stdin", str(root / path), input=body)
+    finally:
+        run("sudo", "umount", "-R", str(root))
+
+
+def _in_image(root: Path, *command: str) -> None:
+    run(
+        "sudo", "chroot", str(root), "/usr/bin/env",
+        "PATH=/usr/sbin:/usr/bin:/sbin:/bin", "DEBIAN_FRONTEND=noninteractive",
+        *command,
+    )
 
 
 def _check_device(device: Path) -> None:
