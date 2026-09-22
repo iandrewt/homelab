@@ -5,7 +5,7 @@
     dest: /etc/ssh/sshd_config.d/10-debian-host-hardening.conf
     owner: root
     group: root
-    mode: "0644"
+    mode: "0600"
     content: |
       PasswordAuthentication {{ debian_host_ssh_password_auth | ternary('yes', 'no') }}
       KbdInteractiveAuthentication no

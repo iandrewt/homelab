@@ -1,8 +1,0 @@
-# Managed by Ansible (debian_host role) - edit host_vars / this role, not this file.
-network:
-  version: 2
-  renderer: networkd
-  ethernets:
-    {{ debian_host_primary_interface }}:
-      addresses:
-        - {{ static_ipv6 }}/64

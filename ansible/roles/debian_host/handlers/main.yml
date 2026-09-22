@@ -9,7 +9,3 @@
     name: apt-daily-upgrade.timer
     daemon_reload: true
     state: restarted
-
-- name: Apply netplan
-  ansible.builtin.command: netplan apply
-  changed_when: true
