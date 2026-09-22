@@ -1,0 +1,85 @@
+---
+- name: Install mandatory Raspberry Pi packages
+  ansible.builtin.apt:
+    name:
+      - raspi-firmware
+      - fake-hwclock
+    state: present
+
+# auditctl before 4.0.5 can't load CIS's `-F perm=` rules on arm64, and trixie ships 4.0.2
+# (linux-audit/audit-userspace#496). Pinned first, so forky can offer nothing but audit.
+- name: Pin forky to the audit source package alone
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/audit-from-forky
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Package: src:audit
+      Pin: release n=forky
+      Pin-Priority: 990
+
+      Package: *
+      Pin: release n=forky
+      Pin-Priority: -1
+
+- name: Add forky
+  register: raspberry_pi_os_forky
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/forky.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: http://deb.debian.org/debian/
+      Suites: forky
+      Components: main
+      Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp
+
+# latest: an installed 4.0.2 only moves up to the pinned candidate if asked to
+- name: Install audit from forky
+  ansible.builtin.apt:  # noqa: package-latest
+    name:
+      - auditd
+      - audispd-plugins
+    state: latest
+    update_cache: "{{ raspberry_pi_os_forky is changed }}"
+
+- name: Read the kernel command line
+  ansible.builtin.slurp:
+    src: /boot/firmware/cmdline.txt
+  register: raspberry_pi_os_cmdline_file
+
+# No mode: /boot/firmware is vfat
+- name: Set the kernel parameters on the command line
+  ansible.builtin.copy:  # noqa: risky-file-permissions
+    dest: /boot/firmware/cmdline.txt
+    content: |
+      {{ (((raspberry_pi_os_cmdline_file.content | b64decode).split()
+           | reject('match', '^(' ~ (raspberry_pi_os_kernel_parameters.keys() | list + ['security', 'apparmor']) | join('|') ~ ')=')
+           | list)
+          + (raspberry_pi_os_kernel_parameters.keys() | zip(raspberry_pi_os_kernel_parameters.values()) | map('join', '=') | list))
+         | join(' ') }}
+  notify: Reboot into the new boot configuration
+
+- name: Mount the boot firmware readable by root only
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^(\S+\s+/boot/firmware\s+vfat\s+)\S+(\s.*)$'
+    replace: '\g<1>{{ raspberry_pi_os_firmware_mount_options }}\g<2>'
+  notify: Reboot into the new boot configuration
+
+- name: Switch the radios off in firmware
+  ansible.builtin.blockinfile:
+    path: /boot/firmware/config.txt
+    marker: "# {mark} raspberry_pi_os"
+    block: |
+      [all]
+      dtoverlay=disable-wifi
+      dtoverlay=disable-bt
+  notify: Reboot into the new boot configuration
+
+# Now, not at the end of the play: CIS 1.3.1.3 needs AppArmor running
+- name: Reboot before the CIS baseline
+  ansible.builtin.meta: flush_handlers

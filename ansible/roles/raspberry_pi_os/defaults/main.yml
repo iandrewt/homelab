@@ -1,0 +1,7 @@
+---
+raspberry_pi_os_kernel_parameters:
+  lsm: landlock,lockdown,yama,apparmor,bpf
+  audit: 1
+  audit_backlog_limit: "{{ deb13cis_audit_back_log_limit | default(8192) }}"
+
+raspberry_pi_os_firmware_mount_options: defaults,fmask=0077,dmask=0077
