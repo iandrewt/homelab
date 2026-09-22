@@ -1,12 +1,9 @@
 # Managed by Ansible (frr_bgp role).
-# Each device names its renderer: a top-level one would override the image's default for
-# every interface on the host, eth0 included.
 network:
   version: 2
 {% if frr_bgp_service_addresses %}
   ethernets:
     lo:
-      renderer: networkd
       match:
         name: lo
       addresses:
@@ -17,7 +14,6 @@ network:
 {% if frr_bgp_anycast_addresses %}
   dummy-devices:
     anycast0:
-      renderer: networkd
       # Held down; anycast.service raises it only while the service it fronts runs
       activation-mode: manual
       addresses:
