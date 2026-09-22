@@ -8,23 +8,23 @@ on:
 jobs:
   tests:
     name: tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       - run: uv run pytest
 
   tofu:
     name: tofu fmt + validate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     env:
       HOMELAB_STATE_PASSPHRASE: ci-validate-only-not-a-real-secret
     steps:
       - uses: actions/checkout@v7
-      - uses: opentofu/setup-opentofu@v1
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: opentofu/setup-opentofu@v2
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
       - run: tofu fmt -check -recursive tofu/
@@ -54,18 +54,18 @@ jobs:
 
   yamllint:
     name: yamllint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
       - run: uvx yamllint -s .
 
   ansible-lint:
     name: ansible-lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.0.1
+      - uses: astral-sh/setup-uv@v10.2.0
       # ansible-lint pulls ansible-core in, but ansible-galaxy ships with core itself.
       - run: uvx --from ansible-core ansible-galaxy collection install -r ansible/requirements.yml
       - run: uvx --from ansible-core ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles
