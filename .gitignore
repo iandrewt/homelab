@@ -47,7 +47,7 @@ terraform.rc
 age-*-key.txt
 *.age
 
-# Python venvs for tools/ (requirements.txt)
+# uv virtualenv for tools/ (pyproject.toml)
 .venv/
 __pycache__/
 *.pyc

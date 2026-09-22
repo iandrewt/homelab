@@ -10,9 +10,8 @@ def _validator(path: Path) -> Draft202012Validator:
     return Draft202012Validator(json.loads(path.read_text()))
 
 
-def errors(schema_path: Path, data, prefix: str) -> list[str]:
-    """Schema violations as flat strings, each naming the key that failed."""
+def errors(schema_path: Path, data, source: str) -> list[str]:
     return [
-        f"{prefix}: {'.'.join(str(p) for p in err.path) or '<root>'}: {err.message}"
+        f"{source}: {'.'.join(str(p) for p in err.path) or '<root>'}: {err.message}"
         for err in sorted(_validator(schema_path).iter_errors(data), key=str)
     ]

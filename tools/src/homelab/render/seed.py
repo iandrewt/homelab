@@ -1,0 +1,53 @@
+"""cloud-init documents for hosts installed from media."""
+
+import uuid
+
+import yaml
+
+
+class IndentedDumper(yaml.SafeDumper):
+    def increase_indent(self, flow=False, indentless=False):
+        return super().increase_indent(flow, False)
+
+
+def _document(payload: dict) -> str:
+    return yaml.dump(payload, Dumper=IndentedDumper, sort_keys=False)
+
+
+def meta_data(hostname: str, site: str, *, ssh_keys=(), instance_id: str | None = None) -> str:
+    return _document({
+        "instance-id": instance_id or uuid.uuid4().hex,
+        "local-hostname": hostname,
+        "cloud-name": "homelab",
+        "region": site,
+        "public-keys": list(ssh_keys),
+    })
+
+
+def cloud_config(payload: dict) -> str:
+    # cloud-init types a document by its first line, so nothing may precede the marker.
+    return "#cloud-config\n" + _document(payload)
+
+
+def network_config(site, *, resolver=None) -> str:
+    ethernet = {
+        "match": {"name": "e*"},
+        "dhcp4": True,
+        "dhcp6": True,
+        # NetworkManager otherwise picks stable-privacy
+        "ipv6-address-generation": "eui64",
+    }
+
+    overrides = {"use-domains": True}
+    if resolver:
+        vlan = site.vlan(resolver.vlan)
+        ethernet["nameservers"] = {
+            "addresses": ["127.0.0.1", str(vlan.gateway_ipv4), str(vlan.gateway_ipv6)]
+        }
+        # networkd drops the lease's servers; NetworkManager keeps them, but after these
+        overrides["use-dns"] = False
+        ethernet["ra-overrides"] = {"use-dns": False}
+    ethernet["dhcp4-overrides"] = dict(overrides)
+    ethernet["dhcp6-overrides"] = dict(overrides)
+
+    return _document({"network": {"version": 2, "ethernets": {"primary": ethernet}}})
