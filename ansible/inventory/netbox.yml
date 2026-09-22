@@ -1,0 +1,20 @@
+plugin: netbox.netbox.nb_inventory
+validate_certs: true
+
+token: "{{ lookup('community.general.onepassword', 'Ansible NetBox API Token',
+                  vault='Homelab', field='credential') }}"
+
+query_filters:
+  - status: active
+  - status: staged
+  - tag: ansible-managed
+
+groups:
+  hypervisor: "role is defined and role.slug == 'hypervisor'"
+  dns_resolver: "role is defined and role.slug == 'dns-resolver'"
+  debian: >-
+    platform is defined and platform.slug in
+    ['debian-13-trixie', 'proxmox-ve-9-2', 'raspberry-pi-os-13']
+  raspberry_pi_os: "platform is defined and platform.slug.startswith('raspberry-pi-os-')"
+
+ansible_host_dns_name: true
