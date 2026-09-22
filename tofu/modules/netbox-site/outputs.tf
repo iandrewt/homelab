@@ -22,12 +22,11 @@ output "vlans" {
   description = "VLAN name to 802.1Q tag."
 }
 
-output "vlan_prefix" {
+output "vlan_prefixes" {
   value = {
-    for name, v in data.netbox_prefixes.vlan :
-    name => one([for p in v.prefixes : p.prefix if !strcontains(p.prefix, ":")])
+    for name, v in data.netbox_prefixes.vlan : name => [for p in v.prefixes : p.prefix]
   }
-  description = "VLAN name to its IPv4 prefix."
+  description = "VLAN name to its prefixes, one per family."
 }
 
 output "management_sources" {

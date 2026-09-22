@@ -13,7 +13,7 @@ locals {
   overrides = merge(
     var.dhcp4 ? { dhcp4-overrides = local.dhcp_overrides } : {},
     var.dhcp6 ? { dhcp6-overrides = local.dhcp_overrides } : {},
-    length(var.dns_servers) > 0 && var.accept_ra ? { ra-overrides = { use-dns = false } } : {},
+    length(var.dns_servers) > 0 ? { ra-overrides = { use-dns = false } } : {},
   )
 }
 
@@ -72,7 +72,7 @@ resource "proxmox_virtual_environment_file" "network_config" {
             match     = { macaddress = local.mac_address }
             dhcp4     = var.dhcp4
             dhcp6     = var.dhcp6
-            accept-ra = var.accept_ra
+            emit-lldp = true
 
             addresses = local.static_addresses
             routes = [for route in [

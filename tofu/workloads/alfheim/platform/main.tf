@@ -38,9 +38,8 @@ module "hugin" {
   vlan_id = module.netbox.vlans["Servers"]
   dhcp4   = true
 
-  # Nothing a resolver needs to build itself may come from the VIP it will serve: its own
-  # recursor first, refused until it exists, then the gateway. Other guests take the lease's.
-  dns_servers = ["127.0.0.1", cidrhost(module.netbox.vlan_prefix["Servers"], 1)]
+  # Nothing a resolver needs to build itself may come from the VIP it will serve
+  dns_servers = [for p in module.netbox.vlan_prefixes["Servers"] : cidrhost(p, 1)]
 
   ssh_public_keys = [data.onepassword_item.control_ssh_key.public_key]
 }

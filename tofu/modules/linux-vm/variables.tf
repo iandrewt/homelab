@@ -109,7 +109,7 @@ variable "dhcp4" {
 variable "dhcp6" {
   description = "Ask for an IPv6 lease."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "ipv4_address" {
@@ -145,12 +145,6 @@ variable "ipv6_gateway" {
   description = "Static IPv6 default route."
   type        = string
   default     = null
-}
-
-variable "accept_ra" {
-  description = "Accept IPv6 router advertisements."
-  type        = bool
-  default     = true
 }
 
 variable "dns_servers" {
