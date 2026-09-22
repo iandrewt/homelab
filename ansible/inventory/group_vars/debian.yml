@@ -4,6 +4,9 @@ deb13cis_level_2: true
 
 deb13cis_section4: false  # disable ufw controls
 
+# Mask the service instead of removing the package: raspi-firmware and pve-manager need it
+deb13cis_rsync_mask: true
+
 # leaving controls for /tmp (1.1.2.1.x) and /dev/shm (1.1.2.2.x) enabled
 deb13cis_rule_1_1_2_3_1: false  # /home separate partition
 deb13cis_rule_1_1_2_3_2: false
@@ -24,9 +27,14 @@ deb13cis_rule_1_1_2_7_2: false
 deb13cis_rule_1_1_2_7_3: false
 deb13cis_rule_1_1_2_7_4: false
 
+# users have no passwords
+deb13cis_rule_5_2_4: false
+deb13cis_rule_5_4_2_4: false
+
 deb13cis_tmp_svc: true
 
 deb13cis_rule_6_1_1_2_2: false  # No journal receiver yet
+deb13cis_rule_6_1_1_2_3: false  # ...so nothing for journal-upload to send to
 
 deb13cis_time_pool:
   - name: au.pool.ntp.org

@@ -19,3 +19,5 @@ deb13cis_sudoers_exclude_nopasswd_list:
   - tofu
 
 deb13cis_config_aide: false
+deb13cis_rule_6_3_2: false
+deb13cis_rule_6_3_3: false
