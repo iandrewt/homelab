@@ -36,7 +36,7 @@ class Snapshot:
     virtual_machines: list[dict] = field(default_factory=list)
 
 
-def _connection(item: str | None = None) -> tuple[str, str]:
+def connection(item: str | None = None) -> tuple[str, str]:
     item = (item or os.environ.get(ITEM_REF_ENV, DEFAULT_ITEM_REF)).rstrip("/")
     try:
         url, token = secrets.resolve(f"{item}/hostname", f"{item}/credential")
@@ -46,7 +46,7 @@ def _connection(item: str | None = None) -> tuple[str, str]:
 
 
 def fetch(item: str | None = None) -> Snapshot:
-    url, token = _connection(item)
+    url, token = connection(item)
 
     try:
         import pynetbox

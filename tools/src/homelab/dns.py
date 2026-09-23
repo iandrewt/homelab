@@ -1,0 +1,116 @@
+"""octoDNS, from NetBox's internal view to each site's primary.
+
+`plan` prints the changes and a checksum; `apply` takes that checksum and applies only if
+the plan still matches it, so what reaches PowerDNS is what was reviewed.
+"""
+
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+import yaml
+
+from . import netbox, secrets
+from .model import InvalidSource, load
+from .repo import Repo
+
+POWERDNS = "octodns_powerdns.PowerDnsProvider"
+
+
+def register(subparsers) -> None:
+    dns = subparsers.add_parser(
+        "dns", help="sync DNS records from NetBox to PowerDNS", description=__doc__
+    )
+    actions = dns.add_subparsers(dest="action", required=True, title="actions")
+
+    plan = actions.add_parser("plan", help="show what would change, and its checksum")
+    plan.set_defaults(run=_plan)
+
+    apply = actions.add_parser("apply", help="apply a plan that was reviewed")
+    apply.add_argument("checksum", help="as printed by `homelab dns plan`")
+    apply.add_argument(
+        "--force", action="store_true", help="allow changes past octoDNS's safety threshold"
+    )
+    apply.set_defaults(run=_apply)
+
+
+def _plan(args) -> int:
+    return _sync()
+
+
+def _apply(args) -> int:
+    return _sync("--checksum", args.checksum, *(["--force"] if args.force else []))
+
+
+def _sync(*flags: str) -> int:
+    path = Repo.discover().octodns_config
+    config = yaml.safe_load(path.read_text())
+    env = _secrets(config)
+
+    try:
+        zones = {f"{name}." for name in load().zones}
+    except (netbox.Unreachable, InvalidSource) as bad:
+        print(f"FAIL: {bad}", file=sys.stderr)
+        return 1
+
+    if missing := _uncreated(config, env, zones):
+        for problem in missing:
+            print(f"FAIL: {problem}", file=sys.stderr)
+        print(
+            "The resolvers play creates zones, with NetBox's SOA; octoDNS would create "
+            "them with PowerDNS's default instead. Run it first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    sync = Path(sys.executable).with_name("octodns-sync")
+    command = [str(sync), "--quiet", "--config-file", str(path), *flags]
+    return subprocess.run(command, env={**os.environ, **env}, check=False).returncode
+
+
+def _primaries(config: dict) -> dict[str, dict]:
+    return {
+        site: provider
+        for site, provider in config["providers"].items()
+        if provider["class"] == POWERDNS
+    }
+
+
+def _env_name(value: str) -> str:
+    return value.removeprefix("env/")
+
+
+def _secrets(config: dict) -> dict[str, str]:
+    """The config's env/ values, named as the config names them."""
+    source = config["providers"]["netbox"]
+    url, token = netbox.connection()
+    env = {_env_name(source["url"]): url, _env_name(source["token"]): token}
+    for site, provider in _primaries(config).items():
+        env[_env_name(provider["api_key"])] = secrets.resolve_one(
+            f"op://Homelab/{site} PowerDNS API key/credential"
+        )
+    return env
+
+
+def _uncreated(config: dict, env: dict[str, str], zones: set[str]) -> list[str]:
+    problems = []
+    for site, provider in _primaries(config).items():
+        url = (
+            f"{provider.get('scheme', 'http')}://{provider['host']}:"
+            f"{provider.get('port', 8081)}/api/v1/servers/localhost/zones"
+        )
+        request = urllib.request.Request(
+            url, headers={"X-API-Key": env[_env_name(provider["api_key"])]}
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                present = {z["name"] for z in json.load(response)}
+        except (urllib.error.URLError, TimeoutError) as down:
+            problems.append(f"{site}: can't list zones at {url}: {down}")
+            continue
+        problems += [f"{site}: {zone} doesn't exist yet" for zone in sorted(zones - present)]
+    return problems

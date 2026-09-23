@@ -1,7 +1,7 @@
 import argparse
 import sys
 
-from . import bootstrap, netbox, render, tofukey
+from . import bootstrap, dns, netbox, render, tofukey
 from . import clusters as cluster_files
 from .bootstrap.shell import BootstrapError
 from .model import InvalidSource, load
@@ -47,6 +47,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--resolver", metavar="HOST", help="the seed is for this resolver, not an ordinary host"
     )
     seed.set_defaults(run=_network_config)
+
+    dns.register(subparsers)
 
     key = subparsers.add_parser(
         "tofu-key",
