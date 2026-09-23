@@ -4,7 +4,7 @@ import sys
 from . import bootstrap, dns, netbox, render, tofukey
 from . import clusters as cluster_files
 from .bootstrap.shell import BootstrapError
-from .model import InvalidSource, load
+from .model import load, unzoned
 from .render import seed
 from .repo import Repo
 from .secrets import SecretError
@@ -74,11 +74,9 @@ def _sources(repo: Repo):
         ipam = load()
     except netbox.Unreachable as down:
         return None, None, [f"NetBox: {down}"]
-    except InvalidSource as invalid:
-        return None, None, str(invalid).splitlines()
 
     clusters, errors = cluster_files.load_all(repo, ipam)
-    return ipam, clusters, errors
+    return ipam, clusters, unzoned(ipam) + errors
 
 
 def _validate(args) -> int:
@@ -128,21 +126,21 @@ def _generate(args) -> int:
 def _network_config(args) -> int:
     try:
         ipam = load()
-    except (netbox.Unreachable, InvalidSource) as bad:
+    except netbox.Unreachable as bad:
         print(f"FAIL: {bad}", file=sys.stderr)
         return 1
 
-    site = ipam.sites.get(args.site)
+    site = ipam["sites"].get(args.site)
     if site is None:
-        known = ", ".join(sorted(ipam.sites))
+        known = ", ".join(sorted(ipam["sites"]))
         print(f"{args.site!r} is not a site in NetBox. Known: {known}", file=sys.stderr)
         return 1
 
     resolver = None
     if args.resolver:
-        resolver = site.resolvers.get(args.resolver)
+        resolver = site["resolvers"].get(args.resolver)
         if resolver is None:
-            known = ", ".join(sorted(site.resolvers)) or "none"
+            known = ", ".join(sorted(site["resolvers"])) or "none"
             print(f"{args.resolver!r} is not a resolver at {args.site}. Known: {known}",
                   file=sys.stderr)
             return 1

@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 from . import netbox, secrets
-from .model import InvalidSource, load
+from .model import load
 from .repo import Repo
 
 POWERDNS = "octodns_powerdns.PowerDnsProvider"
@@ -52,8 +52,8 @@ def _sync(*flags: str) -> int:
     env = _secrets(config)
 
     try:
-        zones = {f"{name}." for name in load().zones}
-    except (netbox.Unreachable, InvalidSource) as bad:
+        zones = {f"{name}." for name in load()["zones"]}
+    except netbox.Unreachable as bad:
         print(f"FAIL: {bad}", file=sys.stderr)
         return 1
 

@@ -26,11 +26,11 @@ class Snapshot:
     vlan_groups: list[dict] = field(default_factory=list)
     vlans: list[dict] = field(default_factory=list)
     prefixes: list[dict] = field(default_factory=list)
-    ranges: list[dict] = field(default_factory=list)
     addresses: list[dict] = field(default_factory=list)
     asns: list[dict] = field(default_factory=list)
     communities: list[dict] = field(default_factory=list)
     zones: list[dict] = field(default_factory=list)
+    dnssec_policies: list[dict] = field(default_factory=list)
     records: list[dict] = field(default_factory=list)
     devices: list[dict] = field(default_factory=list)
     virtual_machines: list[dict] = field(default_factory=list)
@@ -60,11 +60,11 @@ def fetch(item: str | None = None) -> Snapshot:
             vlan_groups=[dict(o) for o in api.ipam.vlan_groups.all()],
             vlans=[dict(o) for o in api.ipam.vlans.all()],
             prefixes=[dict(o) for o in api.ipam.prefixes.all()],
-            ranges=[dict(o) for o in api.ipam.ip_ranges.all()],
             addresses=[dict(o) for o in api.ipam.ip_addresses.all()],
             asns=[dict(o) for o in api.ipam.asns.all()],
             communities=[dict(o) for o in api.plugins.bgp.community.all()],
             zones=[dict(o) for o in api.plugins.netbox_dns.zones.all()],
+            dnssec_policies=[dict(o) for o in api.plugins.netbox_dns.dnssecpolicies.all()],
             records=[dict(o) for o in api.plugins.netbox_dns.records.all()],
             devices=[dict(o) for o in api.dcim.devices.all()],
             virtual_machines=[dict(o) for o in api.virtualization.virtual_machines.all()],

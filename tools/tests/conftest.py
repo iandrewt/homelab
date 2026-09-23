@@ -38,10 +38,6 @@ def prefix(cidr, *, site_slug=SITE, vid=None, role=None, status="active") -> dic
     }
 
 
-def ip_range(start, end, status="active") -> dict:
-    return {"start_address": start, "end_address": end, "status": {"value": status}}
-
-
 def address(addr, *, dns_name="", role=None, status="active", holder=None) -> dict:
     return {
         "address": addr,
@@ -66,6 +62,12 @@ def zone(name, view="_default_") -> dict:
             "nameservers": [{"name": "ratatoskr-dns.one.test"}]}
 
 
+def dnssec_policy(name, *key_types, algorithm="ECDSAP256SHA256") -> dict:
+    return {"name": name, "status": "active", "key_templates": [
+        {"type": t, "algorithm": algorithm, "key_size": None} for t in key_types
+    ]}
+
+
 def record(zone_name, fqdn, rtype, value, ttl=None, view="_default_") -> dict:
     return {"zone": {"name": zone_name, "view": {"name": view}}, "fqdn": fqdn, "type": rtype,
             "value": value, "ttl": ttl, "active": True}
@@ -88,8 +90,8 @@ def device(name, role, site_slug=SITE) -> dict:
 
 @pytest.fixture
 def snapshot() -> netbox.Snapshot:
-    """One site: two VLANs, one of them dual-stack with a pool, and a dns purpose
-    carrying an anycast VIP and one resolver's service addresses."""
+    """One site: two VLANs, one of them dual-stack, and a dns purpose carrying an
+    anycast VIP and one resolver's service addresses."""
     return netbox.Snapshot(
         sites=[site()],
         vlan_groups=[vlan_group()],
@@ -101,10 +103,6 @@ def snapshot() -> netbox.Snapshot:
             prefix("2001:db8:0:110::/64", vid=110),
             prefix("10.0.200.0/27", role="dns"),
             prefix("2001:db8::/64", role="dns"),
-        ],
-        ranges=[
-            ip_range("10.0.10.16/24", "10.0.10.254/24"),
-            ip_range("10.0.110.2/24", "10.0.110.254/24"),
         ],
         addresses=[
             address("10.0.10.5/24", dns_name="hugin.one.test"),

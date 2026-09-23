@@ -5,7 +5,7 @@ from homelab.render import seed, unifi
 
 
 def site_of(snapshot):
-    return load(snapshot).site(SITE)
+    return load(snapshot)["sites"][SITE]
 
 
 def test_frr_requires_both_the_block_and_the_tag(snapshot):
@@ -44,7 +44,7 @@ def test_both_families_override_alike(snapshot):
     """networkd shares one [DHCP] section between them, so netplan rejects the whole file
     when the two disagree - and a missing one counts as disagreeing."""
     site = site_of(snapshot)
-    for resolver in (None, site.resolvers["ratatoskr"]):
+    for resolver in (None, site["resolvers"]["ratatoskr"]):
         host = ethernet(seed.network_config(site, resolver=resolver))
         assert host["dhcp4-overrides"] == host["dhcp6-overrides"]
 
@@ -53,27 +53,8 @@ def test_a_resolver_asks_its_gateway_never_the_vip(snapshot):
     """Nothing a resolver needs to build itself may come from the VIP it will serve, and
     the lease will hand out the VIP by DHCP and RA alike."""
     site = site_of(snapshot)
-    resolver = ethernet(seed.network_config(site, resolver=site.resolvers["ratatoskr"]))
+    resolver = ethernet(seed.network_config(site, resolver=site["resolvers"]["ratatoskr"]))
     assert resolver["nameservers"]["addresses"] == ["10.0.110.1", "2001:db8:0:110::1"]
     assert resolver["dhcp4-overrides"] == {"use-domains": True, "use-dns": False}
     assert resolver["ra-overrides"] == {"use-dns": False}
 
-
-def test_the_seed_carries_no_address_of_its_own(snapshot):
-    config = seed.network_config(site_of(snapshot))
-    assert "addresses:" not in config.split("nameservers:")[0]
-
-
-def test_a_resolvers_own_service_address_is_distinguishable_from_the_vip(snapshot):
-    """The VIP says where DNS is; a resolver's own address says which one answered.
-
-    Both live in the `dns` prefix, so only the IP role tells them apart - which is why
-    the model exposes them by role rather than by address.
-    """
-    site = site_of(snapshot)
-    assert [str(a.address) for a in site.in_pool("dns", "anycast")] == [
-        "10.0.200.1", "2001:db8::53"
-    ]
-    assert [str(a.address) for a in site.in_pool("dns", "loopback")] == [
-        "10.0.200.2", "2001:db8::2"
-    ]

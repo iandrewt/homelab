@@ -34,10 +34,8 @@ def network_config(site, *, resolver=None) -> str:
 
     overrides = {"use-domains": True}
     if resolver:
-        vlan = site.vlan(resolver.vlan)
-        ethernet["nameservers"] = {
-            "addresses": [str(vlan.gateway_ipv4), str(vlan.gateway_ipv6)]
-        }
+        vlan = site["vlans"][resolver["vlan"]]
+        ethernet["nameservers"] = {"addresses": [vlan["gateway_ipv4"], vlan["gateway_ipv6"]]}
         overrides["use-dns"] = False
         ethernet["ra-overrides"] = {"use-dns": False}
     ethernet["dhcp4-overrides"] = dict(overrides)

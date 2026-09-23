@@ -27,7 +27,7 @@ def check(data: dict, source: str, stem: str, ipam, schema_path=None) -> list[st
 
 
 def _site(data, stem, ipam, error) -> None:
-    if data.get("site") and data["site"] not in ipam.sites:
+    if data.get("site") and data["site"] not in ipam["sites"]:
         error(f"site {data['site']!r} isn't a site in NetBox")
 
 
@@ -44,19 +44,19 @@ def _references_into_ipam(data, stem, ipam, error) -> None:
     installer freezes its address. A node missing here means either the cluster file names
     something that was never built, or NetBox was never told - both worth failing on.
     """
-    site = ipam.sites.get(data.get("site"))
+    site = ipam["sites"].get(data.get("site"))
     if site is None:
         return
 
-    named = {a.dns_name.split(".")[0] for a in site.named()}
+    named = {name.split(".")[0] for name in site["named"].values()}
     for node in data.get("nodes") or {}:
         if node not in named:
-            error(f"{node!r} has no named address at site {site.slug!r}")
+            error(f"{node!r} has no named address at site {site['slug']!r}")
 
     for name in (data.get("firewall") or {}).get("management_vlans") or []:
-        if name not in site.vlans:
+        if name not in site["vlans"]:
             error(
-                f"firewall.management_vlans: {name!r} isn't a VLAN at site {site.slug!r}"
+                f"firewall.management_vlans: {name!r} isn't a VLAN at site {site['slug']!r}"
             )
 
 

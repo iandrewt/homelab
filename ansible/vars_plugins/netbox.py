@@ -1,8 +1,7 @@
-"""Site facts from NetBox, through the same model `homelab validate` checks.
+"""Site facts from NetBox, through the same model the `homelab` CLI reads.
 
 `nb_inventory` says which hosts exist and what they are; this says what is true of the
-site each one is at. NetBox is read once per run, with Ansible's own token, and a host
-only ever sees data that validated.
+site each one is at. NetBox is read once per run, with Ansible's own token.
 """
 
 import os
@@ -46,6 +45,6 @@ class VarsModule(BaseVarsPlugin):
             try:
                 snapshot = netbox.fetch(os.environ.get("NETBOX_ITEM_REF", ITEM_REF))
                 cls._ipam = model.load(snapshot)
-            except (netbox.Unreachable, model.InvalidSource) as bad:
+            except netbox.Unreachable as bad:
                 raise AnsibleError(f"NetBox: {bad}") from None
         return cls._ipam

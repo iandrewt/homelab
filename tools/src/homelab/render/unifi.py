@@ -3,9 +3,9 @@ from .base import HEADER_HASH_FRR, Rendered
 
 def render(repo, ipam) -> Rendered:
     return {
-        repo.unifi / f"{site.slug}-frr.conf": frr_config(site)
-        for site in ipam.sites.values()
-        if site.router_asn and site.pools
+        repo.unifi / f"{site['slug']}-frr.conf": frr_config(site)
+        for site in ipam["sites"].values()
+        if site["router_asn"] and site["pools"]
     }
 
 
@@ -14,18 +14,20 @@ def stale(repo, rendered: Rendered) -> list:
     return sorted(existing - set(rendered))
 
 
-def frr_config(site) -> str:
+def frr_config(site: dict) -> str:
+    # An identifier, not an address to reach - but one the router demonstrably holds
+    router_id = min(site["vlans"].values(), key=lambda v: v["vid"])["gateway_ipv4"]
     lines = [
         HEADER_HASH_FRR,
-        f"router bgp {site.router_asn}",
-        f" bgp router-id {site.router_id}",
+        f"router bgp {site['router_asn']}",
+        f" bgp router-id {router_id}",
         " bgp log-neighbor-changes",
         " bgp ebgp-requires-policy",
         " no bgp default ipv4-unicast",
     ]
 
     groups = []
-    for vlan_name in sorted(site.listen_vlans):
+    for vlan_name in site["listen_vlans"]:
         group = vlan_name.upper()
         groups.append(group)
         lines += [
@@ -33,7 +35,7 @@ def frr_config(site) -> str:
             f" neighbor {group} peer-group",
             f" neighbor {group} remote-as external",
             f" neighbor {group} timers 3 9",
-            f" bgp listen range {site.vlan(vlan_name).ipv4} peer-group {group}",
+            f" bgp listen range {site['vlans'][vlan_name]['ipv4']} peer-group {group}",
         ]
 
     for family, suffix in (("ipv4", "V4"), ("ipv6", "V6")):
@@ -48,17 +50,17 @@ def frr_config(site) -> str:
         lines += ["  maximum-paths 8", " exit-address-family"]
     lines += ["!", "route-map NOTHING deny 10", "exit", "!"]
 
-    for purpose, pool in sorted(site.pools.items()):
+    for purpose, pool in sorted(site["pools"].items()):
         group = purpose.upper()
-        lines += _prefix_list("ip", f"{group}-V4", [pool.ipv4])
-        lines += _prefix_list("ipv6", f"{group}-V6", [pool.ipv6] if pool.ipv6 else [])
+        lines += _prefix_list("ip", f"{group}-V4", [pool["ipv4"]])
+        lines += _prefix_list("ipv6", f"{group}-V6", [pool["ipv6"]] if pool["ipv6"] else [])
         lines += [
-            f"bgp community-list standard {group} permit {pool.community}",
+            f"bgp community-list standard {group} permit {pool['community']}",
             "!",
         ]
 
     for suffix, family in (("V4", "ip"), ("V6", "ipv6")):
-        for seq, purpose in enumerate(sorted(site.pools), start=1):
+        for seq, purpose in enumerate(sorted(site["pools"]), start=1):
             group = purpose.upper()
             lines += [
                 f"route-map ADVERTISED-{suffix} permit {seq * 10}",
