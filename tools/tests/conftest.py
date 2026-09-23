@@ -61,14 +61,20 @@ def community(value, purpose) -> dict:
     return {"value": value, "role": None, "custom_fields": {"role": {"slug": purpose}}}
 
 
-def zone(name) -> dict:
-    return {"name": name, "active": True, "default_ttl": 3600,
+def zone(name, view="_default_") -> dict:
+    return {"name": name, "active": True, "default_ttl": 3600, "view": {"name": view},
             "nameservers": [{"name": "ratatoskr-dns.one.test"}]}
 
 
-def record(zone_name, fqdn, rtype, value, ttl=None) -> dict:
-    return {"zone": {"name": zone_name}, "fqdn": fqdn, "type": rtype, "value": value,
-            "ttl": ttl, "active": True}
+def record(zone_name, fqdn, rtype, value, ttl=None, view="_default_") -> dict:
+    return {"zone": {"name": zone_name, "view": {"name": view}}, "fqdn": fqdn, "type": rtype,
+            "value": value, "ttl": ttl, "active": True}
+
+
+def soa(zone_name, view="_default_") -> dict:
+    return record(zone_name, f"{zone_name}.", "SOA",
+                  "ratatoskr-dns.one.test. hostmaster.one.test. 1 3600 600 2419200 300",
+                  view=view)
 
 
 def device(name, role, site_slug=SITE) -> dict:
@@ -115,7 +121,10 @@ def snapshot() -> netbox.Snapshot:
         asns=[asn(64512, "router"), asn(64513, "dns")],
         communities=[community("64512:1", "dns")],
         zones=[zone("one.test"), zone("10.in-addr.arpa"), zone("8.b.d.0.1.0.0.2.ip6.arpa")],
-        records=[record("one.test", "dns.one.test.", "A", "10.0.200.1")],
+        records=[
+            soa("one.test"), soa("10.in-addr.arpa"), soa("8.b.d.0.1.0.0.2.ip6.arpa"),
+            record("one.test", "dns.one.test.", "A", "10.0.200.1"),
+        ],
         devices=[device("ratatoskr", "dns-resolver")],
     )
 

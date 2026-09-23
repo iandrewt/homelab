@@ -20,7 +20,7 @@ powerdns_resolver_anycast_v6: ~
 powerdns_resolver_allow_from: [127.0.0.0/8, "::1/128"]
 powerdns_resolver_gua_prefix: ~
 
-# [{name, nameservers, rrsets: [{name, type, ttl, records}]}]
+# [{name, nameservers, soa, soa_ttl}]
 powerdns_resolver_zones: []
 
 # {slug: {forward_zone, vlans: {name: {ipv4, ipv6}}}}

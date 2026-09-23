@@ -61,13 +61,5 @@ def _site(site) -> dict:
 
 
 def _zone(zone) -> dict:
-    """Records grouped into RRsets: a resolver replaces one name and type at a time, so
-    splitting an RRset across entries would leave only its last record standing."""
-    rrsets: dict[tuple[str, str], dict] = {}
-    for r in zone.records:
-        rrset = rrsets.setdefault(
-            (r.name, r.type), {"name": r.name, "type": r.type, "ttl": r.ttl, "records": []}
-        )
-        rrset["ttl"] = min(rrset["ttl"], r.ttl)
-        rrset["records"].append(r.value)
-    return {"name": zone.name, "nameservers": list(zone.nameservers), "rrsets": list(rrsets.values())}
+    return {"name": zone.name, "nameservers": list(zone.nameservers),
+            "soa": zone.soa, "soa_ttl": zone.soa_ttl}

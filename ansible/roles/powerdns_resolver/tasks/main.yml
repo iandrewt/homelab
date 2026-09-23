@@ -83,7 +83,6 @@
       - /var/lib/powerdns/pdns.lmdb
     pdns_provision: true
     pdns_provision_zones: "{{ (powerdns_resolver_provision_zones | default([])) if powerdns_resolver_role == 'primary' else [] }}"
-    pdns_provision_records: "{{ (powerdns_resolver_provision_records | default([])) if powerdns_resolver_role == 'primary' else [] }}"
     pdns_provision_pdnsutils: "{{ powerdns_resolver_secondary_zone_commands | default([]) }}"
 
 - name: Configure the recursor

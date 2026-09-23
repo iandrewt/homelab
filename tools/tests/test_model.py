@@ -49,6 +49,17 @@ def test_a_name_with_no_reverse_zone_is_an_error(snapshot):
     assert "has no reverse zone for its PTR" in errors(snapshot, zones=typo)
 
 
+def test_a_public_copy_of_a_zone_is_not_the_one_the_resolvers_serve(snapshot):
+    """Stage 2 of the DNS plan puts a copy of each internal zone, under the same name, in
+    the `public` view for Route53."""
+    from conftest import soa, zone
+
+    public = {**zone("one.test", view="public"), "nameservers": [{"name": "ns-1.example"}]}
+    zones = loads(snapshot, zones=[*snapshot.zones, public],
+                  records=[*snapshot.records, soa("one.test", view="public")]).zones
+    assert zones["one.test"].nameservers == ("ratatoskr-dns.one.test",)
+
+
 def test_a_resolver_must_peer_from_a_vlan_the_router_listens_on(snapshot):
     """Its session would simply never come up, and nothing else would say why."""
     deaf = [{**v, "tags": []} for v in snapshot.vlans]

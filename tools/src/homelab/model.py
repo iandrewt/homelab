@@ -14,6 +14,7 @@ ROUTER_ROLE = "router"
 RESOLVER_ROLE = "dns-resolver"
 RESOLVER_PURPOSE = "dns"
 LISTEN_TAG = "bgp-listen"
+INTERNAL_VIEW = "_default_"
 
 IPv4Net = ipaddress.IPv4Network
 IPv6Net = ipaddress.IPv6Network
@@ -87,18 +88,11 @@ class Anycast:
 
 
 @dataclass(frozen=True)
-class Record:
-    name: str
-    type: str
-    value: str
-    ttl: int
-
-
-@dataclass(frozen=True)
 class Zone:
     name: str
     nameservers: tuple[str, ...]
-    records: tuple[Record, ...]
+    soa: str
+    soa_ttl: int
 
 
 @dataclass(frozen=True)
@@ -229,29 +223,28 @@ def _site(slug: str, snap: netbox.Snapshot, communities, zones, fail) -> Site:
 
 
 def _zones(snap: netbox.Snapshot, fail) -> dict[str, Zone]:
-    """Every active zone, with the records netbox_dns holds for it - which it writes itself
-    from each IP's `dns_name`."""
+    """Every active zone in the internal view. octoDNS writes their records; what's left
+    for the resolvers to know is who serves each zone and the SOA it's created with."""
     zones = {}
     for raw in snap.zones:
-        if not raw["active"]:
+        if not raw["active"] or raw["view"]["name"] != INTERNAL_VIEW:
             continue
         name = raw["name"]
         nameservers = tuple(sorted(ns["name"] for ns in raw.get("nameservers") or []))
         if not nameservers:
             fail(f"zone {name}: no name servers")
             continue
-        records = tuple(
-            sorted(
-                (
-                    Record(name=r["fqdn"], type=r["type"], value=r["value"],
-                           ttl=r["ttl"] or raw["default_ttl"])
-                    for r in snap.records
-                    if r["active"] and r["zone"]["name"] == name
-                ),
-                key=lambda r: (r.name, r.type, r.value),
-            )
-        )
-        zones[name] = Zone(name=name, nameservers=nameservers, records=records)
+        soas = [
+            (r["value"], r["ttl"] or raw["default_ttl"])
+            for r in snap.records
+            if r["active"] and r["type"] == "SOA"
+            and r["zone"]["name"] == name and r["zone"]["view"]["name"] == INTERNAL_VIEW
+        ]
+        if len(soas) != 1:
+            fail(f"zone {name}: {len(soas)} SOA records, not 1")
+            continue
+        (soa, soa_ttl), = soas
+        zones[name] = Zone(name=name, nameservers=nameservers, soa=soa, soa_ttl=soa_ttl)
     return zones
 
 
