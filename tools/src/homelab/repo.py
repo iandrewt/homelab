@@ -35,10 +35,6 @@ class Repo:
     def octodns_config(self) -> Path:
         return self.root / "octodns" / "config.yaml"
 
-    @property
-    def answer_template(self) -> Path:
-        return self.root / "bootstrap" / "proxmox" / "answer.toml.tmpl"
-
     def cluster_files(self) -> list[Path]:
         return sorted(self.clusters.glob("*.yaml"))
 

@@ -12,6 +12,7 @@ dependencies = [
     "onepassword-sdk>=0.4.1",
     "pynetbox>=7.4",
     "pyyaml>=6.0",
+    "tomli-w>=1.2",
 ]
 
 [project.scripts]
