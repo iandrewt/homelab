@@ -7,7 +7,10 @@ powerdns_resolver_api_key: ~
 
 powerdns_resolver_api_allow_from: []
 
-powerdns_resolver_dnssec_validation: "off"
+powerdns_resolver_dnssec_validation: validate
+
+# Where the signed zones' DS records are read from; a secondary names its primary's
+powerdns_resolver_primary_api_url: "http://[::1]:8081/api/v1/servers/localhost"
 
 powerdns_resolver_service_v4: ~
 powerdns_resolver_service_v6: ~

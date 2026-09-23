@@ -17,3 +17,14 @@
   loop: "{{ powerdns_resolver_zones }}"
   loop_control:
     label: "{{ item.name }}"
+
+# The PowerDNS role creates a zone's keys only while it has none, so a rollover is the
+# operator's, not a converge's.
+- name: Declare each signed zone's keys
+  ansible.builtin.set_fact:
+    powerdns_resolver_provision_cryptokeys: >-
+      {{ (powerdns_resolver_provision_cryptokeys | default([]))
+         + item.dnssec_keys | map('combine', {'zone': item.name ~ '.', 'active': true}) | list }}
+  loop: "{{ powerdns_resolver_zones }}"
+  loop_control:
+    label: "{{ item.name }}"

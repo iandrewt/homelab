@@ -84,6 +84,10 @@
     pdns_provision: true
     pdns_provision_zones: "{{ (powerdns_resolver_provision_zones | default([])) if powerdns_resolver_role == 'primary' else [] }}"
     pdns_provision_pdnsutils: "{{ powerdns_resolver_secondary_zone_commands | default([]) }}"
+    pdns_provision_cryptokeys: "{{ (powerdns_resolver_provision_cryptokeys | default([])) if powerdns_resolver_role == 'primary' else [] }}"
+
+- name: DNSSEC trust anchors
+  ansible.builtin.import_tasks: anchors.yml
 
 - name: Configure the recursor
   ansible.builtin.include_role:
@@ -92,6 +96,8 @@
     pdns_rec_config:
       dnssec:
         validation: "{{ powerdns_resolver_dnssec_validation }}"
+        trustanchors: "{{ powerdns_resolver_trust_anchors | default([]) }}"
+        negative_trustanchors: "{{ powerdns_resolver_negative_trust_anchors }}"
       incoming:
         listen: ['127.0.0.1', '::1']
         allow_from: "{{ powerdns_resolver_allow_from }}"

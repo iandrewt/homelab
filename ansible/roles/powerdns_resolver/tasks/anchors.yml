@@ -1,0 +1,44 @@
+---
+- name: Read each signed zone's keys from the primary
+  ansible.builtin.uri:
+    url: "{{ powerdns_resolver_primary_api_url }}/zones/{{ item.name }}./cryptokeys"
+    headers:
+      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+    status_code: [200, 404]
+  loop: "{{ powerdns_resolver_zones | rejectattr('dnssec_keys', 'eq', []) | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: powerdns_resolver_cryptokeys
+  check_mode: false
+  no_log: true
+
+- name: Trust each signed zone's SHA-256 DS
+  ansible.builtin.set_fact:
+    powerdns_resolver_trust_anchors: >-
+      {{ (powerdns_resolver_trust_anchors | default([])) + [{
+           'name': item.item.name,
+           'dsrecords': (item.json | default([])) | selectattr('active')
+                        | selectattr('keytype', 'in', ['ksk', 'csk'])
+                        | map(attribute='ds') | flatten
+                        | select('match', '[0-9]+ [0-9]+ 2 ') | list,
+         }] }}
+  loop: "{{ powerdns_resolver_cryptokeys.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Assert every signed zone has a key to trust
+  ansible.builtin.assert:
+    that: item.dsrecords | length > 0
+    fail_msg: "{{ item.name }} is meant to be signed, but the primary has no active key for it"
+    quiet: true
+  loop: "{{ powerdns_resolver_trust_anchors | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: not ansible_check_mode
+
+- name: Set the unsigned zones aside, which validation would otherwise find bogus
+  ansible.builtin.set_fact:
+    powerdns_resolver_negative_trust_anchors: >-
+      {{ powerdns_resolver_zones | selectattr('dnssec_keys', 'eq', []) | map(attribute='name')
+         | map('community.general.dict_kv', 'name')
+         | map('combine', {'reason': 'unsigned internal zone'}) | list }}
