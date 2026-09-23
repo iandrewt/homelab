@@ -126,14 +126,14 @@ to create by hand.
 - [x] Write and upload the UDM Pro's own FRR config (now generated into `unifi/generated/`)
 - [x] Confirm real ECMP behaviour against the actual UDM Pro firmware in practice
 
-**DNS** - the plan is [`netbox/dns-plan.md`](netbox/dns-plan.md)
+**DNS**
 
 - [x] Zone TTLs, and the same as `netbox_dns` plugin defaults
 - [ ] Once both resolvers are up, set UniFi's DHCP DNS and RA RDNSS to the VIP on every internal network; until then clients stay on the UDM
 - [x] UniFi DHCP option 119 per network, per the search list in the DNS plan
 - [x] BGP peer groups and listen sessions in NetBox, replacing the `bgp-listen` tag and the `router` ASN role
 - [ ] IPv6 BGP transport once the UDM's kernel is 5.2 or later
-- [ ] octoDNS from `netbox_dns` to PowerDNS, replacing the role's RRset provisioning
+- [x] octoDNS from `netbox_dns` to PowerDNS, replacing the role's RRset provisioning
 - [ ] Ask the ISP to delegate alfheim's /48 reverse zone to Route53; a `public` view for it and `titmuss.au`
 - [ ] DNSSEC stage 1: sign internal zones, trust anchors on both recursors, validation on
 - [ ] DNSSEC stage 2: public copies in Route53, two DS records at Cloudflare, ACME CNAMEs into `acme.titmuss.au`
