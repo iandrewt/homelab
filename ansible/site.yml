@@ -6,6 +6,13 @@
   roles:
     - raspberry_pi_os
 
+- name: Proxmox node
+  tags: [proxmox]
+  hosts: hypervisor
+  become: true
+  roles:
+    - proxmox_node
+
 - name: CIS Debian 13 baseline
   tags: [cis]
   hosts: debian

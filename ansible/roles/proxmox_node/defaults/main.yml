@@ -1,0 +1,3 @@
+---
+proxmox_node_cluster: "{{ cluster }}"
+proxmox_node_link0: "{{ primary_ip6 }}"
