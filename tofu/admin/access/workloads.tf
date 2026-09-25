@@ -32,15 +32,15 @@ locals {
       acls = [
         {
           path    = "/pool/${group}"
-          role_id = proxmox_virtual_environment_role.tofu_workload.role_id
+          role_id = "PVEVMAdmin"
         },
         {
           path    = "/storage/${local.cluster.guest_defaults.disk_storage}"
-          role_id = proxmox_virtual_environment_role.tofu_vm_storage.role_id
+          role_id = "PVEDatastoreUser"
         },
         {
           path    = "/storage/${local.cluster.guest_defaults.snippet_storage}"
-          role_id = proxmox_virtual_environment_role.tofu_vm_storage.role_id
+          role_id = "PVEDatastoreUser"
         },
         {
           # The API requires SDN.Use on any bridge a VM attaches to,
@@ -80,37 +80,6 @@ locals {
 }
 
 # --- Roles -------------------------------------------------------------------------
-
-resource "proxmox_virtual_environment_role" "tofu_workload" {
-  role_id = "TofuWorkload"
-
-  privileges = [
-    "VM.Allocate",
-    "VM.Audit",
-    "VM.Clone",
-    "VM.Config.CDROM",
-    "VM.Config.CPU",
-    "VM.Config.Cloudinit",
-    "VM.Config.Disk",
-    "VM.Config.HWType",
-    "VM.Config.Memory",
-    "VM.Config.Network",
-    "VM.Config.Options",
-    "VM.Console",
-    "VM.PowerMgmt",
-    "VM.Snapshot",
-    "VM.GuestAgent.Audit",
-  ]
-}
-
-resource "proxmox_virtual_environment_role" "tofu_vm_storage" {
-  role_id = "TofuVMStorage"
-
-  privileges = [
-    "Datastore.AllocateSpace",
-    "Datastore.Audit",
-  ]
-}
 
 resource "proxmox_virtual_environment_role" "tofu_sdn_use" {
   role_id = "TofuSDNUse"
