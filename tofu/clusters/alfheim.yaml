@@ -8,6 +8,7 @@ onepassword_item_prefix: alfheim Proxmox
 
 ssh_username: tofu
 timezone: Australia/Sydney
+mailto: pve@titmuss.house
 mac_prefix: "BC:24:11"
 bridge: vmbr0
 

@@ -13,6 +13,7 @@
     "onepassword_item_prefix",
     "ssh_username",
     "timezone",
+    "mailto",
     "firewall",
     "bridge",
     "storages",
@@ -44,6 +45,10 @@
     },
     "timezone": {
       "description": "tzdata name.",
+      "type": "string"
+    },
+    "mailto": {
+      "description": "root's email address, set by the installer.",
       "type": "string"
     },
     "firewall": {
