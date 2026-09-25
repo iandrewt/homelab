@@ -9,8 +9,8 @@
     components: "{{ item.component }}"
     signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
   loop:
-    - {name: pve-enterprise, path: pve, component: pve-enterprise}
-    - {name: ceph, path: ceph-squid, component: enterprise}
+    - { name: pve-enterprise, path: pve, component: pve-enterprise }
+    - { name: ceph, path: ceph-squid, component: enterprise }
   loop_control:
     label: "{{ item.name }}"
   register: proxmox_node_enterprise
@@ -29,6 +29,46 @@
   ansible.builtin.apt:
     name: lldpd
     update_cache: "{{ proxmox_node_enterprise is changed or proxmox_node_no_subscription is changed }}"
+
+# No link-local address anywhere the node has no IPv6 address of its own.
+# Boot runs ifupdown2 in perfmode, which skips its policy defaults,
+# so the kernel's default has to agree.
+- name: Leave new interfaces without a link-local address
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/60-ipv6-addrgen.conf
+    content: |
+      net.ipv6.conf.default.addr_gen_mode = 1
+    mode: "0644"
+  notify: Apply sysctl
+
+- name: Tell ifupdown2 the same
+  ansible.builtin.copy:
+    dest: /etc/network/ifupdown2/policy.d/addrgen.json
+    content: |
+      {"address": {"defaults": {"ipv6-addrgen": "off"}}}
+    mode: "0644"
+  notify: Reload the network
+
+- name: Write the node's interfaces
+  ansible.builtin.copy:
+    dest: /etc/network/interfaces
+    content: >-
+      {{ interfaces | proxmox_interfaces(netbox_site, [primary_ip4, primary_ip6] | select | list,
+                                         proxmox_node_bond) }}
+    mode: "0644"
+  notify: Reload the network
+
+- name: Point the node at the site's resolvers
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    content: |
+      search {{ netbox_site.forward_zone }}
+      nameserver {{ netbox_site.anycast.ipv6 }}
+      nameserver {{ netbox_site.anycast.ipv4 }}
+    mode: "0644"
+
+- name: Reload the network before the cluster
+  ansible.builtin.meta: flush_handlers
 
 - name: Find the nodes of this cluster
   ansible.builtin.set_fact:

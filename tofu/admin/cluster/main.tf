@@ -21,46 +21,14 @@ module "node" {
   source   = "../../modules/proxmox-node"
   for_each = local.cluster.nodes
 
-  name        = each.key
-  bridge_name = local.cluster.bridge
-  time_zone   = local.cluster.timezone
-
-  vlan_aware = try(each.value.vlan_aware, true)
-
-  bond_mode             = each.value.bond_mode
-  bond_xmit_hash_policy = each.value.bond_xmit_hash_policy
-
-  uplinks         = module.netbox.nodes[each.key].uplinks
-  vids            = module.netbox.nodes[each.key].vids
-  vlan_interfaces = module.netbox.nodes[each.key].vlan_interfaces
-
-  management = {
-    uplink       = try(each.value.management.uplink, null)
-    vlan_id      = try(each.value.management.tagged, false) ? module.netbox.nodes[each.key].management.vlan_id : null
-    ipv4_address = module.netbox.nodes[each.key].management.ipv4_address
-    ipv4_gateway = module.netbox.nodes[each.key].management.ipv4_gateway
-    ipv6_address = module.netbox.nodes[each.key].management.ipv6_address
-    ipv6_gateway = module.netbox.nodes[each.key].management.ipv6_gateway
-  }
-
+  name  = each.key
   pools = each.value.pools
-}
-
-# --- Network -----------------------------------------------------------------------
-
-import {
-  for_each = local.cluster.nodes
-  to       = module.node[each.key].proxmox_network_linux_bridge.this
-  id       = "${each.key}:${local.cluster.bridge}"
 }
 
 # --- SDN ---------------------------------------------------------------------------
 
 locals {
-  vnets = {
-    for vid in toset(flatten([for n, _ in local.cluster.nodes : module.netbox.nodes[n].vids])) :
-    module.netbox.vnets[tostring(vid)].id => merge(module.netbox.vnets[tostring(vid)], { tag = vid })
-  }
+  vnets = { for vid, v in module.netbox.vnets : v.id => merge(v, { tag = tonumber(vid) }) }
 
   subnets = merge([
     for vnet, v in local.vnets : { for p in v.prefixes : "${vnet}|${p}" => { vnet = vnet, cidr = p } }
@@ -73,9 +41,10 @@ resource "proxmox_sdn_applier" "finalizer" {
 
 resource "proxmox_sdn_zone_vlan" "this" {
   id     = local.cluster.site
-  bridge = local.cluster.bridge
+  bridge = local.cluster.sdn.bridge
+  mtu    = local.cluster.sdn.mtu
 
-  depends_on = [module.node, proxmox_sdn_applier.finalizer]
+  depends_on = [proxmox_sdn_applier.finalizer]
 }
 
 resource "proxmox_sdn_vnet" "this" {

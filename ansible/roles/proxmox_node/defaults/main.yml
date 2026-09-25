@@ -1,3 +1,8 @@
 ---
 proxmox_node_cluster: "{{ cluster }}"
 proxmox_node_link0: "{{ primary_ip6 }}"
+
+proxmox_node_bond:
+  miimon: 100
+  mode: 802.3ad
+  xmit-hash-policy: layer3+4

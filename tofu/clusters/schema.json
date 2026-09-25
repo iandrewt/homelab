@@ -15,7 +15,7 @@
     "timezone",
     "mailto",
     "firewall",
-    "bridge",
+    "sdn",
     "storages",
     "guest_defaults",
     "nodes",
@@ -70,9 +70,24 @@
         }
       }
     },
-    "bridge": {
-      "description": "Bridge to place VMs on.",
-      "type": "string"
+    "sdn": {
+      "description": "The SDN VLAN zone every VNet is in.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bridge",
+        "mtu"
+      ],
+      "properties": {
+        "bridge": {
+          "description": "The trunk bridge it runs on, on every node. proxmox_node builds it from NetBox.",
+          "type": "string"
+        },
+        "mtu": {
+          "type": "integer",
+          "minimum": 1280
+        }
+      }
     },
     "oidc": {
       "description": "OIDC realm, such as Entra.",
@@ -109,12 +124,6 @@
           "pools"
         ],
         "properties": {
-          "bond_mode": {
-            "type": "string"
-          },
-          "bond_xmit_hash_policy": {
-            "type": "string"
-          },
           "pools": {
             "type": "object",
             "additionalProperties": {
@@ -151,59 +160,8 @@
                 }
               }
             }
-          },
-          "vlan_aware": {
-            "description": "False for a flat network with no VLANs.",
-            "type": "boolean"
-          },
-          "management": {
-            "type": "object",
-            "additionalProperties": false,
-            "minProperties": 1,
-            "properties": {
-              "uplink": {
-                "description": "NIC given over to management. Must not be a member of the LAG in NetBox.",
-                "type": "string"
-              },
-              "tagged": {
-                "description": "Only when sharing the VM bridge: true for a pure-trunk port, false when the port carries the management VLAN natively.",
-                "type": "boolean"
-              }
-            },
-            "not": {
-              "required": [
-                "uplink",
-                "tagged"
-              ]
-            }
           }
-        },
-        "allOf": [
-          {
-            "$comment": "A tagged management subinterface needs a VLAN-aware bridge.",
-            "if": {
-              "required": [
-                "vlan_aware"
-              ],
-              "properties": {
-                "vlan_aware": {
-                  "const": false
-                }
-              }
-            },
-            "then": {
-              "properties": {
-                "management": {
-                  "properties": {
-                    "tagged": {
-                      "const": false
-                    }
-                  }
-                }
-              }
-            }
-          }
-        ]
+        }
       }
     },
     "images": {

@@ -2,14 +2,13 @@ resource "proxmox_virtual_environment_role" "tofu_cluster" {
   role_id = "TofuCluster"
 
   privileges = [
-    "Sys.Modify", # cluster options, node network/apt/firewall, ZFS pool creation
+    "Sys.Modify", # cluster options, node firewall, ZFS pool creation
     "Sys.Audit",
     "Datastore.Allocate", # storage definitions
     "Datastore.Audit",
     "Mapping.Modify", # hardware mappings
     "Mapping.Audit",
     "SDN.Allocate", # the VLAN zone and its VNets
-    "SDN.Audit",    # the network listing hides any bridge the caller can't audit
   ]
 }
 

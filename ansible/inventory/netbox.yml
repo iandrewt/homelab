@@ -18,3 +18,4 @@ groups:
   raspberry_pi_os: "platform is defined and platform.slug.startswith('raspberry-pi-os-')"
 
 ansible_host_dns_name: true
+interfaces: true

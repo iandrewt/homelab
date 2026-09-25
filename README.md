@@ -171,7 +171,7 @@ to create by hand.
 - [x] Add `netbox.netbox` to `requirements.yml`
 - [x] Create read-only NetBox users `homelab`, `tofu` and `ansible`; store each token as `<user> NetBox API token` (API Credential in `Homelab`, URL in `hostname`)
 - [x] Check `role`/`platform` hostvar names with `ansible-inventory --list` against live data
-- [ ] Decide whether Proxmox keeps plain `DEBIAN13-CIS` or gets its own group
+- [x] Decide whether Proxmox keeps plain `DEBIAN13-CIS` or gets its own group
 
 **homelab CLI**
 

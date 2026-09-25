@@ -10,7 +10,9 @@ ssh_username: tofu
 timezone: Australia/Sydney
 mailto: pve@titmuss.house
 mac_prefix: "BC:24:11"
-bridge: vmbr0
+sdn:
+  bridge: vmbr0
+  mtu: 9000
 
 firewall:
   management_vlans: [Management, Trusted]
@@ -50,12 +52,6 @@ guest_defaults:
 
 nodes:
   yggdrasil:
-    bond_mode: 802.3ad
-    bond_xmit_hash_policy: layer3+4
-
-    management:
-      uplink: eno3
-
     pools:
       tank:
         raidlevel: raid10

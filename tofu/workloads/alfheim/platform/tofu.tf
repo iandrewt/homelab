@@ -59,9 +59,7 @@ provider "netbox" {
 module "netbox" {
   source = "../../../modules/netbox-site"
 
-  site_slug        = local.cluster.site
-  nodes            = keys(try(local.cluster.nodes, {}))
-  management_vlans = try(local.cluster.firewall.management_vlans, [])
+  site_slug = local.cluster.site
 }
 
 provider "onepassword" {}

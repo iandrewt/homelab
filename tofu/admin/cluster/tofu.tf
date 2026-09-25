@@ -53,8 +53,6 @@ module "netbox" {
   source = "../../modules/netbox-site"
 
   site_slug        = local.cluster.site
-  nodes            = keys(try(local.cluster.nodes, {}))
-  bridge           = local.cluster.bridge
   management_vlans = try(local.cluster.firewall.management_vlans, [])
 }
 
