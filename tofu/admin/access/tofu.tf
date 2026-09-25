@@ -42,8 +42,12 @@ locals {
 
 provider "onepassword" {}
 
+data "onepassword_vault" "this" {
+  name = local.cluster.onepassword_vault
+}
+
 ephemeral "onepassword_item" "token" {
-  vault = local.cluster.onepassword_vault
+  vault = data.onepassword_vault.this.uuid
   title = "${local.cluster.onepassword_item_prefix} access token"
 }
 

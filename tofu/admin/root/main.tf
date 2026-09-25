@@ -4,7 +4,7 @@ locals {
 
 resource "proxmox_virtual_environment_user" "tofu" {
   user_id = local.admin_user_id
-  comment = "OpenTofu cluster administration. Ceiling only - scope lives on each token."
+  comment = "OpenTofu cluster administration."
   enabled = true
 }
 
@@ -43,7 +43,7 @@ module "access_token" {
     role_id = proxmox_virtual_environment_role.tofu_access.role_id
   }]
 
-  onepassword_vault = local.cluster.onepassword_vault
+  onepassword_vault = data.onepassword_vault.this.uuid
   item_title        = "${local.cluster.onepassword_item_prefix} access token"
 
   depends_on = [proxmox_acl.tofu]

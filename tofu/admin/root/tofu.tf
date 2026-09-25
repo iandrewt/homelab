@@ -42,6 +42,10 @@ locals {
 
 provider "onepassword" {}
 
+data "onepassword_vault" "this" {
+  name = local.cluster.onepassword_vault
+}
+
 provider "proxmox" {
   endpoint = local.cluster.endpoint
   username = "root@pam"

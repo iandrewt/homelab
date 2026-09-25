@@ -15,7 +15,7 @@ module "cluster_token" {
     role_id = proxmox_virtual_environment_role.tofu_cluster.role_id
   }]
 
-  onepassword_vault = local.cluster.onepassword_vault
+  onepassword_vault = data.onepassword_vault.this.uuid
   item_title        = "${local.item_prefix} cluster token"
 }
 
@@ -37,6 +37,6 @@ module "images_token" {
     },
   ]
 
-  onepassword_vault = local.cluster.onepassword_vault
+  onepassword_vault = data.onepassword_vault.this.uuid
   item_title        = "${local.item_prefix} images token"
 }

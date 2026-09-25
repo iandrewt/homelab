@@ -8,7 +8,7 @@ deb13cis_rule_5_1_21: false
 debian_host_service_accounts:
   - name: tofu
     comment: OpenTofu provider SSH access
-    ssh_key: "{{ lookup('community.general.onepassword', 'proxmox tofu SSH key',
+    ssh_key: "{{ lookup('community.general.onepassword', 'Proxmox Tofu SSH key',
                         vault=onepassword_vault, field='public key') }}"
     sudo_commands:
       - /usr/sbin/pvesm apiinfo

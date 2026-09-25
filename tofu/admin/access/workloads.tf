@@ -162,7 +162,7 @@ module "identity_token" {
   comment    = each.value.comment
   acls       = each.value.acls
 
-  onepassword_vault = local.cluster.onepassword_vault
+  onepassword_vault = data.onepassword_vault.this.uuid
   item_title        = "${local.item_prefix} ${each.key} token"
 
   depends_on = [proxmox_acl.identity]

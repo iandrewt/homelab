@@ -66,13 +66,17 @@ module "netbox" {
 
 provider "onepassword" {}
 
+data "onepassword_vault" "this" {
+  name = local.cluster.onepassword_vault
+}
+
 ephemeral "onepassword_item" "netbox" {
-  vault = local.cluster.onepassword_vault
-  title = "tofu NetBox API token"
+  vault = data.onepassword_vault.this.uuid
+  title = "Tofu NetBox API token"
 }
 
 ephemeral "onepassword_item" "token" {
-  vault = local.cluster.onepassword_vault
+  vault = data.onepassword_vault.this.uuid
   title = "${local.cluster.onepassword_item_prefix} wl-platform token"
 }
 
