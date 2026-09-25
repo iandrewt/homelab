@@ -10,7 +10,7 @@ locals {
 }
 
 data "onepassword_item" "control_ssh_key" {
-  vault = local.cluster.onepassword_vault
+  vault = data.onepassword_vault.this.uuid
   title = "homelab control node SSH key"
 }
 
