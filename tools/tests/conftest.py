@@ -20,6 +20,7 @@ def vlan(vid, name, *, group=SITE, tags=()) -> dict:
     return {
         "vid": vid,
         "name": name,
+        "custom_fields": {"vnet": name},
         "status": {"value": "active"},
         "group": {"slug": group},
         "site": None,

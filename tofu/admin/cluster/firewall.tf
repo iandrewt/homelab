@@ -14,55 +14,47 @@ resource "proxmox_virtual_environment_cluster_firewall" "this" {
   }
 }
 
-resource "proxmox_virtual_environment_firewall_alias" "management" {
-  for_each = {
-    for cidr in module.netbox.management_sources :
-    "mgmt-${replace(replace(replace(cidr, ".", "-"), ":", ""), "/", "-")}" => cidr
-  }
-
-  name    = each.key
-  cidr    = each.value
+resource "proxmox_virtual_environment_firewall_ipset" "management" {
+  name    = "management"
   comment = "Allowed to reach the GUI and SSH. Managed by OpenTofu."
+
+  dynamic "cidr" {
+    for_each = module.netbox.management_sources
+    content {
+      name = cidr.value
+    }
+  }
 }
 
 resource "proxmox_virtual_environment_firewall_rules" "cluster" {
-  dynamic "rule" {
-    for_each = proxmox_virtual_environment_firewall_alias.management
-    content {
-      comment = "GUI from ${rule.value.cidr}"
-      type    = "in"
-      action  = "ACCEPT"
-      source  = rule.value.name
-      dport   = "8006"
-      proto   = "tcp"
-      log     = "nolog"
-    }
+  rule {
+    comment = "GUI"
+    type    = "in"
+    action  = "ACCEPT"
+    source  = "+dc/${proxmox_virtual_environment_firewall_ipset.management.name}"
+    dport   = "8006"
+    proto   = "tcp"
+    log     = "nolog"
   }
 
-  dynamic "rule" {
-    for_each = proxmox_virtual_environment_firewall_alias.management
-    content {
-      comment = "SSH from ${rule.value.cidr}"
-      type    = "in"
-      action  = "ACCEPT"
-      source  = rule.value.name
-      dport   = "22"
-      proto   = "tcp"
-      log     = "nolog"
-    }
+  rule {
+    comment = "SSH"
+    type    = "in"
+    action  = "ACCEPT"
+    source  = "+dc/${proxmox_virtual_environment_firewall_ipset.management.name}"
+    dport   = "22"
+    proto   = "tcp"
+    log     = "nolog"
   }
 
   # Without this a dropped INPUT policy also silently breaks ping and, on IPv6, the
   # neighbour discovery the management link depends on.
-  dynamic "rule" {
-    for_each = proxmox_virtual_environment_firewall_alias.management
-    content {
-      comment = "Ping from ${rule.value.cidr}"
-      type    = "in"
-      action  = "ACCEPT"
-      source  = rule.value.name
-      macro   = "Ping"
-      log     = "nolog"
-    }
+  rule {
+    comment = "Ping"
+    type    = "in"
+    action  = "ACCEPT"
+    source  = "+dc/${proxmox_virtual_environment_firewall_ipset.management.name}"
+    macro   = "Ping"
+    log     = "nolog"
   }
 }

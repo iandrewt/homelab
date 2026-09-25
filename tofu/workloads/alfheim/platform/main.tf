@@ -34,9 +34,9 @@ module "hugin" {
   memory_mb    = 1024
   disk_size_gb = 8
 
-  vm_id   = 200
-  vlan_id = module.netbox.vlans["Servers"]
-  dhcp4   = true
+  vm_id = 200
+  vnet  = "servers"
+  dhcp4 = true
 
   # Nothing a resolver needs to build itself may come from the VIP it will serve
   dns_servers = [for p in module.netbox.vlan_prefixes["Servers"] : cidrhost(p, 1)]

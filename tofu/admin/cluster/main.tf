@@ -54,6 +54,60 @@ import {
   id       = "${each.key}:${local.cluster.bridge}"
 }
 
+# --- SDN ---------------------------------------------------------------------------
+
+locals {
+  vnets = {
+    for vid in toset(flatten([for n, _ in local.cluster.nodes : module.netbox.nodes[n].vids])) :
+    module.netbox.vnets[tostring(vid)].id => merge(module.netbox.vnets[tostring(vid)], { tag = vid })
+  }
+
+  subnets = merge([
+    for vnet, v in local.vnets : { for p in v.prefixes : "${vnet}|${p}" => { vnet = vnet, cidr = p } }
+  ]...)
+}
+
+resource "proxmox_sdn_applier" "finalizer" {
+  on_create = false
+}
+
+resource "proxmox_sdn_zone_vlan" "this" {
+  id     = local.cluster.site
+  bridge = local.cluster.bridge
+
+  depends_on = [module.node, proxmox_sdn_applier.finalizer]
+}
+
+resource "proxmox_sdn_vnet" "this" {
+  for_each = local.vnets
+
+  id            = each.key
+  zone          = proxmox_sdn_zone_vlan.this.id
+  tag           = each.value.tag
+  alias         = each.value.name
+  isolate_ports = each.value.isolated
+
+  depends_on = [proxmox_sdn_applier.finalizer]
+}
+
+resource "proxmox_sdn_subnet" "this" {
+  for_each = local.subnets
+
+  vnet    = proxmox_sdn_vnet.this[each.value.vnet].id
+  cidr    = each.value.cidr
+  gateway = cidrhost(each.value.cidr, 1)
+
+  depends_on = [proxmox_sdn_applier.finalizer]
+}
+
+resource "proxmox_sdn_applier" "this" {
+  lifecycle {
+    replace_triggered_by = [proxmox_sdn_zone_vlan.this, proxmox_sdn_vnet.this, proxmox_sdn_subnet.this]
+  }
+
+  depends_on = [proxmox_sdn_zone_vlan.this, proxmox_sdn_vnet.this, proxmox_sdn_subnet.this]
+}
+
 # --- Storage -----------------------------------------------------------------------
 
 # The installer always names its directory storage `local`

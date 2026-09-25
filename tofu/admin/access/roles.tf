@@ -8,7 +8,8 @@ resource "proxmox_virtual_environment_role" "tofu_cluster" {
     "Datastore.Audit",
     "Mapping.Modify", # hardware mappings
     "Mapping.Audit",
-    "SDN.Audit", # the network listing hides any bridge the caller can't audit
+    "SDN.Allocate", # the VLAN zone and its VNets
+    "SDN.Audit",    # the network listing hides any bridge the caller can't audit
   ]
 }
 

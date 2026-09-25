@@ -1,6 +1,4 @@
 locals {
-  sdn_path = "/sdn/zones/localnetwork/${local.cluster.bridge}"
-
   integrations = merge([
     for group, workload in local.cluster.workloads : {
       for name, integration in try(workload.integrations, {}) :
@@ -29,7 +27,7 @@ locals {
       token_name = "tofu"
       comment    = workload.comment
 
-      acls = [
+      acls = concat([
         {
           path    = "/pool/${group}"
           role_id = "PVEVMAdmin"
@@ -42,13 +40,12 @@ locals {
           path    = "/storage/${local.cluster.guest_defaults.snippet_storage}"
           role_id = "PVEDatastoreUser"
         },
-        {
-          # The API requires SDN.Use on any bridge a VM attaches to,
-          # plain Linux bridges included - they sit under the implicit localnetwork zone.
-          path    = local.sdn_path
+        ], [
+        for vnet in try(workload.vnets, []) : {
+          path    = "/sdn/zones/${local.cluster.site}/${vnet}"
           role_id = proxmox_virtual_environment_role.tofu_sdn_use.role_id
-        },
-      ]
+        }
+      ])
     }
   }
 

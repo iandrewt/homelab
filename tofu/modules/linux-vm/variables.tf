@@ -89,15 +89,9 @@ variable "pre_enrolled_keys" {
   default     = true
 }
 
-variable "bridge" {
-  type    = string
-  default = "vmbr0"
-}
-
-variable "vlan_id" {
-  description = "null means untagged."
-  type        = number
-  default     = null
+variable "vnet" {
+  description = "The SDN VNet the NIC attaches to."
+  type        = string
 }
 
 variable "dhcp4" {

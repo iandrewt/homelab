@@ -14,8 +14,12 @@ data "netbox_site" "this" {
 data "netbox_vlans" "site" {
   filter {
     name  = "group"
-    value = coalesce(var.vlan_group, var.site_slug)
+    value = var.site_slug
   }
+}
+
+data "netbox_tag" "isolate_ports" {
+  name = "Isolate Ports"
 }
 
 data "netbox_devices" "nodes" {

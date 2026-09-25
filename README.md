@@ -189,8 +189,8 @@ to create by hand.
 **OpenTofu / Proxmox**
 
 - [ ] Move `hugin` to its own network-owned workload state
-- [ ] Publish NetBox VLANs as SDN VNets from the admin layer, then drop NetBox from `workloads/*`
-- [ ] SDN: subnets from NetBox prefixes, `+sdn/<vnet>-all` IPSets in firewall rules, `isolate-ports` on `dmz`; skip SDN's IPAM/DHCP/DNS
+- [x] Publish NetBox VLANs as SDN VNets from the admin layer, then drop NetBox from `workloads/*`
+- [x] SDN: subnets from NetBox prefixes, `+sdn/<vnet>-all` IPSets in firewall rules, `isolate-ports` on `dmz`; skip SDN's IPAM/DHCP/DNS
 - [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
 - [ ] `linux-vm`: match `e*`, let Proxmox allocate the VMID and MAC
 - [ ] Proxmox answer server on the laptop, keyed on the SMBIOS type 1 serial (the service tag), URL baked in with `prepare-iso`

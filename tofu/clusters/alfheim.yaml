@@ -80,6 +80,7 @@ images:
 workloads:
   platform:
     comment: "Long-lived singleton VMs: DNS resolvers and friends."
+    vnets: [servers]
 
   # Each integration is something running inside the workload that needs its own
   # Proxmox credentials. It gets a user, a privsep token, and one role per ACL entry -

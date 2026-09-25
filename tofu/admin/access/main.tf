@@ -8,7 +8,7 @@ module "cluster_token" {
 
   user_id    = local.admin_user_id
   token_name = "cluster"
-  comment    = "Cluster layer: cluster options, node config, storage, mappings."
+  comment    = "Cluster layer: cluster options, node config, SDN, storage, mappings."
 
   acls = [{
     path    = "/"

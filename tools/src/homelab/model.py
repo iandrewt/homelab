@@ -111,6 +111,7 @@ def _vlans(slug: str, snap: netbox.Snapshot) -> tuple[dict, list[str]]:
         v4, v6 = nets[raw["vid"]][4], nets[raw["vid"]].get(6)
         vlans[raw["name"]] = {
             "vid": raw["vid"],
+            "vnet": (raw.get("custom_fields") or {}).get("vnet"),
             "ipv4": str(v4),
             "ipv6": v6 and str(v6),
             "gateway_ipv4": str(v4.network_address + 1),

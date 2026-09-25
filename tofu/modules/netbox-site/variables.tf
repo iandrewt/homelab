@@ -9,12 +9,6 @@ variable "nodes" {
   description = "Cluster node names, each of which must have a named address in NetBox."
 }
 
-variable "vlan_group" {
-  type        = string
-  default     = null
-  description = "Slug of the VLAN group holding this site's VLANs. Defaults to the site slug."
-}
-
 variable "bridge" {
   type        = string
   default     = "vmbr0"
