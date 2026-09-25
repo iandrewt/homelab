@@ -1,10 +1,4 @@
 locals {
-  apt_repos = {
-    "no-subscription"       = true
-    "enterprise"            = false
-    "ceph-squid-enterprise" = false
-  }
-
   bonded = length(var.uplinks) > 1
 
   mgmt_dedicated = var.management.uplink != null
@@ -131,22 +125,6 @@ resource "proxmox_node_firewall" "this" {
   tcp_flags_log_level                  = var.firewall_configuration.tcp_flags_log_level
   nf_conntrack_max                     = var.firewall_configuration.nf_conntrack_max
   nf_conntrack_tcp_timeout_established = var.firewall_configuration.nf_conntrack_tcp_timeout_established
-}
-
-resource "proxmox_apt_standard_repository" "repos" {
-  for_each = local.apt_repos
-
-  handle = each.key
-  node   = var.name
-}
-
-resource "proxmox_apt_repository" "repos" {
-  for_each = local.apt_repos
-
-  enabled   = each.value
-  file_path = proxmox_apt_standard_repository.repos[each.key].file_path
-  index     = proxmox_apt_standard_repository.repos[each.key].index
-  node      = proxmox_apt_standard_repository.repos[each.key].node
 }
 
 resource "proxmox_node_disk_zfs" "pools" {
