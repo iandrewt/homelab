@@ -2,9 +2,8 @@ import argparse
 import sys
 
 from . import bootstrap, dns, netbox, render, tofukey
-from . import clusters as cluster_files
 from .bootstrap.shell import BootstrapError
-from .model import load, unzoned
+from .model import load
 from .render import seed
 from .repo import Repo
 from .secrets import SecretError
@@ -15,13 +14,6 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(
         dest="command", required=True, title="subcommands"
     )
-
-    validate = subparsers.add_parser(
-        "validate",
-        help="check NetBox and tofu/clusters/*.yaml",
-        description="Schema and semantic checks for every hand-authored source file."
-    )
-    validate.set_defaults(run=_validate)
 
     generate = subparsers.add_parser(
         "generate",
@@ -68,38 +60,12 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _sources(repo: Repo):
-    """Both source files, or every reason they can't be used."""
+def _generate(args) -> int:
+    repo = Repo.discover()
     try:
         ipam = load()
     except netbox.Unreachable as down:
-        return None, None, [f"NetBox: {down}"]
-
-    clusters, errors = cluster_files.load_all(repo, ipam)
-    return ipam, clusters, unzoned(ipam) + errors
-
-
-def _validate(args) -> int:
-    repo = Repo.discover()
-    _, _, errors = _sources(repo)
-    for error in errors:
-        print(f"FAIL: {error}", file=sys.stderr)
-    if errors:
-        return 1
-
-    print("NetBox + tofu/clusters/*.yaml: valid")
-    return 0
-
-
-def _generate(args) -> int:
-    repo = Repo.discover()
-    ipam, _clusters, errors = _sources(repo)
-    if errors:
-        for error in errors:
-            print(f"FAIL: {error}", file=sys.stderr)
-        print(
-            "refusing to generate from a source that doesn't validate", file=sys.stderr
-        )
+        print(f"FAIL: NetBox: {down}", file=sys.stderr)
         return 1
 
     plan = render.plan(repo, ipam)

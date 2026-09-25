@@ -24,10 +24,6 @@ class Repo:
         return self.root / "tofu" / "clusters"
 
     @property
-    def cluster_schema(self) -> Path:
-        return self.clusters / "schema.json"
-
-    @property
     def unifi(self) -> Path:
         return self.root / "unifi" / "generated"
 

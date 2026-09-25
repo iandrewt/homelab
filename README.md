@@ -5,7 +5,7 @@ Infrastructure-as-code for my home network and home lab (site `alfheim`): OpenTo
 ## Layout
 
 ```
-tools/        the `homelab` CLI: reads NetBox, validates the cluster files against it
+tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS
 ansible/      roles, playbooks, and an inventory read from NetBox
 tofu/         modules, one file per cluster, one directory per privilege layer
 unifi/        generated config for the UDM Pro, which nothing here can apply directly
@@ -43,7 +43,6 @@ export NETBOX_API=https://netbox.example
 ```
 
 ```
-uv run homelab validate                 # NetBox is renderable, and the cluster files agree with it
 uv run homelab generate                 # rewrite unifi/generated/; --check reports drift instead
 uv run homelab network-config alfheim   # the network-config for a site's install media
 ```
@@ -57,7 +56,7 @@ There is no inventory file. [`ansible/inventory/netbox.yml`](ansible/inventory/n
 builds it from NetBox: active or staged hosts tagged `ansible-managed`, grouped by device
 role and platform into the groups `site.yml` plays against. What each host needs to know
 about its site comes from [`ansible/vars_plugins/netbox.py`](ansible/vars_plugins/netbox.py),
-which loads the same model `homelab validate` checks - so Ansible runs through `uv`:
+which loads the same model `homelab generate` renders from - so Ansible runs through `uv`:
 
 ```
 uv run ansible-galaxy collection install -r ansible/requirements.yml
@@ -176,7 +175,6 @@ to create by hand.
 **homelab CLI**
 
 - [ ] `bootstrap pi <name>`: look the Device up (site, platform) instead of `--hostname`/`--site`
-- [ ] `validate`: pet names unique across sites; optional `name_prefix` on Device Role checked against names
 - [x] Confirm `match: {name: e*}` binds on a Pi's first boot (`cloud-init.log`, `ip -6 addr`)
 
 **Writers into NetBox**

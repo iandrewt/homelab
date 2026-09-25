@@ -106,6 +106,18 @@ resource "proxmox_virtual_environment_user" "identity" {
   user_id = "${each.key}@pve"
   comment = each.value.comment
   enabled = true
+
+  # merge() keeps the last of two equal keys, and a role ID is only unique in Proxmox
+  lifecycle {
+    precondition {
+      condition     = length(local.identities) == length(local.workload_identities) + length(local.integration_identities)
+      error_message = "A workload and an integration both derive the same user - rename one."
+    }
+    precondition {
+      condition     = length(distinct([for r in local.integration_roles : r.role_id])) == length(local.integration_roles)
+      error_message = "Two integration ACL paths derive the same role ID - rename one."
+    }
+  }
 }
 
 resource "proxmox_acl" "identity" {

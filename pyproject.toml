@@ -1,11 +1,10 @@
 [project]
 name = "homelab-tools"
 version = "0.1.0"
-description = "Validation and generation from NetBox, the source of truth."
+description = "Rendering and syncing from NetBox, the source of truth."
 requires-python = ">=3.14"
 
 dependencies = [
-    "jsonschema>=4.21",
     "octodns>=1.22",
     "octodns-netbox-dns>=0.3.19",
     "octodns-powerdns>=1.2",

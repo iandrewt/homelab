@@ -6,7 +6,6 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "name",
     "site",
     "endpoint",
     "onepassword_vault",
@@ -25,9 +24,6 @@
     "mac_prefix"
   ],
   "properties": {
-    "name": {
-      "type": "string"
-    },
     "site": {
       "description": "NetBox site slug.",
       "type": "string",

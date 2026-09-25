@@ -28,6 +28,8 @@ jobs:
         with:
           enable-cache: true
       - run: tofu fmt -check -recursive tofu/
+      - name: cluster files against their schema
+        run: uvx check-jsonschema --schemafile tofu/clusters/schema.json tofu/clusters/*.yaml
       - name: validate the admin tree against every cluster
         run: |
           set -euo pipefail

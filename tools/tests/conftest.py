@@ -143,27 +143,3 @@ def repo(tmp_path):
     for sub in ("tofu/clusters", "ansible/inventory/group_vars", "unifi/generated"):
         (tmp_path / sub).mkdir(parents=True)
     return Repo(tmp_path)
-
-
-@pytest.fixture
-def cluster() -> dict:
-    """A cluster file that passes every check, with one of each section to break."""
-    return {
-        "name": "one",
-        "site": SITE,
-        "endpoint": "https://hugin.one.test:8006/",
-        "nodes": {
-            "hugin": {
-                "pools": {"pool": {}},
-                "management": {"uplink": "eno2"},
-            }
-        },
-        "storages": {
-            "pool": {"type": "zfspool", "pool": "pool", "nodes": ["hugin"]},
-            "images": {"type": "zfspool", "pool": "pool", "nodes": ["hugin"]},
-            "local": {"type": "directory", "nodes": ["hugin"]},
-        },
-        "guest_defaults": {"disk_storage": "pool", "snippet_storage": "local"},
-        "workloads": {},
-        "firewall": {"management_vlans": ["management"]},
-    }

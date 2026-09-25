@@ -15,7 +15,7 @@ from pathlib import Path
 import yaml
 
 from . import netbox, secrets
-from .model import load
+from .model import load, unzoned
 from .repo import Repo
 
 POWERDNS = "octodns_powerdns.PowerDnsProvider"
@@ -52,10 +52,13 @@ def _sync(*flags: str) -> int:
     env = _secrets(config)
 
     try:
-        zones = {f"{name}." for name in load()["zones"]}
+        ipam = load()
     except netbox.Unreachable as bad:
         print(f"FAIL: {bad}", file=sys.stderr)
         return 1
+    for problem in unzoned(ipam):
+        print(f"UNZONED: {problem}", file=sys.stderr)
+    zones = {f"{name}." for name in ipam["zones"]}
 
     if missing := _uncreated(config, env, zones):
         for problem in missing:

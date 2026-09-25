@@ -1,5 +1,4 @@
 # yaml-language-server: $schema=schema.json
-name: alfheim
 site: alfheim
 endpoint: https://yggdrasil.alfheim.titmuss.zone:8006/
 
