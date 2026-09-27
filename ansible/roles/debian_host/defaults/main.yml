@@ -4,7 +4,7 @@ debian_host_timezone: Australia/Sydney
 debian_host_ssh_password_auth: false
 debian_host_sshd_options: {}
 
-# Machine accounts: {name, ssh_key, comment?, shell?, sudo_commands?}.
+# Machine accounts: {name, ssh_key, comment?, shell?, sudo_commands?, directories?}.
 debian_host_service_accounts: []
 
 debian_host_unattended_upgrade_origins:

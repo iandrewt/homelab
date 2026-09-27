@@ -10,13 +10,8 @@ debian_host_service_accounts:
     comment: OpenTofu provider SSH access
     ssh_key: "{{ lookup('community.general.onepassword', 'Proxmox Tofu SSH key',
                         vault=onepassword_vault, field='public key') }}"
-    sudo_commands:
-      - /usr/sbin/pvesm apiinfo
-      - /usr/bin/tee /var/lib/vz/snippets/[a-zA-Z0-9_][a-zA-Z0-9_.-]*
-
-# Control 5.2.4 would strip that NOPASSWD and every workload apply would fail at snippet upload.
-deb13cis_sudoers_exclude_nopasswd_list:
-  - tofu
+    directories:
+      - /var/lib/vz/snippets
 
 deb13cis_config_aide: false
 deb13cis_rule_6_3_2: false

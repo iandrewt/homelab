@@ -23,6 +23,7 @@ resource "random_id" "vm_instance_id" {
 
 resource "proxmox_virtual_environment_file" "meta_data" {
   content_type = "snippets"
+  upload_mode  = "sftp"
   datastore_id = var.snippet_datastore_id
   node_name    = var.node_name
 
@@ -42,6 +43,7 @@ resource "proxmox_virtual_environment_file" "meta_data" {
 
 resource "proxmox_virtual_environment_file" "vendor_data" {
   content_type = "snippets"
+  upload_mode  = "sftp"
   datastore_id = var.snippet_datastore_id
   node_name    = var.node_name
 
@@ -59,6 +61,7 @@ resource "proxmox_virtual_environment_file" "vendor_data" {
 
 resource "proxmox_virtual_environment_file" "network_config" {
   content_type = "snippets"
+  upload_mode  = "sftp"
   datastore_id = var.snippet_datastore_id
   node_name    = var.node_name
 
@@ -92,6 +95,7 @@ resource "proxmox_virtual_environment_file" "network_config" {
 
 resource "proxmox_virtual_environment_file" "user_data" {
   content_type = "snippets"
+  upload_mode  = "sftp"
   datastore_id = var.snippet_datastore_id
   node_name    = var.node_name
 

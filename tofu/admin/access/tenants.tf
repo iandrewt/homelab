@@ -41,9 +41,10 @@ locals {
           path    = "/storage/${local.cluster.guest_defaults.disk_storage}"
           role_id = "PVEDatastoreUser"
         },
+        # Proxmox wants Datastore.Allocate to attach a snippet to a VM at all
         {
           path    = "/storage/${local.cluster.guest_defaults.snippet_storage}"
-          role_id = "PVEDatastoreUser"
+          role_id = "PVEDatastoreAdmin"
         },
         ], [
         for vnet in try(grant.vnets, []) : {

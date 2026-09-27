@@ -189,6 +189,7 @@ to create by hand.
 - [x] Move `hugin` to its own network-owned workload state
 - [x] Publish NetBox VLANs as SDN VNets from the admin layer, then drop NetBox from `workloads/*`
 - [x] SDN: subnets from NetBox prefixes, `+sdn/<vnet>-all` IPSets in firewall rules, `isolate-ports` on `dmz`; skip SDN's IPAM/DHCP/DNS
+- [ ] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
 - [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
 - [ ] `linux-vm`: match `e*`, let Proxmox allocate the VMID and MAC
 - [ ] Proxmox answer server on the laptop, keyed on the SMBIOS type 1 serial (the service tag), URL baked in with `prepare-iso`
