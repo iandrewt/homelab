@@ -17,6 +17,11 @@
   tags: [cis]
   hosts: debian
   become: true
+  pre_tasks:
+    - name: Leave CIS alone unless this run selects it
+      ansible.builtin.meta: end_play
+      when: "'all' not in ansible_run_tags and 'cis' not in ansible_run_tags"
+      tags: always
   roles:
     - DEBIAN13-CIS
 
