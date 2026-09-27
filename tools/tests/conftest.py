@@ -115,6 +115,8 @@ def snapshot() -> netbox.Snapshot:
                     holder="ratatoskr"),
             address("10.0.110.9/24", dns_name="ratatoskr.one.test", status="dhcp",
                     holder="ratatoskr"),
+            address("2001:db8:0:110::9/64", dns_name="ratatoskr.one.test", status="slaac",
+                    holder="ratatoskr"),
             address("192.0.2.9/24", dns_name="elsewhere.example"),
         ],
         asns=[asn(64512, "router"), asn(64513, "dns")],

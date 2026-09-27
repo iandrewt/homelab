@@ -7,6 +7,14 @@ frr_bgp_community: "{{ netbox_site.pools.dns.community }}"
 frr_bgp_peer_address: "{{ netbox_site.vlans[dns_resolver.vlan].gateway_ipv4 }}"
 
 frr_bgp_service_addresses: ["{{ dns_resolver.ipv4 }}", "{{ dns_resolver.ipv6 }}"]
+
+dns_resolver_siblings: >-
+  {{ netbox_site.resolvers | dict2items | rejectattr('key', 'eq', inventory_hostname)
+     | map(attribute='value') | selectattr('vlan', 'eq', dns_resolver.vlan) | list }}
+frr_bgp_siblings: "{{ dns_resolver_siblings | map(attribute='lan_ipv6') | list }}"
+frr_bgp_sibling_service_addresses: >-
+  {{ dns_resolver_siblings | map(attribute='ipv4') | list
+   + dns_resolver_siblings | map(attribute='ipv6') | list }}
 frr_bgp_anycast_addresses: ["{{ netbox_site.anycast.ipv4 }}", "{{ netbox_site.anycast.ipv6 }}"]
 frr_bgp_anycast_service: dnsdist.service
 

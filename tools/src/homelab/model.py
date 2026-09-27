@@ -150,22 +150,25 @@ def _anycast(addresses: list[dict], pools: dict) -> dict | None:
 
 def _resolvers(hosts: list[dict], addresses: list[dict], vlans: dict, pools: dict) -> dict:
     """Each resolver's service addresses - the loopbacks it holds in the resolvers' block -
-    and the VLAN its LAN address is in, which is where it peers from."""
+    the VLAN its IPv4 lease is in, where it peers with the router, and its IPv6 address
+    there, where it peers with the other resolvers."""
     loopbacks = _in_pool(addresses, pools, "loopback")
     resolvers = {}
     for host in hosts:
         if _slug(host, "role") != RESOLVER_ROLE:
             continue
         service = {_ip(a).version: str(_ip(a)) for a in loopbacks if _holder(a) == host["name"]}
-        lan = next(
+        held = [_ip(a) for a in addresses if _holder(a) == host["name"]]
+        vlan = next(
             name
-            for a in addresses
-            if _holder(a) == host["name"]
-            for name, vlan in vlans.items()
-            for net in (vlan["ipv4"], vlan["ipv6"])
-            if net and _ip(a) in ipaddress.ip_network(net)
+            for ip in held
+            for name, v in vlans.items()
+            if v["ipv4"] and ip in ipaddress.ip_network(v["ipv4"])
         )
-        resolvers[host["name"]] = {"ipv4": service[4], "ipv6": service[6], "vlan": lan}
+        lan6 = next(ip for ip in held if ip in ipaddress.ip_network(vlans[vlan]["ipv6"]))
+        resolvers[host["name"]] = {
+            "ipv4": service[4], "ipv6": service[6], "vlan": vlan, "lan_ipv6": str(lan6),
+        }
     return resolvers
 
 

@@ -9,4 +9,8 @@ frr_bgp_service_addresses: []
 frr_bgp_anycast_addresses: []
 frr_bgp_anycast_service: ~
 
+# Other members of this ASN for on-link routing
+frr_bgp_siblings: []
+frr_bgp_sibling_service_addresses: []
+
 frr_bgp_router_id: "{{ frr_bgp_service_addresses | reject('search', ':') | first | default('') }}"

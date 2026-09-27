@@ -22,11 +22,11 @@ def test_a_vlan_in_a_group_belongs_to_the_site_the_group_is_scoped_to(snapshot):
 
 def test_a_resolvers_service_address_is_told_from_the_vip_by_its_role(snapshot):
     """Both sit in the `dns` block; only the IP role says which is which. The resolver
-    peers from the VLAN its LAN address is in."""
+    peers with the router from its VLAN's IPv4 side, and with other resolvers from its IPv6."""
     site = loads(snapshot)["sites"][SITE]
     assert site["anycast"] == {"ipv4": "10.0.200.1", "ipv6": "2001:db8::53"}
     assert site["resolvers"]["ratatoskr"] == {
-        "ipv4": "10.0.200.2", "ipv6": "2001:db8::2", "vlan": "servers"
+        "ipv4": "10.0.200.2", "ipv6": "2001:db8::2", "vlan": "servers", "lan_ipv6": "2001:db8:0:110::9"
     }
 
 

@@ -1,15 +1,21 @@
 ! Managed by Ansible (frr_bgp role) - edit host_vars / this role, not this file.
 {% set advertised = frr_bgp_service_addresses + frr_bgp_anycast_addresses %}
 {% set families = {
-     'ipv4': {'keyword': 'ip', 'length': 32, 'addresses': advertised | reject('search', ':') | list},
-     'ipv6': {'keyword': 'ipv6', 'length': 128, 'addresses': advertised | select('search', ':') | list},
+     'ipv4': {'keyword': 'ip', 'length': 32,
+              'advertised': advertised | reject('search', ':') | list,
+              'service': frr_bgp_service_addresses | reject('search', ':') | list,
+              'siblings': frr_bgp_sibling_service_addresses | reject('search', ':') | list},
+     'ipv6': {'keyword': 'ipv6', 'length': 128,
+              'advertised': advertised | select('search', ':') | list,
+              'service': frr_bgp_service_addresses | select('search', ':') | list,
+              'siblings': frr_bgp_sibling_service_addresses | select('search', ':') | list},
    } %}
 frr version 10.3
 frr defaults datacenter
 hostname {{ inventory_hostname }}
 !
-{% for afi, family in families.items() if family.addresses %}
-{% for address in family.addresses %}
+{% for afi, family in families.items() if family.advertised %}
+{% for address in family.advertised %}
 {{ family.keyword }} prefix-list ADVERTISED-{{ afi | upper }} seq {{ loop.index * 5 }} permit {{ address }}/{{ family.length }}
 {% endfor %}
 !
@@ -18,6 +24,23 @@ route-map TO-UPSTREAM-{{ afi | upper }} permit 10
  set community {{ frr_bgp_community }}
 exit
 !
+{% if frr_bgp_siblings %}
+{% for address in family.service %}
+{{ family.keyword }} prefix-list SERVICE-{{ afi | upper }} seq {{ loop.index * 5 }} permit {{ address }}/{{ family.length }}
+{% endfor %}
+{% for address in family.siblings %}
+{{ family.keyword }} prefix-list SIBLINGS-{{ afi | upper }} seq {{ loop.index * 5 }} permit {{ address }}/{{ family.length }}
+{% endfor %}
+!
+route-map TO-SIBLINGS-{{ afi | upper }} permit 10
+ match {{ family.keyword }} address prefix-list SERVICE-{{ afi | upper }}
+exit
+!
+route-map FROM-SIBLINGS-{{ afi | upper }} permit 10
+ match {{ family.keyword }} address prefix-list SIBLINGS-{{ afi | upper }}
+exit
+!
+{% endif %}
 {% endfor %}
 route-map NOTHING deny 10
 exit
@@ -31,16 +54,29 @@ router bgp {{ frr_bgp_local_asn }}
 {% if ':' in frr_bgp_peer_address %}
  neighbor {{ frr_bgp_peer_address }} capability extended-nexthop
 {% endif %}
-{% for afi, family in families.items() if family.addresses %}
+{% if frr_bgp_siblings %}
+ neighbor SIBLINGS peer-group
+ neighbor SIBLINGS remote-as internal
+ neighbor SIBLINGS capability extended-nexthop
+{% for sibling in frr_bgp_siblings %}
+ neighbor {{ sibling }} peer-group SIBLINGS
+{% endfor %}
+{% endif %}
+{% for afi, family in families.items() if family.advertised %}
  !
  address-family {{ afi }} unicast
-{% for address in family.addresses %}
+{% for address in family.advertised %}
   network {{ address }}/{{ family.length }}
 {% endfor %}
   neighbor {{ frr_bgp_peer_address }} activate
   neighbor {{ frr_bgp_peer_address }} send-community
   neighbor {{ frr_bgp_peer_address }} route-map NOTHING in
   neighbor {{ frr_bgp_peer_address }} route-map TO-UPSTREAM-{{ afi | upper }} out
+{% if frr_bgp_siblings %}
+  neighbor SIBLINGS activate
+  neighbor SIBLINGS route-map FROM-SIBLINGS-{{ afi | upper }} in
+  neighbor SIBLINGS route-map TO-SIBLINGS-{{ afi | upper }} out
+{% endif %}
  exit-address-family
 {% endfor %}
 !
