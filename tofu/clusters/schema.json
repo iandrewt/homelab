@@ -20,7 +20,7 @@
     "nodes",
     "image_storage",
     "images",
-    "workloads",
+    "tenants",
     "mac_prefix"
   ],
   "properties": {
@@ -201,8 +201,8 @@
         }
       }
     },
-    "workloads": {
-      "description": "Naming a group here creates its pool, its privsep token and its ACLs. Anything running inside the group that needs the Proxmox API itself is an integration, and gets its own identity.",
+    "tenants": {
+      "description": "A team Platform grants a share of the cluster: a pool, a privsep token that makes its own workloads as pools under it, and the VNets it may join. Anything running inside a workload that needs the Proxmox API itself is an integration, and gets its own identity.",
       "type": "object",
       "additionalProperties": {
         "type": "object",
@@ -215,7 +215,7 @@
             "type": "string"
           },
           "vnets": {
-            "description": "SDN VNets the group's VMs may join, by each VLAN's `vnet` in NetBox.",
+            "description": "SDN VNets its VMs may join, by each VLAN's `vnet` in NetBox.",
             "type": "array",
             "uniqueItems": true,
             "items": {
@@ -237,7 +237,7 @@
                   "type": "string"
                 },
                 "acls": {
-                  "description": "Privileges granted, keyed by ACL path. Nothing is granted implicitly, so the group's own pool is listed like anything else. A /storage/<id> path must name a key of `storages`, a /pool/<id> a workload group.",
+                  "description": "Privileges granted, keyed by ACL path. Nothing is granted implicitly, so the workload's own pool is listed like anything else. A /storage/<id> path must name a key of `storages`, a /pool/<id> a tenant or one of its workloads.",
                   "type": "object",
                   "minProperties": 1,
                   "propertyNames": {

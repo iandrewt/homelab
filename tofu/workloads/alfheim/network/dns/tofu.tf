@@ -46,9 +46,9 @@ terraform {
 
 locals {
   cluster_name = "alfheim"
-  pool         = "platform"
+  tenant       = "network"
 
-  cluster = yamldecode(file("${path.module}/../../../clusters/${local.cluster_name}.yaml"))
+  cluster = yamldecode(file("${path.module}/../../../../clusters/${local.cluster_name}.yaml"))
 }
 
 provider "netbox" {
@@ -57,7 +57,7 @@ provider "netbox" {
 }
 
 module "netbox" {
-  source = "../../../modules/netbox-site"
+  source = "../../../../modules/netbox-site"
 
   site_slug = local.cluster.site
 }
@@ -70,12 +70,12 @@ data "onepassword_vault" "this" {
 
 ephemeral "onepassword_item" "netbox" {
   vault = data.onepassword_vault.this.uuid
-  title = "Tofu NetBox API token"
+  title = "Tofu NetBox API Token"
 }
 
 ephemeral "onepassword_item" "token" {
   vault = data.onepassword_vault.this.uuid
-  title = "${local.cluster.onepassword_item_prefix} wl-platform token"
+  title = "${local.cluster.onepassword_item_prefix} tenant-${local.tenant} token"
 }
 
 provider "proxmox" {

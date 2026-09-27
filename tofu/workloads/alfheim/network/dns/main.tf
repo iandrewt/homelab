@@ -9,16 +9,21 @@ locals {
   }
 }
 
+resource "proxmox_virtual_environment_pool" "this" {
+  pool_id = "${local.tenant}/dns"
+  comment = "The resolvers."
+}
+
 data "onepassword_item" "control_ssh_key" {
   vault = data.onepassword_vault.this.uuid
   title = "homelab control node SSH key"
 }
 
 module "hugin" {
-  source = "../../../modules/linux-vm"
+  source = "../../../../modules/linux-vm"
 
   node_name   = local.node["yggdrasil"]
-  pool_id     = local.pool
+  pool_id     = proxmox_virtual_environment_pool.this.pool_id
   hostname    = "hugin"
   region      = local.cluster_name
   description = "DNS resolver."

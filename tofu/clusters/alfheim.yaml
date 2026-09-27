@@ -72,23 +72,24 @@ images:
     content_type: import
     # TODO: pin a checksum
 
-workloads:
-  platform:
-    comment: "Long-lived singleton VMs: DNS resolvers and friends."
+tenants:
+  network:
+    comment: "The Network team."
     vnets: [servers]
 
-  # Each integration is something running inside the workload that needs its own
+  # Each integration is something running inside a workload that needs its own
   # Proxmox credentials. It gets a user, a privsep token, and one role per ACL entry -
   # a Proxmox ACL grants a role on a path, so privileges are declared per path.
-  # talos:
-  #   comment: "Talos Kubernetes cluster."
+  # platform:
+  #   comment: "The Platform team."
+  #   vnets: [k8s, storage]
   #   integrations:
   #     csi:
   #       comment: "proxmox-csi-plugin: provisions and attaches PVs."
   #       acls:
-  #         /pool/talos: [VM.Audit, VM.Config.Disk]
+  #         /pool/platform/talos: [VM.Audit, VM.Config.Disk]
   #         /storage/nvme: [Datastore.Allocate, Datastore.AllocateSpace, Datastore.Audit]
   #     ccm:
   #       comment: "proxmox-cloud-controller-manager: labels nodes with their topology."
   #       acls:
-  #         /pool/talos: [VM.Audit]
+  #         /pool/platform/talos: [VM.Audit]

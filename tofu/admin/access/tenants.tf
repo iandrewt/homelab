@@ -1,8 +1,8 @@
 locals {
   integrations = merge([
-    for group, workload in local.cluster.workloads : {
-      for name, integration in try(workload.integrations, {}) :
-      "${group}-${name}" => {
+    for tenant, grant in local.cluster.tenants : {
+      for name, integration in try(grant.integrations, {}) :
+      "${tenant}-${name}" => {
         name    = name
         comment = integration.comment
         acls    = integration.acls
@@ -11,26 +11,31 @@ locals {
   ]...)
 
   # A Proxmox ACL grants one role on one path, so privileges that differ per path are
-  # different roles. Integrations declare their own, unlike workload states, which all
-  # want the same things and share the roles below.
+  # different roles. Integrations declare their own, unlike tenants, which all want the
+  # same things and share built-in roles.
   integration_roles = merge([
     for key, integration in local.integrations : {
       for path, privileges in integration.acls : "${key}|${path}" => {
-        role_id    = "wl-${key}-${path == "/" ? "root" : replace(trimprefix(path, "/"), "/", "-")}"
+        role_id    = "tenant-${key}-${path == "/" ? "root" : replace(trimprefix(path, "/"), "/", "-")}"
         privileges = privileges
       }
     }
   ]...)
 
-  workload_identities = {
-    for group, workload in local.cluster.workloads : "wl-${group}" => {
+  # PVEPoolAdmin lets a tenant make its own workloads, as pools under this one
+  tenant_identities = {
+    for tenant, grant in local.cluster.tenants : "tenant-${tenant}" => {
       token_name = "tofu"
-      comment    = workload.comment
+      comment    = grant.comment
 
       acls = concat([
         {
-          path    = "/pool/${group}"
+          path    = "/pool/${tenant}"
           role_id = "PVEVMAdmin"
+        },
+        {
+          path    = "/pool/${tenant}"
+          role_id = "PVEPoolAdmin"
         },
         {
           path    = "/storage/${local.cluster.guest_defaults.disk_storage}"
@@ -41,7 +46,7 @@ locals {
           role_id = "PVEDatastoreUser"
         },
         ], [
-        for vnet in try(workload.vnets, []) : {
+        for vnet in try(grant.vnets, []) : {
           path    = "/sdn/zones/${local.cluster.site}/${vnet}"
           role_id = proxmox_virtual_environment_role.tofu_sdn_use.role_id
         }
@@ -50,7 +55,7 @@ locals {
   }
 
   integration_identities = {
-    for key, integration in local.integrations : "wl-${key}" => {
+    for key, integration in local.integrations : "tenant-${key}" => {
       token_name = integration.name
       comment    = integration.comment
 
@@ -63,11 +68,11 @@ locals {
     }
   }
 
-  identities = merge(local.workload_identities, local.integration_identities)
+  identities = merge(local.tenant_identities, local.integration_identities)
 
   identity_acls = merge([
     for key, identity in local.identities : {
-      for acl in identity.acls : "${key}|${acl.path}" => {
+      for acl in identity.acls : "${key}|${acl.path}|${acl.role_id}" => {
         identity = key
         path     = acl.path
         role_id  = acl.role_id
@@ -93,8 +98,8 @@ resource "proxmox_virtual_environment_role" "integration" {
 
 # --- Pools, users, tokens ------------------------------------------------------------
 
-resource "proxmox_virtual_environment_pool" "workload" {
-  for_each = local.cluster.workloads
+resource "proxmox_virtual_environment_pool" "tenant" {
+  for_each = local.cluster.tenants
 
   pool_id = each.key
   comment = each.value.comment
@@ -110,8 +115,8 @@ resource "proxmox_virtual_environment_user" "identity" {
   # merge() keeps the last of two equal keys, and a role ID is only unique in Proxmox
   lifecycle {
     precondition {
-      condition     = length(local.identities) == length(local.workload_identities) + length(local.integration_identities)
-      error_message = "A workload and an integration both derive the same user - rename one."
+      condition     = length(local.identities) == length(local.tenant_identities) + length(local.integration_identities)
+      error_message = "A tenant and an integration both derive the same user - rename one."
     }
     precondition {
       condition     = length(distinct([for r in local.integration_roles : r.role_id])) == length(local.integration_roles)
@@ -128,7 +133,7 @@ resource "proxmox_acl" "identity" {
   role_id   = each.value.role_id
   propagate = true
 
-  depends_on = [proxmox_virtual_environment_pool.workload]
+  depends_on = [proxmox_virtual_environment_pool.tenant]
 }
 
 module "identity_token" {

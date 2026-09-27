@@ -18,17 +18,17 @@ tofu/clusters/
 tofu/admin/
   root/                   root@pam only - the tofu@pve user, ACME
   access/                 roles, users, pools, realms, every other token
-  cluster/                cluster options, node config, storage, mappings
+  cluster/                cluster options, SDN, node firewall, storage, mappings
   images/                 cloud image downloads
 tofu/workloads/
-  alfheim/platform/       general VMs and containers
+  alfheim/network/dns/    hugin, in the Network team's `network/dns` pool
 unifi/generated/
   alfheim-frr.conf        BGP toward the resolvers, written by `homelab generate`
 ```
 
 The tofu is shaped in a multi-cluster way to make it easier for others to re-use. To use it, just replace `alfheim.yaml` with your own cluster info.
 
-Workloads are managed separately to the cluster itself. The `workloads` map in the cluster YAML is how you can onboard a new workload group. Each one gets a pool, a PVE user of its own, and a token written to 1Password. Anything running *inside* a workload that needs the Proxmox API itself is an `integration` under that group, and gets its own user, token and roles.
+Workloads are managed separately to the cluster itself. The `tenants` map in the cluster YAML is how you can separate groups of workloads: it gets a pool, a PVE user of its own, a token written to 1Password, and the VNets it may join. The tenant then makes its own workloads as states under `tofu/workloads/<site>/<tenant>/`, organised as it likes - VMs straight in its pool, or in pools of its own under it - and nothing in the cluster YAML changes for a new one. Anything running *inside* a workload that needs the Proxmox API itself is an `integration` under its tenant, and gets its own user, token and roles.
 
 ## Using this repo
 
@@ -79,7 +79,7 @@ tofu -chdir=tofu/admin/cluster init
 tofu -chdir=tofu/admin/cluster workspace select alfheim
 tofu -chdir=tofu/admin/cluster plan
 
-tofu -chdir=tofu/workloads/alfheim/platform plan
+tofu -chdir=tofu/workloads/alfheim/network/dns plan
 ```
 
 Set `HOMELAB_STATE_PASSPHRASE` to bypass 1Password entirely - that is how CI validates a
@@ -143,7 +143,7 @@ to create by hand.
 - [ ] Reboot-required alerting - needs a monitoring stack
 - [ ] CI: static checks on a hosted runner, a self-hosted runner for anything touching
       the LAN
-- [ ] Everything cluster/Talos-related - arrives as `tofu/workloads/alfheim/talos/` with its own providers, plus a `workloads.talos` grant in the cluster file carrying its `csi` and `ccm` integrations (commented out there already)
+- [ ] Everything cluster/Talos-related - arrives as `tofu/workloads/alfheim/platform/talos/` with its own providers, plus a `tenants.platform` grant in the cluster file carrying its `csi` and `ccm` integrations (commented out there already)
 - [x] Network config for the NAS hosts - addressed in NetBox, not yet applied
 
 **NetBox data**
@@ -186,7 +186,7 @@ to create by hand.
 
 **OpenTofu / Proxmox**
 
-- [ ] Move `hugin` to its own network-owned workload state
+- [x] Move `hugin` to its own network-owned workload state
 - [x] Publish NetBox VLANs as SDN VNets from the admin layer, then drop NetBox from `workloads/*`
 - [x] SDN: subnets from NetBox prefixes, `+sdn/<vnet>-all` IPSets in firewall rules, `isolate-ports` on `dmz`; skip SDN's IPAM/DHCP/DNS
 - [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
