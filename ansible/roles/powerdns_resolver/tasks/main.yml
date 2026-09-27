@@ -56,7 +56,9 @@
   ansible.builtin.set_fact:
     powerdns_resolver_forward_zones: >-
       {{ powerdns_resolver_zones | map(attribute='name') | map('community.general.dict_kv', 'zone')
-         | map('combine', {'forwarders': ['[' ~ powerdns_resolver_service_v6 ~ ']:53'], 'recurse': false})
+         | map('combine', {'forwarders': ['[' ~ powerdns_resolver_service_v6 ~ ']:53']
+                                         + powerdns_resolver_peer_notify_addresses,
+                           'recurse': false})
          | list }}
 
 - name: Build the secondary's create-secondary-zone commands
