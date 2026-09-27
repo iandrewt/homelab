@@ -50,6 +50,7 @@
             {'secondary': true, 'webserver': false, 'api': false,
              'allow-notify-from': powerdns_resolver_peer_addresses | join(',')}
           )
+        | combine({'log-dns-queries': true, 'loglevel': 5} if powerdns_resolver_query_logging | bool else {})
       }}
 
 - name: Build the recursor's forward_zones list
@@ -97,6 +98,8 @@
     name: PowerDNS.pdns_recursor
   vars:
     pdns_rec_config:
+      logging:
+        quiet: "{{ not powerdns_resolver_query_logging | bool }}"
       dnssec:
         validation: "{{ powerdns_resolver_dnssec_validation }}"
         trustanchors: "{{ powerdns_resolver_trust_anchors | default([]) }}"
@@ -104,6 +107,8 @@
       incoming:
         listen: ['127.0.0.1', '::1']
         allow_from: "{{ powerdns_resolver_allow_from }}"
+        # dnsdist's side; 127.0.0.1 stays header-free for a local dig
+        proxy_protocol_from: ['::1']
       outgoing:
         source_address:
           - 0.0.0.0
@@ -140,6 +145,11 @@
       {% for local in powerdns_resolver_dnsdist_locals %}
       {{ 'setLocal' if loop.first else 'addLocal' }}("{{ local }}", {reusePort=true})
       {% endfor %}
+      {% if powerdns_resolver_query_logging | bool %}
+      -- First, so no other rule's answer goes unlogged
+      addAction(AllRule(), LogAction("", false, false, false, false))
+      addResponseAction(AllRule(), LogResponseAction("", false, false, false))
+      {% endif %}
       {% if not powerdns_resolver_cross_site_ipv6 %}
       {%   for owner in powerdns_resolver_sites.values() if owner.forward_zone %}
       {%     set others = powerdns_resolver_sites.values() | rejectattr('slug', 'eq', owner.slug)
@@ -165,7 +175,7 @@
       {%   endfor %}
       {% endif %}
     dnsdist_servers:
-      - "[::1]:53"
+      - '{address="[::1]:53", useProxyProtocol=true}'
     dnsdist_controlsocket: "::1"
     # addACL appends, so dnsdist's built-in private ranges still apply - this only adds
     # the site's public prefix, which those defaults can't know about.

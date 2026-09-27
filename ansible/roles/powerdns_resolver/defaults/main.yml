@@ -9,6 +9,8 @@ powerdns_resolver_api_allow_from: []
 
 powerdns_resolver_dnssec_validation: validate
 
+powerdns_resolver_query_logging: false
+
 # The primary's API, which the control node reads the signed zones' DS records from
 powerdns_resolver_primary_api_url: ~
 
@@ -18,9 +20,9 @@ powerdns_resolver_service_v6: ~
 powerdns_resolver_anycast_v4: ~
 powerdns_resolver_anycast_v6: ~
 
-# The recursor's only clients: dnsdist, which health-checks it over ::1, and the host itself.
-# Who may ask the resolvers is dnsdist's ACL, not this.
-powerdns_resolver_allow_from: [127.0.0.0/8, "::1/128"]
+# Checked against the client in dnsdist's proxy header, so anything dnsdist let in. The
+# recursor listens on loopback alone: who may ask the resolvers is dnsdist's ACL, not this.
+powerdns_resolver_allow_from: [0.0.0.0/0, "::/0"]
 powerdns_resolver_gua_prefix: ~
 
 # [{name, nameservers, soa, soa_ttl}]
