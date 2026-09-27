@@ -13,6 +13,9 @@ deb13cis_rule_6_2_1_4: false
 deb13cis_rule_6_2_3_19: false
 deb13cis_rule_6_2_3_34: false
 
+# raspi-firmware depends on rsync, so mask its service rather than remove the package
+deb13cis_rsync_mask: true
+
 # overkill for a Pi.
 deb13cis_config_aide: false
 deb13cis_rule_6_3_2: false

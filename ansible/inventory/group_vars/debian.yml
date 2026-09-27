@@ -4,9 +4,6 @@ deb13cis_level_2: true
 
 deb13cis_section4: false  # disable ufw controls
 
-# Mask the service instead of removing the package: raspi-firmware and pve-manager need it
-deb13cis_rsync_mask: true
-
 # leaving controls for /tmp (1.1.2.1.x) and /dev/shm (1.1.2.2.x) enabled
 deb13cis_rule_1_1_2_3_1: false  # /home separate partition
 deb13cis_rule_1_1_2_3_2: false
