@@ -128,7 +128,7 @@ to create by hand.
 **DNS**
 
 - [x] Zone TTLs, and the same as `netbox_dns` plugin defaults
-- [ ] Once both resolvers are up, set UniFi's DHCP DNS and RA RDNSS to the VIP on every internal network; until then clients stay on the UDM
+- [x] Once both resolvers are up, set UniFi's DHCP DNS and RA RDNSS to the VIP on every internal network; until then clients stay on the UDM
 - [x] UniFi DHCP option 119 per network, per the search list in the DNS plan
 - [x] BGP peer groups and listen sessions in NetBox, replacing the `bgp-listen` tag and the `router` ASN role
 - [ ] IPv6 BGP transport once the UDM's kernel is 5.2 or later
@@ -136,7 +136,7 @@ to create by hand.
 - [ ] Ask the ISP to delegate alfheim's /48 reverse zone to Route53; a `public` view for it and `titmuss.au`
 - [ ] DNSSEC stage 1: sign internal zones, trust anchors on both recursors, validation on
 - [ ] DNSSEC stage 2: public copies in Route53, two DS records at Cloudflare, ACME CNAMEs into `acme.titmuss.au`
-- [ ] Laptop: negative trust anchors for the internal zones until stage 2
+- [x] Laptop: positive trust anchors for the internal zones until stage 2
 
 **Other**
 
@@ -158,7 +158,7 @@ to create by hand.
 - [x] iDRACs: `mgmt_only` interface + OOB IP on each server, service tag in `serial`
 - [x] Keystones as modules on the plates and `pp-a`; TIA-606 link IDs (`A07`) as cable and port labels
 - [x] Power feed named as printed (`N3`); `circuit-n3` stays as the fan-out
-- [ ] Tenant on BGP/LB prefixes (network vs platform)
+- [x] Tenant on BGP/LB prefixes (network vs platform)
 - [x] Planned custom fields replaced: ASN roles, a `role` field on `netbox_bgp` communities,
       a `bgp-listen` VLAN tag, `netbox_dns` zones
 - [x] Renumber hub-shared so `dns` is its base `/26` and the VIP is `10.176.192.53`
@@ -202,7 +202,7 @@ to create by hand.
 
 **Docs**
 
-- [ ] CLAUDE.md: owning team (network/platform/apps) in the ownership table; one writer per NetBox object
+- [x] CLAUDE.md: owning team (network/platform/apps) in the ownership table; one writer per NetBox object
 - [ ] CLAUDE.md: the naming scheme - names hold only what no field does, lowercase-hyphen, per-site sequences
 - [ ] CLAUDE.md: nothing needs NetBox at runtime, only at plan/apply; a rebuild restores NetBox to the laptop first
 - [ ] Rehearse a NetBox restore from the NAS backup onto the laptop
