@@ -4,8 +4,9 @@ resource "proxmox_virtual_environment_cluster_firewall" "this" {
   input_policy  = "DROP"
   output_policy = "ACCEPT"
 
-  # Traffic between VMs on the same bridge in the same VLAN
-  forward_policy = "DROP"
+  # Every frame a VNet bridges passes forward, the gateway's included. Guests are
+  # filtered by their own firewalls, and VLANs from each other by the router.
+  forward_policy = "ACCEPT"
 
   log_ratelimit {
     enabled = true
