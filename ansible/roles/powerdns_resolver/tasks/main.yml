@@ -11,7 +11,7 @@
     that: powerdns_resolver_api_key is not none
     fail_msg: >-
       powerdns_resolver_api_key is unset - would otherwise render as the literal
-      string "None" in pdns.conf. Set it via a 1Password lookup in host_vars.
+      string "None" in pdns.conf. Set it via a 1Password lookup in group_vars.
   when: powerdns_resolver_role == 'primary'
 
 - name: Zones and records

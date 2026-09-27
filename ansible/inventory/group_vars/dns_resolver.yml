@@ -36,5 +36,10 @@ powerdns_resolver_api_allow_from: >-
    + ['Trusted', 'Servers'] | map('extract', netbox_site.vlans) | map(attribute='ipv6') | select | list
    + [netbox_site.pools['kubernetes-pods'].ipv4, netbox_site.pools['kubernetes-pods'].ipv6] | select | list }}
 
+powerdns_resolver_api_key: "{{ lookup('community.general.onepassword', 'alfheim PowerDNS API key',
+                                      vault=onepassword_vault, field='credential') }}"
+powerdns_resolver_primary_api_url: >-
+  http://[{{ netbox_sites.alfheim.resolvers.ratatoskr.ipv6 }}]:8081/api/v1/servers/localhost
+
 powerdns_resolver_zones: "{{ netbox_zones }}"
 powerdns_resolver_sites: "{{ netbox_sites }}"

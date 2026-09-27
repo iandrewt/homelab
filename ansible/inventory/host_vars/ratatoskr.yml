@@ -2,8 +2,6 @@
 ansible_user: pi
 
 powerdns_resolver_role: primary
-powerdns_resolver_api_key: "{{ lookup('community.general.onepassword', 'alfheim PowerDNS API key',
-                                      vault=onepassword_vault, field='credential') }}"
 
 debian_host_upgrade_hour: 9  # staggered against hugin - see hugin.yml
 
