@@ -188,6 +188,7 @@ variable "watchdog_action" {
 }
 
 variable "tags" {
-  type    = list(string)
-  default = []
+  description = "Only on an existing VM for a pool-scoped token: Proxmox checks tags at create before the VM joins its pool."
+  type        = list(string)
+  default     = []
 }

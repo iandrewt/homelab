@@ -27,7 +27,6 @@ module "hugin" {
   hostname    = "hugin"
   region      = local.cluster_name
   description = "DNS resolver."
-  tags        = ["dns-resolver"]
 
   image_file_id = local.image["debian-13-genericcloud"]
   mac_prefix    = local.cluster.mac_prefix
