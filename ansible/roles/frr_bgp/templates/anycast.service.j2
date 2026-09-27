@@ -1,8 +1,9 @@
 # Managed by Ansible (frr_bgp role).
 [Unit]
-Description=anycast0 up while {{ frr_bgp_anycast_service }} runs
-BindsTo={{ frr_bgp_anycast_service }} sys-subsystem-net-devices-anycast0.device
-After={{ frr_bgp_anycast_service }} sys-subsystem-net-devices-anycast0.device
+{% set units = [frr_bgp_anycast_service] + frr_bgp_anycast_needs %}
+Description=anycast0 up while {{ units | join(' and ') }} run
+BindsTo={{ units | join(' ') }} sys-subsystem-net-devices-anycast0.device
+After={{ units | join(' ') }} sys-subsystem-net-devices-anycast0.device
 
 [Service]
 Type=oneshot

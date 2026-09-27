@@ -17,6 +17,7 @@ frr_bgp_sibling_service_addresses: >-
    + dns_resolver_siblings | map(attribute='ipv6') | list }}
 frr_bgp_anycast_addresses: ["{{ netbox_site.anycast.ipv4 }}", "{{ netbox_site.anycast.ipv6 }}"]
 frr_bgp_anycast_service: dnsdist.service
+frr_bgp_anycast_needs: [pdns-recursor.service]
 
 powerdns_resolver_anycast_v4: "{{ netbox_site.anycast.ipv4 }}"
 powerdns_resolver_anycast_v6: "{{ netbox_site.anycast.ipv6 }}"

@@ -8,6 +8,7 @@ frr_bgp_community: ~
 frr_bgp_service_addresses: []
 frr_bgp_anycast_addresses: []
 frr_bgp_anycast_service: ~
+frr_bgp_anycast_needs: []
 
 # Other members of this ASN for on-link routing
 frr_bgp_siblings: []

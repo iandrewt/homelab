@@ -175,7 +175,7 @@
       {%   endfor %}
       {% endif %}
     dnsdist_servers:
-      - '{address="[::1]:53", useProxyProtocol=true}'
+      - '{address="[::1]:53", useProxyProtocol=true, healthCheckMode="lazy", lazyHealthCheckMode="TimeoutOnly"}'
     dnsdist_controlsocket: "::1"
     # addACL appends, so dnsdist's built-in private ranges still apply - this only adds
     # the site's public prefix, which those defaults can't know about.
