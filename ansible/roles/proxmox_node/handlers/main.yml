@@ -8,3 +8,9 @@
   async: 60
   poll: 5
   changed_when: true
+
+- name: Reload the VNet guard
+  ansible.builtin.systemd_service:
+    name: vnet-guard
+    state: restarted
+    daemon_reload: true

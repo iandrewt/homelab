@@ -2,6 +2,11 @@
 proxmox_node_cluster: "{{ cluster }}"
 proxmox_node_link0: "{{ primary_ip6 }}"
 
+# Every VNet at the site but those the node holds an interface for
+proxmox_node_unjoined_vnets: >-
+  {{ netbox_site.vlans.values() | map(attribute='vnet') | select
+     | reject('in', interfaces | map(attribute='name') | list) | sort }}
+
 proxmox_node_bond:
   miimon: 100
   mode: 802.3ad

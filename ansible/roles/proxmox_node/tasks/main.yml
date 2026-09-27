@@ -1,136 +1,19 @@
 ---
-- name: Disable the enterprise repositories
-  ansible.builtin.deb822_repository:
-    name: "{{ item.name }}"
-    enabled: false
-    types: deb
-    uris: "https://enterprise.proxmox.com/debian/{{ item.path }}"
-    suites: "{{ ansible_facts.distribution_release }}"
-    components: "{{ item.component }}"
-    signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
-  loop:
-    - { name: pve-enterprise, path: pve, component: pve-enterprise }
-    - { name: ceph, path: ceph-squid, component: enterprise }
-  loop_control:
-    label: "{{ item.name }}"
-  register: proxmox_node_enterprise
+- name: Repositories and packages
+  ansible.builtin.import_tasks: packages.yml
+  tags: [packages]
 
-- name: Use the no-subscription repository
-  ansible.builtin.deb822_repository:
-    name: pve-no-subscription
-    types: deb
-    uris: http://download.proxmox.com/debian/pve
-    suites: "{{ ansible_facts.distribution_release }}"
-    components: pve-no-subscription
-    signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
-  register: proxmox_node_no_subscription
+- name: Network
+  ansible.builtin.import_tasks: network.yml
+  tags: [network]
 
-- name: Advertise the node over LLDP
-  ansible.builtin.apt:
-    name: lldpd
-    update_cache: "{{ proxmox_node_enterprise is changed or proxmox_node_no_subscription is changed }}"
+- name: VNet guard
+  ansible.builtin.import_tasks: vnet_guard.yml
+  tags: [vnet_guard]
 
-# No link-local address anywhere the node has no IPv6 address of its own.
-# Boot runs ifupdown2 in perfmode, which skips its policy defaults,
-# so the kernel's default has to agree.
-- name: Leave new interfaces without a link-local address
-  ansible.builtin.copy:
-    dest: /etc/sysctl.d/60-ipv6-addrgen.conf
-    content: |
-      net.ipv6.conf.default.addr_gen_mode = 1
-    mode: "0644"
-  notify: Apply sysctl
-
-- name: Tell ifupdown2 the same
-  ansible.builtin.copy:
-    dest: /etc/network/ifupdown2/policy.d/addrgen.json
-    content: |
-      {"address": {"defaults": {"ipv6-addrgen": "off"}}}
-    mode: "0644"
-  notify: Reload the network
-
-- name: Write the node's interfaces
-  ansible.builtin.copy:
-    dest: /etc/network/interfaces
-    content: >-
-      {{ interfaces | proxmox_interfaces(netbox_site, [primary_ip4, primary_ip6] | select | list,
-                                         proxmox_node_bond) }}
-    mode: "0644"
-  notify: Reload the network
-
-- name: Point the node at the site's resolvers
-  ansible.builtin.copy:
-    dest: /etc/resolv.conf
-    content: |
-      search {{ netbox_site.forward_zone }}
-      nameserver {{ netbox_site.anycast.ipv6 }}
-      nameserver {{ netbox_site.anycast.ipv4 }}
-    mode: "0644"
-
-- name: Reload the network before the cluster
+- name: Apply the network before the cluster
   ansible.builtin.meta: flush_handlers
 
-- name: Find the nodes of this cluster
-  ansible.builtin.set_fact:
-    proxmox_node_peers: >-
-      {{ groups['hypervisor'] | map('extract', hostvars) | selectattr('cluster', 'defined')
-         | selectattr('cluster', 'eq', proxmox_node_cluster)
-         | map(attribute='inventory_hostname') | sort }}
-
-# Delegated, so a run limited to a new node still sees the members
-- name: Check which of them are already in it
-  ansible.builtin.stat:
-    path: /etc/pve/corosync.conf
-  delegate_to: "{{ item }}"
-  loop: "{{ proxmox_node_peers }}"
-  register: proxmox_node_membership
-
-- name: Pick the member to join through - the first node, if nobody is in it yet
-  ansible.builtin.set_fact:
-    proxmox_node_members: "{{ members }}"
-    proxmox_node_member: "{{ members | first | default(proxmox_node_peers | first) }}"
-  vars:
-    members: >-
-      {{ proxmox_node_membership.results | selectattr('stat.exists')
-         | map(attribute='item') | list }}
-
-- name: Create the cluster on its first node
-  ansible.builtin.command: pvecm create {{ proxmox_node_cluster }} --link0 {{ proxmox_node_link0 }}
-  args:
-    creates: /etc/pve/corosync.conf
-  when:
-    - proxmox_node_members | length == 0
-    - inventory_hostname == proxmox_node_member
-    - proxmox_node_link0 in ansible_facts.all_ipv6_addresses
-
-# Tasks run across every host before the next starts, so a fresh cluster's first node
-# has created it by the time the others get here
-- name: Read how to join from the member
-  ansible.builtin.command: pvesh get /cluster/config/join --output-format json
-  delegate_to: "{{ proxmox_node_member }}"
-  register: proxmox_node_join_info
-  changed_when: false
-  when: &joining
-    - inventory_hostname not in proxmox_node_members
-    - inventory_hostname != proxmox_node_member
-    - proxmox_node_link0 in ansible_facts.all_ipv6_addresses
-
-- name: Join the cluster
-  ansible.builtin.command:
-    argv:
-      - pvesh
-      - create
-      - /cluster/config/join
-      - --hostname
-      - "{{ hostvars[proxmox_node_member].primary_ip6 }}"
-      - --fingerprint
-      - "{{ (proxmox_node_join_info.stdout | from_json).nodelist
-            | selectattr('name', 'eq', proxmox_node_member) | map(attribute='pve_fp') | first }}"
-      - --password
-      - "{{ lookup('community.general.onepassword', proxmox_node_member ~ ' Root Login',
-                   vault=onepassword_vault, field='password') }}"
-      - --link0
-      - "{{ proxmox_node_link0 }}"
-    creates: /etc/pve/corosync.conf
-  no_log: true
-  when: *joining
+- name: Cluster
+  ansible.builtin.import_tasks: cluster.yml
+  tags: [cluster]

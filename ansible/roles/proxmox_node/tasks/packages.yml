@@ -1,0 +1,31 @@
+---
+- name: Disable the enterprise repositories
+  ansible.builtin.deb822_repository:
+    name: "{{ item.name }}"
+    enabled: false
+    types: deb
+    uris: "https://enterprise.proxmox.com/debian/{{ item.path }}"
+    suites: "{{ ansible_facts.distribution_release }}"
+    components: "{{ item.component }}"
+    signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
+  loop:
+    - { name: pve-enterprise, path: pve, component: pve-enterprise }
+    - { name: ceph, path: ceph-squid, component: enterprise }
+  loop_control:
+    label: "{{ item.name }}"
+  register: proxmox_node_enterprise
+
+- name: Use the no-subscription repository
+  ansible.builtin.deb822_repository:
+    name: pve-no-subscription
+    types: deb
+    uris: http://download.proxmox.com/debian/pve
+    suites: "{{ ansible_facts.distribution_release }}"
+    components: pve-no-subscription
+    signed_by: /usr/share/keyrings/proxmox-archive-keyring.gpg
+  register: proxmox_node_no_subscription
+
+- name: Advertise the node over LLDP
+  ansible.builtin.apt:
+    name: lldpd
+    update_cache: "{{ proxmox_node_enterprise is changed or proxmox_node_no_subscription is changed }}"

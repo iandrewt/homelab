@@ -1,0 +1,42 @@
+---
+- name: Write the VNet guard's rules
+  ansible.builtin.copy:
+    dest: /etc/vnet-guard.nft
+    content: |
+      table bridge vnet-guard
+      delete table bridge vnet-guard
+      table bridge vnet-guard {
+          chain input {
+              type filter hook input priority filter; policy accept;
+      {% if proxmox_node_unjoined_vnets %}
+              meta ibrname { {{ proxmox_node_unjoined_vnets | map('to_json') | join(', ') }} } ether type { ip, ip6, arp } drop
+      {% endif %}
+          }
+      }
+    mode: "0644"
+  notify: Reload the VNet guard
+
+- name: Install the VNet guard's unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/vnet-guard.service
+    content: |
+      [Unit]
+      Description=Drop what reaches the node on VNets it doesn't join
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      ExecStart=/usr/sbin/nft -f /etc/vnet-guard.nft
+      ExecStop=/usr/sbin/nft delete table bridge vnet-guard
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: "0644"
+  notify: Reload the VNet guard
+
+- name: Start the VNet guard, now and at every boot
+  ansible.builtin.systemd_service:
+    name: vnet-guard
+    enabled: true
+    state: started
+    daemon_reload: true

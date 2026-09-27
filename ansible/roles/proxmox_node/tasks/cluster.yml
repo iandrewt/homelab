@@ -1,0 +1,65 @@
+---
+- name: Find the nodes of this cluster
+  ansible.builtin.set_fact:
+    proxmox_node_peers: >-
+      {{ groups['hypervisor'] | map('extract', hostvars) | selectattr('cluster', 'defined')
+         | selectattr('cluster', 'eq', proxmox_node_cluster)
+         | map(attribute='inventory_hostname') | sort }}
+
+# Delegated, so a run limited to a new node still sees the members
+- name: Check which of them are already in it
+  ansible.builtin.stat:
+    path: /etc/pve/corosync.conf
+  delegate_to: "{{ item }}"
+  loop: "{{ proxmox_node_peers }}"
+  register: proxmox_node_membership
+
+- name: Pick the member to join through - the first node, if nobody is in it yet
+  ansible.builtin.set_fact:
+    proxmox_node_members: "{{ members }}"
+    proxmox_node_member: "{{ members | first | default(proxmox_node_peers | first) }}"
+  vars:
+    members: >-
+      {{ proxmox_node_membership.results | selectattr('stat.exists')
+         | map(attribute='item') | list }}
+
+- name: Create the cluster on its first node
+  ansible.builtin.command: pvecm create {{ proxmox_node_cluster }} --link0 {{ proxmox_node_link0 }}
+  args:
+    creates: /etc/pve/corosync.conf
+  when:
+    - proxmox_node_members | length == 0
+    - inventory_hostname == proxmox_node_member
+    - proxmox_node_link0 in ansible_facts.all_ipv6_addresses
+
+# Tasks run across every host before the next starts, so a fresh cluster's first node
+# has created it by the time the others get here
+- name: Read how to join from the member
+  ansible.builtin.command: pvesh get /cluster/config/join --output-format json
+  delegate_to: "{{ proxmox_node_member }}"
+  register: proxmox_node_join_info
+  changed_when: false
+  when: &joining
+    - inventory_hostname not in proxmox_node_members
+    - inventory_hostname != proxmox_node_member
+    - proxmox_node_link0 in ansible_facts.all_ipv6_addresses
+
+- name: Join the cluster
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - create
+      - /cluster/config/join
+      - --hostname
+      - "{{ hostvars[proxmox_node_member].primary_ip6 }}"
+      - --fingerprint
+      - "{{ (proxmox_node_join_info.stdout | from_json).nodelist
+            | selectattr('name', 'eq', proxmox_node_member) | map(attribute='pve_fp') | first }}"
+      - --password
+      - "{{ lookup('community.general.onepassword', proxmox_node_member ~ ' Root Login',
+                   vault=onepassword_vault, field='password') }}"
+      - --link0
+      - "{{ proxmox_node_link0 }}"
+    creates: /etc/pve/corosync.conf
+  no_log: true
+  when: *joining
