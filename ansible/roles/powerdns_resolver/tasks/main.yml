@@ -38,6 +38,7 @@
     powerdns_resolver_pdns_config: >-
       {{
         {'local-address': powerdns_resolver_service_v4 ~ ',' ~ powerdns_resolver_service_v6,
+         'query-local-address': powerdns_resolver_service_v4 ~ ',' ~ powerdns_resolver_service_v6,
          'local-port': 53}
         | combine(
             {'primary': true, 'webserver': true, 'webserver-address': '::',
