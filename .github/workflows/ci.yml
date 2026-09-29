@@ -54,6 +54,16 @@ jobs:
             echo "::endgroup::"
           done
 
+      - name: validate every AWS layer
+        run: |
+          set -euo pipefail
+          for layer in $(find tofu/aws -name tofu.tf -printf '%h\n' | sort); do
+            echo "::group::$layer"
+            tofu -chdir="$layer" init -backend=false -input=false
+            tofu -chdir="$layer" validate
+            echo "::endgroup::"
+          done
+
   yamllint:
     name: yamllint
     runs-on: ubuntu-26.04
