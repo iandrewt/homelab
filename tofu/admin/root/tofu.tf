@@ -12,8 +12,14 @@ terraform {
     }
   }
 
-  # TODO: R2 or S3 once the bucket exists
-  backend "local" {}
+  backend "s3" {
+    bucket               = "tofu-state-585242447535-ap-southeast-2-an"
+    region               = "ap-southeast-2"
+    profile              = "homelab-state"
+    workspace_key_prefix = "clusters"
+    key                  = "admin/root.tfstate"
+    use_lockfile         = true
+  }
 
   encryption {
     key_provider "external" "primary" {

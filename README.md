@@ -107,7 +107,7 @@ to create by hand.
 
 **OpenTofu**
 
-- [ ] Decide the state backend (R2 vs S3) - local-only right now
+- [x] State in S3, in Platform's bucket, still encrypted client-side
 - [ ] Pin a checksum on the Debian cloud image - `latest` moves
 - [ ] ACME account + node certificates, then drop `insecure = true` from every layer
 
