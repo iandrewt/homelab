@@ -134,7 +134,7 @@ to create by hand.
 - [ ] IPv6 BGP transport once the UDM's kernel is 5.2 or later
 - [x] octoDNS from `netbox_dns` to PowerDNS, replacing the role's RRset provisioning
 - [ ] Ask the ISP to delegate alfheim's /48 reverse zone to Route53; a `public` view for it and `titmuss.au`
-- [ ] DNSSEC stage 1: sign internal zones, trust anchors on both recursors, validation on
+- [x] DNSSEC stage 1: sign internal zones, trust anchors on both recursors, validation on
 - [ ] DNSSEC stage 2: public copies in Route53, two DS records at Cloudflare, ACME CNAMEs into `acme.titmuss.au`
 - [x] Laptop: positive trust anchors for the internal zones until stage 2
 
@@ -192,7 +192,6 @@ to create by hand.
 - [ ] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
 - [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
 - [ ] `linux-vm`: match `e*`, let Proxmox allocate the VMID and MAC
-- [ ] Proxmox answer server on the laptop, keyed on the SMBIOS type 1 serial (the service tag), URL baked in with `prepare-iso`
 
 **IMDS (day two)**
 
