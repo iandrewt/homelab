@@ -1,32 +1,91 @@
 locals {
   bootstrap_role = "arn:aws:iam::*:role/OrganizationAccountAccessRole"
 
-  # Global services, which alone may use us-east-1. One missing here fails with an explicit
-  # SCP deny, and joins the list then
-  global_actions = [
+  # Allowed in every region: services with no regional resources of their own, and allow
+  # inspecting resources in denied regions
+  anywhere = [
+    "access-analyzer:*",
     "account:*",
+    "artifact:*",
+    "autoscaling:Describe*",
+    "aws-marketplace-management:*",
+    "aws-marketplace:*",
     "aws-portal:*",
+    "bcm-dashboards:*",
+    "bcm-data-exports:*",
+    "bcm-pricing-calculator:*",
+    "bcm-recommended-actions:*",
     "billing:*",
+    "billingconductor:*",
     "budgets:*",
     "ce:*",
+    "chatbot:*",
+    "cloudfront-keyvaluestore:*",
+    "cloudfront:*",
+    "cloudtrail:Describe*",
+    "cloudtrail:Get*",
+    "cloudtrail:List*",
     "cloudtrail:LookupEvents",
+    "compute-optimizer:*",
+    "consoleapp:*",
+    "consolidatedbilling:*",
+    "cost-optimization-hub:*",
     "cur:*",
+    "ec2:Describe*",
+    "ecs:List*",
     "freetier:*",
+    "globalaccelerator:*",
     "health:*",
     "iam:*",
     "invoicing:*",
+    "networkmanager:*",
+    "notifications-contacts:*",
+    "notifications:*",
     "organizations:*",
+    "outposts:List*",
     "payments:*",
     "pricing:*",
+    "purchase-orders:*",
+    "rds:Describe*",
+    "route53-recovery-cluster:*",
+    "route53-recovery-control-config:*",
+    "route53-recovery-readiness:*",
     "route53:*",
     "route53domains:*",
+    "s3:*AccountPublicAccessBlock",
+    "s3:*MultiRegionAccessPoint*",
+    "s3:*StorageLens*",
     "s3:GetBucketLocation",
     "s3:ListAllMyBuckets",
+    "savingsplans:*",
+    "security-ir:*",
+    "shield:*",
+    "signin:*",
     "sts:*",
+    "support-console:*",
     "support:*",
+    "supportapp:*",
+    "supportplans:*",
+    "sustainability:*",
     "tax:*",
     "trustedadvisor:*",
+    "waf:*",
   ]
+
+  # Regional services that global ones depend on, allowed in the one region they have to be in.
+  pinned = {
+    "us-east-1" = [
+      "acm:*",
+      "cloudwatch:*",
+      "ecr-public:*",
+      "events:*",
+      "fms:*",
+      "kms:*",
+      "logs:*",
+      "sns:*",
+      "wafv2:*",
+    ]
+  }
 
   # Administrator where the logging and detection layers run
   security_administrators = [
@@ -123,28 +182,28 @@ resource "aws_organizations_policy" "regions" {
 
   content = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
+    Statement = concat(
+      [{
         Sid       = "OnlyTheseRegions"
         Effect    = "Deny"
-        NotAction = local.global_actions
+        NotAction = concat(local.anywhere, flatten(values(local.pinned)))
         Resource  = "*"
         Condition = {
           StringNotEquals = { "aws:RequestedRegion" = local.regions }
           ArnNotLike      = { "aws:PrincipalArn" = local.bootstrap_role }
         }
-      },
-      {
-        Sid      = "GlobalServicesFromUsEast1"
+      }],
+      [for region, actions in local.pinned : {
+        Sid      = "PinnedTo${replace(title(replace(region, "-", " ")), " ", "")}"
         Effect   = "Deny"
-        Action   = local.global_actions
+        Action   = actions
         Resource = "*"
         Condition = {
-          StringNotEquals = { "aws:RequestedRegion" = concat(local.regions, ["us-east-1"]) }
+          StringNotEquals = { "aws:RequestedRegion" = concat(local.regions, [region]) }
           ArnNotLike      = { "aws:PrincipalArn" = local.bootstrap_role }
         }
-      },
-    ]
+      }],
+    )
   })
 }
 
