@@ -26,6 +26,7 @@ resource "aws_organizations_organization" "this" {
     "ec2.amazonaws.com",
     "health.amazonaws.com",
     "guardduty.amazonaws.com",
+    "malware-protection.guardduty.amazonaws.com",
     "iam.amazonaws.com",
     "member.org.stacksets.cloudformation.amazonaws.com",
     "notifications.amazonaws.com",
