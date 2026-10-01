@@ -66,6 +66,7 @@ resource "aws_organizations_policy" "bootstrap_role_trust" {
         ArnNotLike = {
           "aws:PrincipalArn" = "arn:aws:iam::${local.management_id}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_${aws_ssoadmin_permission_set.management_administrator.name}_*"
         }
+        BoolIfExists = { "aws:PrincipalIsAWSService" = "false" }
       }
     }]
   })
