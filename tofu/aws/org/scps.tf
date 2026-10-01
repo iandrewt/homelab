@@ -141,6 +141,18 @@ resource "aws_organizations_policy" "guardrails" {
         Resource = "*"
       },
       {
+        # .au has no transfer lock
+        Sid    = "DomainsStay"
+        Effect = "Deny"
+        Action = [
+          "route53domains:DisableDomainAutoRenew",
+          "route53domains:RetrieveDomainAuthCode",
+          "route53domains:TransferDomainToAnotherAwsAccount",
+        ]
+        Resource  = "*"
+        Condition = { ArnNotLike = { "aws:PrincipalArn" = local.bootstrap_role } }
+      },
+      {
         Sid       = "RetentionIsBreakGlass"
         Effect    = "Deny"
         Action    = "s3:BypassGovernanceRetention"
