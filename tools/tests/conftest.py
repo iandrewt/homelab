@@ -75,10 +75,10 @@ def soa(zone_name, view="_default_") -> dict:
                   view=view)
 
 
-def device(name, role, site_slug=SITE, tags=()) -> dict:
+def device(name, role, site_slug=SITE, tags=(), role_name=None) -> dict:
     return {
         "name": name,
-        "role": {"slug": role},
+        "role": {"slug": role, "name": role_name or role},
         "site": _site_ref(site_slug),
         "tags": [{"slug": t} for t in tags],
     }
@@ -124,6 +124,6 @@ def snapshot() -> netbox.Snapshot:
             record("one.test", "dns.one.test.", "A", "10.0.200.1"),
         ],
         devices=[device("ratatoskr", "dns-resolver", tags=["dns-primary"]),
-                 device("udm", "router")],
+                 device("udm", "router-firewall", role_name="Router Firewall")],
     )
 

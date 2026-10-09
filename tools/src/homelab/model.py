@@ -8,6 +8,8 @@ INTERNAL_VIEW = "_default_"
 RESOLVER_ROLE = "dns-resolver"
 RESOLVER_PURPOSE = "dns"
 ROUTER_ROLE = "router"
+# By name, which is all the netbox-site module can look a device role up by
+ROUTER_DEVICE_ROLE = "Router Firewall"
 LISTEN_TAG = "bgp-listen"
 PRIMARY_TAG = "dns-primary"
 
@@ -41,7 +43,7 @@ def _site(slug: str, snap: netbox.Snapshot, zones: dict) -> dict:
     hosts = [
         h for h in [*snap.devices, *snap.virtual_machines] if _slug(h, "site") == slug
     ]
-    routers = {h["name"] for h in hosts if _slug(h, "role") == ROUTER_ROLE}
+    routers = {h["name"] for h in hosts if (h.get("role") or {}).get("name") == ROUTER_DEVICE_ROLE}
     gateways = [_ip(a) for a in snap.addresses if _holder(a) in routers]
     vlans, listen = _vlans(slug, snap, gateways)
     pools = _pools(slug, snap)
