@@ -81,7 +81,6 @@ ephemeral "onepassword_item" "token" {
 provider "proxmox" {
   endpoint  = local.cluster.endpoint
   api_token = ephemeral.onepassword_item.token.password
-  insecure  = true # self-signed until there's an ACME account
 
   ssh {
     agent    = true

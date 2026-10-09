@@ -2,6 +2,10 @@ terraform {
   required_version = "~> 1.12"
 
   required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.66"
+    }
     proxmox = {
       source  = "bpg/proxmox"
       version = "~> 0.114"
@@ -46,6 +50,15 @@ locals {
   cluster = yamldecode(file("${path.module}/../../clusters/${terraform.workspace}.yaml"))
 }
 
+provider "aws" {
+  region  = "ap-southeast-2"
+  profile = "homelab-network"
+
+  default_tags {
+    tags = { managed-by = "opentofu", layer = "admin/root", cluster = terraform.workspace }
+  }
+}
+
 provider "onepassword" {}
 
 data "onepassword_vault" "this" {
@@ -55,5 +68,4 @@ data "onepassword_vault" "this" {
 provider "proxmox" {
   endpoint = local.cluster.endpoint
   username = "root@pam"
-  insecure = true # self-signed until there's an ACME account
 }

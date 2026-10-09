@@ -48,15 +48,3 @@ module "access_token" {
 
   depends_on = [proxmox_acl.tofu]
 }
-
-# ACME lives here because POST /cluster/acme/account carries no permissions block at
-# all in the API schema, which means root@pam only - no token scoping can reach it.
-#
-# TODO: enable, then drop `insecure = true` from every layer's provider block.
-#
-# resource "proxmox_acme_account" "default" {
-#   name      = "default"
-#   contact   = "..."
-#   directory = "https://acme-v02.api.letsencrypt.org/directory"
-#   tos       = "https://letsencrypt.org/documents/LE-SA-v1.5-February-24-2025.pdf"
-# }
