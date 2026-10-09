@@ -107,6 +107,9 @@
         },
         "username_claim": {
           "type": "string"
+        },
+        "comment": {
+          "type": "string"
         }
       }
     },

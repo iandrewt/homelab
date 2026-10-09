@@ -16,11 +16,11 @@ sdn:
 firewall:
   management_vlans: [Management, Trusted]
 
-# oidc:
-#   realm: entra
-#   issuer_url: https://login.microsoftonline.com/<tenant-id>/v2.0
-#   client_id: <application-id>
-#   username_claim: email
+oidc:
+  realm: entra
+  issuer_url: https://login.microsoftonline.com/5b506f80-57e1-4fda-864e-c2da64b16fd1/v2.0
+  client_id: 997138dc-e3d4-440e-89d9-8043c0c3455a
+  comment: Entra ID
 
 storages:
   local:
