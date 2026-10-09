@@ -16,6 +16,7 @@ resource "proxmox_virtual_environment_role" "tofu_images" {
   role_id = "TofuImages"
 
   privileges = [
+    "Datastore.Allocate", # replacing an image deletes the volume it replaces
     "Datastore.AllocateTemplate",
     "Datastore.Audit",
   ]
