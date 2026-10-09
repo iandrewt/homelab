@@ -109,7 +109,9 @@ to create by hand.
 
 - [x] State in S3, in Platform's bucket, still encrypted client-side
 - [ ] Pin a checksum on the Debian cloud image - `latest` moves
-- [ ] ACME account + node certificates, then drop `insecure = true` from every layer
+- [x] ACME account + node certificates, then drop `insecure = true` from every layer
+- [ ] Delete `proxmox-acme-<cluster>` and its access key once an internal CA issues the nodes' certificates
+- [x] Sign in to Proxmox with Entra, Entra app roles as Proxmox groups
 
 **Ratatoskr (Raspberry Pi)**
 
@@ -135,8 +137,8 @@ to create by hand.
 - [x] octoDNS from `netbox_dns` to PowerDNS, replacing the role's RRset provisioning
 - [ ] Ask the ISP to delegate alfheim's /48 reverse zone to Route53; a `public` view for it and `titmuss.au`
 - [x] DNSSEC stage 1: sign internal zones, trust anchors on both recursors, validation on
-- [ ] DNSSEC stage 2: public copies in Route53, two DS records at Cloudflare, ACME CNAMEs into `acme.titmuss.au`
-- [x] Laptop: positive trust anchors for the internal zones until stage 2
+- [x] DNSSEC stage 2: a public copy in Route53, Route53's and PowerDNS's DS at Cloudflare
+- [x] Laptop: drop `alfheim.titmuss.zone`'s trust anchor; the /48's reverse keeps its own until the ISP's delegation is signed
 
 **Other**
 
