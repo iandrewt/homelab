@@ -45,7 +45,7 @@ data "netbox_prefixes" "vlan" {
 }
 
 data "netbox_device_role" "router" {
-  name = "Router"
+  name = "Router Firewall"
 }
 
 data "netbox_devices" "routers" {
@@ -71,4 +71,10 @@ data "netbox_ip_addresses" "router" {
 
 locals {
   router_ips = flatten([for r in data.netbox_ip_addresses.router : [for a in r.ip_addresses : split("/", a.ip_address)[0]]])
+
+  # cidrcontains fails rather than answering false across address families
+  router_ips_by_family = {
+    ipv4 = [for ip in local.router_ips : ip if !strcontains(ip, ":")]
+    ipv6 = [for ip in local.router_ips : ip if strcontains(ip, ":")]
+  }
 }

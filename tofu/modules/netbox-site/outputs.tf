@@ -6,8 +6,11 @@ output "vlans" {
       isolated = contains(v.tag_ids, tonumber(data.netbox_tag.isolate_ports.id))
       subnets = [
         for p in data.netbox_prefixes.vlan[v.name].prefixes : {
-          cidr    = p.prefix
-          gateway = one([for ip in local.router_ips : ip if cidrcontains(p.prefix, ip)])
+          cidr = p.prefix
+          gateway = one([
+            for ip in local.router_ips_by_family[strcontains(p.prefix, ":") ? "ipv6" : "ipv4"] : ip
+            if cidrcontains(p.prefix, ip)
+          ])
         }
       ]
     }
