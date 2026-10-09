@@ -23,7 +23,19 @@ resource "aws_organizations_policy" "perimeter" {
         Resource = "*"
         Condition = {
           StringNotEqualsIfExists = { "aws:PrincipalOrgID" = aws_organizations_organization.this.id }
+          StringNotEquals         = { "aws:PrincipalType" = "Anonymous" }
           BoolIfExists            = { "aws:PrincipalIsAWSService" = "false" }
+        }
+      },
+      {
+        Sid       = "AnonymousOnlyThroughTheOrganisation"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = "*"
+        Condition = {
+          StringEquals            = { "aws:PrincipalType" = "Anonymous" }
+          StringNotEqualsIfExists = { "aws:VpceOrgID" = aws_organizations_organization.this.id }
         }
       },
       {
