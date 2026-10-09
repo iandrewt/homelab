@@ -11,8 +11,7 @@ deb13cis_rsync_mask: true
 debian_host_service_accounts:
   - name: tofu
     comment: OpenTofu provider SSH access
-    ssh_key: "{{ lookup('community.general.onepassword', 'Proxmox Tofu SSH key',
-                        vault=onepassword_vault, field='public key') }}"
+    ssh_key: "{{ tofu_ssh_public_key }}"
     directories:
       - /var/lib/vz/snippets
 

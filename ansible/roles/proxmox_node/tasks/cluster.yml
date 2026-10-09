@@ -56,8 +56,7 @@
       - "{{ (proxmox_node_join_info.stdout | from_json).nodelist
             | selectattr('name', 'eq', proxmox_node_member) | map(attribute='pve_fp') | first }}"
       - --password
-      - "{{ lookup('community.general.onepassword', proxmox_node_member ~ ' Root Login',
-                   vault=onepassword_vault, field='password') }}"
+      - "{{ hostvars[proxmox_node_member].proxmox_root_password }}"
       - --link0
       - "{{ proxmox_node_link0 }}"
     creates: /etc/pve/corosync.conf

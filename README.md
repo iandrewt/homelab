@@ -61,7 +61,9 @@ builds it from NetBox: active or staged hosts tagged `ansible-managed`, grouped 
 role and platform into the groups `site.yml` plays against. What each host needs to know
 about its site comes from [`ansible/vars_plugins/netbox.py`](ansible/vars_plugins/netbox.py),
 which loads the same model `homelab generate` renders from - so Ansible runs through `uv`.
-Its secrets come through `community.general.onepassword`, which needs the `op` CLI:
+Its secrets are declared in [`ansible/inventory/onepassword.yml`](ansible/inventory/onepassword.yml)
+and resolved through the 1Password SDK before any task runs, so a run asks the desktop app
+once (`OP_ACCOUNT=<name>`):
 
 ```
 uv run ansible-galaxy collection install -r ansible/requirements.yml

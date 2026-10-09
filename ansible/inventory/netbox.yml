@@ -1,8 +1,7 @@
 plugin: netbox.netbox.nb_inventory
 validate_certs: true
 
-token: "{{ lookup('community.general.onepassword', 'Ansible NetBox API Token',
-                  vault='Homelab', field='credential') }}"
+token: "{{ lookup('secret', 'op://Homelab/Ansible NetBox API Token/credential') }}"
 
 query_filters:
   - status: active

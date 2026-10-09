@@ -42,10 +42,8 @@ powerdns_resolver_api_allow_from: >-
    + [netbox_site.pools.get('kubernetes-pods', {}).get('ipv4'),
       netbox_site.pools.get('kubernetes-pods', {}).get('ipv6')] | select | list }}
 
-powerdns_resolver_api_key: "{{ lookup('community.general.onepassword', netbox_site.slug ~ ' PowerDNS API key',
-                                      vault=onepassword_vault, field='credential') }}"
-powerdns_resolver_cloudflare_api_token: "{{ lookup('community.general.onepassword', 'Ansible Cloudflare API token',
-                                                   vault=onepassword_vault, field='credential') }}"
+powerdns_resolver_api_key: "{{ powerdns_api_key }}"
+powerdns_resolver_cloudflare_api_token: "{{ cloudflare_api_token }}"
 powerdns_resolver_primary_api_url: >-
   http://[{{ dns_resolver_primary.ipv6 }}]:8081/api/v1/servers/localhost
 
