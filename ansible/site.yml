@@ -25,18 +25,17 @@
   roles:
     - DEBIAN13-CIS
 
-- name: Configure Proxmox hosts
-  tags: [hypervisor]
-  hosts: hypervisor
+- name: Debian host
+  tags: [debian]
+  hosts: debian
   become: true
   roles:
     - debian_host
 
-- name: Configure DNS resolvers
+- name: DNS resolvers
   tags: [resolvers]
   hosts: dns_resolver
   become: true
   roles:
-    - debian_host
     - frr_bgp
     - powerdns_resolver

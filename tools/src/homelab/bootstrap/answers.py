@@ -2,7 +2,6 @@
 
 import ipaddress
 
-import pynetbox
 import tomli_w
 import yaml
 
@@ -15,8 +14,8 @@ BOOT_TAG = "proxmox-boot"
 
 
 def render(host: str) -> str:
-    found = facts(pynetbox.api(*netbox.connection()), host)
-    clusters = [yaml.safe_load(p.read_text()) for p in Repo.discover().cluster_files()]
+    found = facts(netbox.api(), host)
+    clusters = [yaml.safe_load(p.read_text()) for p in Repo.discover().clusters.glob("*.yaml")]
     cluster = next((c for c in clusters if host in c["nodes"]), None)
     if cluster is None:
         raise BootstrapError(f"{host} is a node in no cluster file")
@@ -26,11 +25,20 @@ def render(host: str) -> str:
         f"op://{vault}/homelab control node SSH key/public key",
     )
     root_hash = run("openssl", "passwd", "-6", "-stdin", input=password, capture=True).strip()
-    resolver = load()["sites"][found["site"]]["anycast"]["ipv6"]
-    return tomli_w.dumps(answer(found, cluster, root_hash, ssh_key, resolver))
+    site = load()["sites"][found["site"]]
+    ip = ipaddress.ip_interface(found["cidr"]).ip
+    gateway = next(
+        v["gateway_ipv6"] for v in site["vlans"].values()
+        if v["ipv6"] and ip in ipaddress.ip_network(v["ipv6"])
+    )
+    return tomli_w.dumps(
+        answer(found, cluster, root_hash, ssh_key, gateway, site["anycast"]["ipv6"])
+    )
 
 
-def answer(facts: dict, cluster: dict, root_hash: str, ssh_key: str, resolver: str) -> dict:
+def answer(
+    facts: dict, cluster: dict, root_hash: str, ssh_key: str, gateway: str, resolver: str
+) -> dict:
     return {
         "global": {
             "keyboard": "en-us",
@@ -44,7 +52,7 @@ def answer(facts: dict, cluster: dict, root_hash: str, ssh_key: str, resolver: s
         "network": {
             "source": "from-answer",
             "cidr": facts["cidr"],
-            "gateway": str(ipaddress.ip_interface(facts["cidr"]).network.network_address + 1),
+            "gateway": gateway,
             "dns": resolver,
             "filter": {"ID_NET_NAME_MAC": "enx" + facts["mac"].replace(":", "").lower()},
         },

@@ -1,21 +1,18 @@
 import argparse
-import hashlib
 import lzma
 import os
 import re
 import shutil
 import subprocess
 import tempfile
-import urllib.request
 from pathlib import Path
 
 from .. import netbox, secrets
 from ..model import load
 from ..render import seed
 from . import blockdev
+from .download import CHUNK, fetch, get
 from .shell import BootstrapError, require, run, say
-
-CHUNK = 1024 * 1024
 
 IMAGES_BASE_URL = "https://downloads.raspberrypi.com/raspios_lite_arm64/images"
 
@@ -70,13 +67,13 @@ def main(args: argparse.Namespace) -> int:
     require("sudo", "dd", "lsblk", "mount", "umount", "chroot")
 
     try:
-        ipam = load()
+        model = load()
     except netbox.Unreachable as bad:
         raise BootstrapError(str(bad)) from None
 
-    site = ipam["sites"].get(args.site)
+    site = model["sites"].get(args.site)
     if site is None:
-        known = ", ".join(sorted(ipam["sites"]))
+        known = ", ".join(sorted(model["sites"]))
         raise BootstrapError(f"{args.site!r} is not a site in NetBox. Known: {known}")
 
     device = Path(args.device)
@@ -100,7 +97,7 @@ def main(args: argparse.Namespace) -> int:
 
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp)
-        compressed = _fetch(url, work)
+        compressed = fetch(url, work / url.rsplit("/", 1)[-1], get(f"{url}.sha256").split()[0])
         _write(compressed, device)
         _bake(work, device)
         _seed(work, args, site, ssh_key, device)
@@ -111,7 +108,7 @@ def main(args: argparse.Namespace) -> int:
 
 def latest_image_url() -> str:
     """Dated directories sort chronologically, so the last one is the newest build."""
-    listing = _get(f"{IMAGES_BASE_URL}/")
+    listing = get(f"{IMAGES_BASE_URL}/")
     directories = sorted(
         set(re.findall(r"raspios_lite_arm64-\d{4}-\d{2}-\d{2}/", listing))
     )
@@ -125,37 +122,13 @@ def latest_image_url() -> str:
         set(
             re.findall(
                 r"\d{4}-\d{2}-\d{2}-raspios-[a-z]+-arm64-lite\.img\.xz",
-                _get(f"{IMAGES_BASE_URL}/{latest}"),
+                get(f"{IMAGES_BASE_URL}/{latest}"),
             )
         )
     )
     if not names:
         raise BootstrapError(f"no .img.xz in {IMAGES_BASE_URL}/{latest}")
     return f"{IMAGES_BASE_URL}/{latest}{names[0]}"
-
-
-def _get(url: str) -> str:
-    with urllib.request.urlopen(url) as response:
-        return response.read().decode()
-
-
-def _fetch(url: str, work: Path) -> Path:
-    image = work / url.rsplit("/", 1)[-1]
-    expected = _get(f"{url}.sha256").split()[0]
-
-    say(f"downloading {url}")
-    digest = hashlib.sha256()
-    with urllib.request.urlopen(url) as response, image.open("wb") as out:
-        while block := response.read(CHUNK):
-            digest.update(block)
-            out.write(block)
-
-    if digest.hexdigest() != expected:
-        raise BootstrapError(
-            f"checksum mismatch for {image.name}: expected {expected}, got {digest.hexdigest()}"
-        )
-    say("checksum verified")
-    return image
 
 
 def _write(compressed: Path, device: Path) -> None:

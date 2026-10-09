@@ -1,19 +1,17 @@
 """A host's unattended Proxmox ISO: the latest release, with its answer file inside."""
 
 import argparse
-import hashlib
 import re
 import shutil
 import tempfile
-import urllib.request
 from pathlib import Path
 
 from . import answers
+from .download import fetch, get, sha256
 from .shell import BootstrapError, require, run, say
 
 ISO_INDEX = "https://enterprise.proxmox.com/iso/"
 CACHE = Path.home() / ".cache" / "homelab"
-CHUNK = 1024 * 1024
 
 
 def register(subparsers) -> None:
@@ -62,39 +60,17 @@ def _uuid(iso: Path) -> str:
 
 def _latest_iso() -> Path:
     """Cached, since it's a gigabyte and a host's install can take a few attempts."""
-    releases = re.findall(r"proxmox-ve_(\d+)\.(\d+)-(\d+)\.iso", _get(ISO_INDEX))
+    releases = re.findall(r"proxmox-ve_(\d+)\.(\d+)-(\d+)\.iso", get(ISO_INDEX))
     if not releases:
         raise BootstrapError(f"no proxmox-ve_*.iso at {ISO_INDEX}")
     name = "proxmox-ve_{}.{}-{}.iso".format(*max(releases, key=lambda r: tuple(map(int, r))))
     expected = next(
-        line.split()[0] for line in _get(f"{ISO_INDEX}SHA256SUMS").splitlines()
+        line.split()[0] for line in get(f"{ISO_INDEX}SHA256SUMS").splitlines()
         if line.split()[1:] == [name]
     )
 
     iso = CACHE / name
-    if iso.exists() and _sha256(iso) == expected:
+    if iso.exists() and sha256(iso) == expected:
         return iso
-
     CACHE.mkdir(parents=True, exist_ok=True)
-    partial = iso.with_suffix(".partial")
-    say(f"downloading {ISO_INDEX}{name}")
-    with urllib.request.urlopen(f"{ISO_INDEX}{name}") as response, partial.open("wb") as out:
-        shutil.copyfileobj(response, out, CHUNK)
-    if (actual := _sha256(partial)) != expected:
-        partial.unlink()
-        raise BootstrapError(f"checksum mismatch for {name}: expected {expected}, got {actual}")
-    partial.rename(iso)
-    return iso
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as f:
-        while block := f.read(CHUNK):
-            digest.update(block)
-    return digest.hexdigest()
-
-
-def _get(url: str) -> str:
-    with urllib.request.urlopen(url) as response:
-        return response.read().decode()
+    return fetch(f"{ISO_INDEX}{name}", iso, expected)

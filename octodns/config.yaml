@@ -1,5 +1,6 @@
 # NetBox's internal view to each site's primary. Run through `homelab dns plan` and
-# `homelab dns apply`, which fill in the env/ values from 1Password.
+# `homelab dns apply`, which add a PowerDNS target per site - its resolver tagged
+# `dns-primary` - and fill in the env/ values from 1Password.
 manager:
   enable_checksum: true
   plan_outputs:
@@ -15,14 +16,6 @@ providers:
     make_absolute: true
     ns_ttl_mode: record
 
-  # One per site, named by its slug: its API key is "<slug> PowerDNS API key".
-  alfheim:
-    class: octodns_powerdns.PowerDnsProvider
-    host: ratatoskr-dns.alfheim.titmuss.zone
-    api_key: env/ALFHEIM_POWERDNS_API_KEY
-    enable_dynamic: false
-
 zones:
   "*":
     sources: [netbox]
-    targets: [alfheim]

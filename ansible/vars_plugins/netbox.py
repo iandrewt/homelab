@@ -16,7 +16,7 @@ ITEM_REF = "op://Homelab/Ansible NetBox API Token"
 class VarsModule(BaseVarsPlugin):
     REQUIRES_ENABLED = True
 
-    _ipam = None
+    _model = None
 
     def get_vars(self, loader, path, entities, cache=True):
         super().get_vars(loader, path, entities)
@@ -24,17 +24,22 @@ class VarsModule(BaseVarsPlugin):
         if not hosts:
             return {}
 
-        from homelab.render.hostvars import host_vars
-
-        ipam = self._load()
+        model = self._load()
         data = {}
         for host in hosts:
-            data.update(host_vars(ipam, host.name))
+            # A host NetBox doesn't know is at no site, and gets nothing
+            site = next((s for s in model["sites"].values() if host.name in s["hosts"]), None)
+            if site is not None:
+                data.update(
+                    netbox_site=site,
+                    netbox_sites=model["sites"],
+                    netbox_zones=list(model["zones"].values()),
+                )
         return data
 
     @classmethod
     def _load(cls):
-        if cls._ipam is None:
+        if cls._model is None:
             try:
                 from homelab import model, netbox
             except ModuleNotFoundError as missing:
@@ -43,8 +48,7 @@ class VarsModule(BaseVarsPlugin):
                 ) from None
 
             try:
-                snapshot = netbox.fetch(os.environ.get("NETBOX_ITEM_REF", ITEM_REF))
-                cls._ipam = model.load(snapshot)
+                cls._model = model.load(netbox.fetch(os.environ.get("NETBOX_ITEM_REF", ITEM_REF)))
             except netbox.Unreachable as bad:
                 raise AnsibleError(f"NetBox: {bad}") from None
-        return cls._ipam
+        return cls._model

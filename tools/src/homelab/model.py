@@ -9,6 +9,7 @@ RESOLVER_ROLE = "dns-resolver"
 RESOLVER_PURPOSE = "dns"
 ROUTER_ROLE = "router"
 LISTEN_TAG = "bgp-listen"
+PRIMARY_TAG = "dns-primary"
 
 
 def load(snapshot: netbox.Snapshot | None = None) -> dict:
@@ -20,14 +21,14 @@ def load(snapshot: netbox.Snapshot | None = None) -> dict:
     }
 
 
-def unzoned(ipam: dict) -> list[str]:
+def unzoned(model: dict) -> list[str]:
     """Names netbox_dns will skip without a word: no zone to hold the record, or its PTR."""
 
     def held(name: str) -> bool:
-        return any(name == z or name.endswith(f".{z}") for z in ipam["zones"])
+        return any(name == z or name.endswith(f".{z}") for z in model["zones"])
 
     problems = []
-    for slug, site in ipam["sites"].items():
+    for slug, site in model["sites"].items():
         for address, name in site["named"].items():
             if not held(name):
                 problems.append(f"{slug}: {name} is in no zone")
@@ -37,7 +38,12 @@ def unzoned(ipam: dict) -> list[str]:
 
 
 def _site(slug: str, snap: netbox.Snapshot, zones: dict) -> dict:
-    vlans, listen = _vlans(slug, snap)
+    hosts = [
+        h for h in [*snap.devices, *snap.virtual_machines] if _slug(h, "site") == slug
+    ]
+    routers = {h["name"] for h in hosts if _slug(h, "role") == ROUTER_ROLE}
+    gateways = [_ip(a) for a in snap.addresses if _holder(a) in routers]
+    vlans, listen = _vlans(slug, snap, gateways)
     pools = _pools(slug, snap)
     owned = [
         ipaddress.ip_network(net)
@@ -46,9 +52,6 @@ def _site(slug: str, snap: netbox.Snapshot, zones: dict) -> dict:
         if net
     ]
     addresses = [a for a in snap.addresses if any(_ip(a) in net for net in owned)]
-    hosts = [
-        h for h in [*snap.devices, *snap.virtual_machines] if _slug(h, "site") == slug
-    ]
     return {
         "slug": slug,
         "forward_zone": next((z for z in sorted(zones) if z.split(".")[0] == slug), None),
@@ -95,9 +98,9 @@ def _zones(snap: netbox.Snapshot) -> dict:
     return zones
 
 
-def _vlans(slug: str, snap: netbox.Snapshot) -> tuple[dict, list[str]]:
-    """A VLAN in a group has no site of its own - the group's scope places it."""
-    groups = {g["slug"] for g in _at(snap.vlan_groups, slug)}
+def _vlans(slug: str, snap: netbox.Snapshot, gateways: list) -> tuple[dict, list[str]]:
+    """A site's VLANs are in the group named by its slug. Each gateway is the router's
+    address inside the VLAN's prefix."""
     nets: dict[int, dict] = {}
     for p in _at(snap.prefixes, slug):
         if p.get("vlan") and _active(p):
@@ -106,18 +109,20 @@ def _vlans(slug: str, snap: netbox.Snapshot) -> tuple[dict, list[str]]:
 
     vlans, listen = {}, []
     for raw in snap.vlans:
-        if not _active(raw) or not (_slug(raw, "group") in groups or _slug(raw, "site") == slug):
+        if not _active(raw) or _slug(raw, "group") != slug:
             continue
         v4, v6 = nets[raw["vid"]][4], nets[raw["vid"]].get(6)
+        tags = _tags(raw)
         vlans[raw["name"]] = {
             "vid": raw["vid"],
             "vnet": (raw.get("custom_fields") or {}).get("vnet"),
+            "tags": tags,
             "ipv4": str(v4),
             "ipv6": v6 and str(v6),
-            "gateway_ipv4": str(v4.network_address + 1),
-            "gateway_ipv6": v6 and str(v6.network_address + 1),
+            "gateway_ipv4": _gateway(v4, gateways),
+            "gateway_ipv6": v6 and _gateway(v6, gateways),
         }
-        if LISTEN_TAG in {t["slug"] for t in raw["tags"]}:
+        if LISTEN_TAG in tags:
             listen.append(raw["name"])
     return vlans, sorted(listen)
 
@@ -168,6 +173,7 @@ def _resolvers(hosts: list[dict], addresses: list[dict], vlans: dict, pools: dic
         lan6 = next(ip for ip in held if ip in ipaddress.ip_network(vlans[vlan]["ipv6"]))
         resolvers[host["name"]] = {
             "ipv4": service[4], "ipv6": service[6], "vlan": vlan, "lan_ipv6": str(lan6),
+            "primary": PRIMARY_TAG in _tags(host),
         }
     return resolvers
 
@@ -202,6 +208,14 @@ def _gua(slug: str, snap: netbox.Snapshot) -> str | None:
 
 def _at(objects: list[dict], slug: str) -> list[dict]:
     return [o for o in objects if o.get("scope_type") == "dcim.site" and _slug(o, "scope") == slug]
+
+
+def _gateway(net: ipaddress.IPv4Network | ipaddress.IPv6Network, gateways: list) -> str | None:
+    return next((str(ip) for ip in gateways if ip in net), None)
+
+
+def _tags(raw: dict) -> list[str]:
+    return sorted(t["slug"] for t in raw.get("tags") or [])
 
 
 def _slug(raw: dict, key: str) -> str | None:

@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+import pynetbox
+
 from . import secrets
 
 ITEM_REF_ENV = "NETBOX_ITEM_REF"
@@ -23,7 +25,6 @@ class Unreachable(Exception):
 @dataclass(frozen=True)
 class Snapshot:
     sites: list[dict] = field(default_factory=list)
-    vlan_groups: list[dict] = field(default_factory=list)
     vlans: list[dict] = field(default_factory=list)
     prefixes: list[dict] = field(default_factory=list)
     addresses: list[dict] = field(default_factory=list)
@@ -45,29 +46,26 @@ def connection(item: str | None = None) -> tuple[str, str]:
     return url, token
 
 
-def fetch(item: str | None = None) -> Snapshot:
+def api(item: str | None = None) -> pynetbox.api:
     url, token = connection(item)
+    return pynetbox.api(url, token=token)
 
-    try:
-        import pynetbox
-    except ModuleNotFoundError as exc:  # pragma: no cover - packaging failure
-        raise Unreachable("pynetbox is not installed") from exc
 
-    api = pynetbox.api(url, token=token)
+def fetch(item: str | None = None) -> Snapshot:
+    nb = api(item)
     try:
         return Snapshot(
-            sites=[dict(o) for o in api.dcim.sites.all()],
-            vlan_groups=[dict(o) for o in api.ipam.vlan_groups.all()],
-            vlans=[dict(o) for o in api.ipam.vlans.all()],
-            prefixes=[dict(o) for o in api.ipam.prefixes.all()],
-            addresses=[dict(o) for o in api.ipam.ip_addresses.all()],
-            asns=[dict(o) for o in api.ipam.asns.all()],
-            communities=[dict(o) for o in api.plugins.bgp.community.all()],
-            zones=[dict(o) for o in api.plugins.netbox_dns.zones.all()],
-            dnssec_policies=[dict(o) for o in api.plugins.netbox_dns.dnssecpolicies.all()],
-            records=[dict(o) for o in api.plugins.netbox_dns.records.all()],
-            devices=[dict(o) for o in api.dcim.devices.all()],
-            virtual_machines=[dict(o) for o in api.virtualization.virtual_machines.all()],
+            sites=[dict(o) for o in nb.dcim.sites.all()],
+            vlans=[dict(o) for o in nb.ipam.vlans.all()],
+            prefixes=[dict(o) for o in nb.ipam.prefixes.all()],
+            addresses=[dict(o) for o in nb.ipam.ip_addresses.all()],
+            asns=[dict(o) for o in nb.ipam.asns.all()],
+            communities=[dict(o) for o in nb.plugins.bgp.community.all()],
+            zones=[dict(o) for o in nb.plugins.netbox_dns.zones.all()],
+            dnssec_policies=[dict(o) for o in nb.plugins.netbox_dns.dnssecpolicies.all()],
+            records=[dict(o) for o in nb.plugins.netbox_dns.records.all()],
+            devices=[dict(o) for o in nb.dcim.devices.all()],
+            virtual_machines=[dict(o) for o in nb.virtualization.virtual_machines.all()],
         )
     except Exception as exc:
-        raise Unreachable(f"{url}: {exc}") from exc
+        raise Unreachable(f"{nb.base_url}: {exc}") from exc

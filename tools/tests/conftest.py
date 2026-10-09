@@ -12,10 +12,6 @@ def site(slug=SITE) -> dict:
     return {**_site_ref(slug), "custom_fields": {}}
 
 
-def vlan_group(slug=SITE) -> dict:
-    return {"slug": slug, "scope_type": "dcim.site", "scope": _site_ref(slug)}
-
-
 def vlan(vid, name, *, group=SITE, tags=()) -> dict:
     return {
         "vid": vid,
@@ -23,7 +19,6 @@ def vlan(vid, name, *, group=SITE, tags=()) -> dict:
         "custom_fields": {"vnet": name},
         "status": {"value": "active"},
         "group": {"slug": group},
-        "site": None,
         "tags": [{"slug": t} for t in tags],
     }
 
@@ -80,22 +75,21 @@ def soa(zone_name, view="_default_") -> dict:
                   view=view)
 
 
-def device(name, role, site_slug=SITE) -> dict:
+def device(name, role, site_slug=SITE, tags=()) -> dict:
     return {
         "name": name,
         "role": {"slug": role},
-        "platform": {"slug": "debian-13"},
         "site": _site_ref(site_slug),
+        "tags": [{"slug": t} for t in tags],
     }
 
 
 @pytest.fixture
 def snapshot() -> netbox.Snapshot:
-    """One site: two VLANs, one of them dual-stack, and a dns purpose carrying an
-    anycast VIP and one resolver's service addresses."""
+    """One site: two VLANs, one of them dual-stack, a router holding their gateways, and a
+    dns purpose carrying an anycast VIP and one resolver's service addresses."""
     return netbox.Snapshot(
         sites=[site()],
-        vlan_groups=[vlan_group()],
         vlans=[vlan(10, "management"), vlan(110, "servers", tags=["bgp-listen"])],
         prefixes=[
             prefix("10.0.0.0/16", status="container"),
@@ -118,6 +112,9 @@ def snapshot() -> netbox.Snapshot:
             address("2001:db8:0:110::9/64", dns_name="ratatoskr.one.test", status="slaac",
                     holder="ratatoskr"),
             address("192.0.2.9/24", dns_name="elsewhere.example"),
+            address("10.0.10.254/24", holder="udm"),
+            address("10.0.110.1/24", holder="udm"),
+            address("2001:db8:0:110::1/64", holder="udm"),
         ],
         asns=[asn(64512, "router"), asn(64513, "dns")],
         communities=[community("64512:1", "dns")],
@@ -126,22 +123,7 @@ def snapshot() -> netbox.Snapshot:
             soa("one.test"), soa("10.in-addr.arpa"), soa("8.b.d.0.1.0.0.2.ip6.arpa"),
             record("one.test", "dns.one.test.", "A", "10.0.200.1"),
         ],
-        devices=[device("ratatoskr", "dns-resolver")],
+        devices=[device("ratatoskr", "dns-resolver", tags=["dns-primary"]),
+                 device("udm", "router")],
     )
 
-
-@pytest.fixture
-def ipam(snapshot):
-    from homelab.model import load
-
-    return load(snapshot)
-
-
-@pytest.fixture
-def repo(tmp_path):
-    from homelab.repo import MARKER, Repo
-
-    (tmp_path / MARKER).write_text("[project]\n")
-    for sub in ("tofu/clusters", "ansible/inventory/group_vars", "unifi/generated"):
-        (tmp_path / sub).mkdir(parents=True)
-    return Repo(tmp_path)

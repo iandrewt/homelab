@@ -2,17 +2,12 @@ import asyncio
 import atexit
 import functools
 import os
-import re
 
 INTEGRATION_NAME = "homelab"
 INTEGRATION_VERSION = "v1.0.0"
 
 TOKEN_ENV = "OP_SERVICE_ACCOUNT_TOKEN"
 ACCOUNT_ENV = "OP_ACCOUNT"
-
-# Item and field names routinely contain spaces, so a reference runs to the quote that
-# closes it, not to the first space.
-REFERENCE = re.compile(r'op://[^"\'\n]+')
 
 
 class SecretError(Exception):
@@ -73,13 +68,3 @@ async def _resolve(client, references) -> list[str]:
     except Exception as exc:
         raise SecretError(f"1Password could not resolve a reference: {exc}") from exc
 
-
-def inject(template: str) -> str:
-    """Replace every op:// reference in a template with its value, like `op inject`."""
-    references = sorted({match.rstrip() for match in REFERENCE.findall(template)})
-    if not references:
-        return template
-
-    for reference, value in zip(references, resolve(*references)):
-        template = template.replace(reference, value)
-    return template

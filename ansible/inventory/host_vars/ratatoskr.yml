@@ -1,8 +1,6 @@
 ---
 ansible_user: pi
 
-powerdns_resolver_role: primary
-
 debian_host_upgrade_hour: 9  # staggered against hugin - see hugin.yml
 
 deb13cis_sudoers_exclude_nopasswd_list:

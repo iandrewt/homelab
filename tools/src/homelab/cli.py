@@ -1,10 +1,12 @@
+"""Reads NetBox, renders what can't read it, and syncs DNS."""
+
 import argparse
 import sys
 
-from . import bootstrap, dns, netbox, render, tofukey
+from . import bootstrap, dns, netbox, tofukey
 from .bootstrap.shell import BootstrapError
 from .model import load
-from .render import seed
+from .render import frr, seed
 from .repo import Repo
 from .secrets import SecretError
 
@@ -17,9 +19,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     generate = subparsers.add_parser(
         "generate",
-        help="write everything derived from NetBox",
-        description="Rewrite the Ansible inventory, the per-cluster OpenTofu extracts, "
-        "and the UniFi config. Only files whose content changed are touched.",
+        help="write the UDM Pro's FRR config from NetBox",
+        description="Rewrite unifi/generated/<site>-frr.conf for every site with a router "
+        "and something to route. Only files whose content changed are touched.",
     )
     generate.add_argument(
         "--check",
@@ -28,17 +30,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     generate.set_defaults(run=_generate)
 
-    seed = subparsers.add_parser(
+    network_config = subparsers.add_parser(
         "network-config",
         help="print a site's cloud-init network config",
         description="For seeding install media. DHCP and SLAAC; nothing is per-host "
         "except whether the host is a resolver, which is not pointed at itself.",
     )
-    seed.add_argument("site", help="site slug")
-    seed.add_argument(
+    network_config.add_argument("site", help="site slug")
+    network_config.add_argument(
         "--resolver", metavar="HOST", help="the seed is for this resolver, not an ordinary host"
     )
-    seed.set_defaults(run=_network_config)
+    network_config.set_defaults(run=_network_config)
 
     dns.register(subparsers)
 
@@ -63,42 +65,52 @@ def build_parser() -> argparse.ArgumentParser:
 def _generate(args) -> int:
     repo = Repo.discover()
     try:
-        ipam = load()
+        model = load()
     except netbox.Unreachable as down:
         print(f"FAIL: NetBox: {down}", file=sys.stderr)
         return 1
 
-    plan = render.plan(repo, ipam)
+    rendered = {
+        repo.unifi / f"{site['slug']}-frr.conf": frr.frr_config(site)
+        for site in model["sites"].values()
+        if site["router_asn"] and site["pools"]
+    }
+    changed = [p for p, body in sorted(rendered.items()) if not p.exists() or p.read_text() != body]
+    stale = sorted(set(repo.unifi.glob("*-frr.conf")) - set(rendered))
 
     if args.check:
-        drifted = plan.drift()
-        for path in drifted:
+        for path in changed + stale:
             print(f"DRIFT: {repo.relative(path)}")
-        if drifted:
+        if changed or stale:
             print(
                 "Generated output doesn't match NetBox. Someone hand-edited a generated "
                 "file, or NetBox changed since the last `homelab generate`.",
                 file=sys.stderr,
             )
             return 1
-        print(f"{len(plan)} generated files match NetBox")
+        print(f"{len(rendered)} generated files match NetBox")
         return 0
 
-    for action, path in plan.write():
-        print(f"{action} {repo.relative(path)}")
+    for path in changed:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(rendered[path])
+        print(f"wrote {repo.relative(path)}")
+    for path in stale:
+        path.unlink()
+        print(f"removed {repo.relative(path)}")
     return 0
 
 
 def _network_config(args) -> int:
     try:
-        ipam = load()
+        model = load()
     except netbox.Unreachable as bad:
         print(f"FAIL: {bad}", file=sys.stderr)
         return 1
 
-    site = ipam["sites"].get(args.site)
+    site = model["sites"].get(args.site)
     if site is None:
-        known = ", ".join(sorted(ipam["sites"]))
+        known = ", ".join(sorted(model["sites"]))
         print(f"{args.site!r} is not a site in NetBox. Known: {known}", file=sys.stderr)
         return 1
 

@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -47,18 +48,17 @@ def _apply(args) -> int:
 
 
 def _sync(*flags: str) -> int:
-    path = Repo.discover().octodns_config
-    config = yaml.safe_load(path.read_text())
-    env = _secrets(config)
-
     try:
-        ipam = load()
+        model = load()
     except netbox.Unreachable as bad:
         print(f"FAIL: {bad}", file=sys.stderr)
         return 1
-    for problem in unzoned(ipam):
+    for problem in unzoned(model):
         print(f"UNZONED: {problem}", file=sys.stderr)
-    zones = {f"{name}." for name in ipam["zones"]}
+
+    config = _config(model)
+    env = _secrets(config)
+    zones = {f"{name}." for name in model["zones"]}
 
     if missing := _uncreated(config, env, zones):
         for problem in missing:
@@ -71,8 +71,32 @@ def _sync(*flags: str) -> int:
         return 1
 
     sync = Path(sys.executable).with_name("octodns-sync")
-    command = [str(sync), "--quiet", "--config-file", str(path), *flags]
-    return subprocess.run(command, env={**os.environ, **env}, check=False).returncode
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml") as path:
+        yaml.safe_dump(config, path)
+        path.flush()
+        command = [str(sync), "--quiet", "--config-file", path.name, *flags]
+        return subprocess.run(command, env={**os.environ, **env}, check=False).returncode
+
+
+def _config(model: dict) -> dict:
+    """The committed config, plus a target per site: the primary NetBox tags, by the name
+    of its service address."""
+    config = yaml.safe_load(Repo.discover().octodns_config.read_text())
+    targets = []
+    for slug, site in sorted(model["sites"].items()):
+        primary = next((r for r in site["resolvers"].values() if r["primary"]), None)
+        if primary is None:
+            continue
+        config["providers"][slug] = {
+            "class": POWERDNS,
+            "host": site["named"][primary["ipv6"]],
+            "api_key": f"env/{slug.upper()}_POWERDNS_API_KEY",
+            "enable_dynamic": False,
+        }
+        targets.append(slug)
+    for zone in config["zones"].values():
+        zone["targets"] = targets
+    return config
 
 
 def _primaries(config: dict) -> dict[str, dict]:
@@ -102,10 +126,7 @@ def _secrets(config: dict) -> dict[str, str]:
 def _uncreated(config: dict, env: dict[str, str], zones: set[str]) -> list[str]:
     problems = []
     for site, provider in _primaries(config).items():
-        url = (
-            f"{provider.get('scheme', 'http')}://{provider['host']}:"
-            f"{provider.get('port', 8081)}/api/v1/servers/localhost/zones"
-        )
+        url = f"http://{provider['host']}:8081/api/v1/servers/localhost/zones"
         request = urllib.request.Request(
             url, headers={"X-API-Key": env[_env_name(provider["api_key"])]}
         )

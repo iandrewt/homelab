@@ -1,8 +1,6 @@
 ---
 ansible_user: debian
 
-powerdns_resolver_role: secondary
-
 debian_host_upgrade_hour: 3  # staggered against ratatoskr - see ratatoskr.yml
 
 deb13cis_sudoers_exclude_nopasswd_list:
