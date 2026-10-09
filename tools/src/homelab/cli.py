@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import bootstrap, dns, netbox, tofukey
+from . import bootstrap, dns, netbox
 from .bootstrap.shell import BootstrapError
 from .model import load
 from .render import frr, seed
@@ -43,14 +43,6 @@ def build_parser() -> argparse.ArgumentParser:
     network_config.set_defaults(run=_network_config)
 
     dns.register(subparsers)
-
-    key = subparsers.add_parser(
-        "tofu-key",
-        help="OpenTofu external key provider (not for interactive use)",
-        description="Speaks OpenTofu's external key provider protocol on stdin/stdout, "
-        "deriving the state encryption key from a passphrase in 1Password.",
-    )
-    key.set_defaults(run=lambda args: tofukey.main())
 
     boot = subparsers.add_parser(
         "bootstrap", help="build install media", description="Build install media."

@@ -19,8 +19,6 @@ jobs:
   tofu:
     name: tofu fmt + validate
     runs-on: ubuntu-26.04
-    env:
-      HOMELAB_STATE_PASSPHRASE: ci-validate-only-not-a-real-secret
     steps:
       - uses: actions/checkout@v7
       - uses: opentofu/setup-opentofu@v2

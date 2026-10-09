@@ -37,22 +37,9 @@ terraform {
       keys = key_provider.aws_kms.state
     }
 
-    # Reads state written before KMS; goes once every state has been rewritten
-    key_provider "external" "primary" {
-      command = ["uv", "run", "homelab", "tofu-key"]
-    }
-
-    method "aes_gcm" "primary" {
-      keys = key_provider.external.primary
-    }
-
     state {
       method   = method.aes_gcm.state
       enforced = true
-
-      fallback {
-        method = method.aes_gcm.primary
-      }
     }
 
     plan {

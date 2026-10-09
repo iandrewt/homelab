@@ -95,19 +95,9 @@ to create by hand.
 
 ## Status / TODO
 
-**Rollout of this change**
+**NetBox data**
 
 - [ ] Tag the primary resolver `dns-primary`, and the VLANs that may reach its API `dns-api`
-- [ ] Point the `homelab-state` profile at Platform's `Administrator` for the migration -
-      `TofuState` reaches either the old keys or the new ones, never both
-- [ ] Apply the KMS key in `platform/aws/state` from the commit that adds it, before any
-      layer switches - OpenTofu asks KMS for a data key before it plans anything
-- [ ] `tofu init -migrate-state` in every layer: the state moves to its new key, rewritten
-      under KMS. Then delete the old keys (`clusters/`, `aws/`, `alfheim/`) from the bucket
-- [ ] Apply `platform/aws/identity` (`TofuState` by `<team>/*`), and point `homelab-state`
-      back at it
-- [ ] Drop each layer's `external` fallback, `homelab tofu-key`, and CI's
-      `HOMELAB_STATE_PASSPHRASE`
 
 **Credentials**
 
