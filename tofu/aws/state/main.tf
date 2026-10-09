@@ -42,3 +42,20 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
 
   depends_on = [aws_s3_bucket_versioning.state]
 }
+
+# Encrypts every layer's state and plans. The key policy is the default - the account
+# delegates to IAM - so what each team may decrypt is TofuState's, by encryption context.
+resource "aws_kms_key" "state" {
+  description             = "OpenTofu state and plan encryption"
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "aws_kms_alias" "state" {
+  name          = "alias/tofu-state"
+  target_key_id = aws_kms_key.state.key_id
+}
