@@ -19,7 +19,7 @@ terraform {
   backend "s3" {
     bucket       = "tofu-state-585242447535-ap-southeast-2-an"
     region       = "ap-southeast-2"
-    profile      = "homelab-state"
+    profile      = "homelab-state-network"
     key          = "network/aws/dns/terraform.tfstate"
     use_lockfile = true
   }
@@ -29,7 +29,7 @@ terraform {
       kms_key_id         = "arn:aws:kms:ap-southeast-2:585242447535:alias/tofu-state"
       key_spec           = "AES_256"
       region             = "ap-southeast-2"
-      profile            = "homelab-state"
+      profile            = "homelab-state-network"
       encryption_context = { state = "network/aws/dns/terraform.tfstate" }
     }
 

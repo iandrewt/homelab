@@ -4,48 +4,22 @@ locals {
   instance_arn      = one(data.aws_ssoadmin_instances.this.arns)
   identity_store_id = one(data.aws_ssoadmin_instances.this.identity_store_ids)
 
-  state_bucket = "tofu-state-${local.account_ids["Platform"]}-ap-southeast-2-an"
-
-  # A layer's state lives under its path in tofu/, which starts with the team that owns it.
-  # Each group's members carry the tag team-<group, lowercased> = "true", from a claim in
-  # Entra conditioned on the group.
-  state_teams = ["Network", "Platform"]
+  # A team owns state once it has a directory in tofu/; its Entra group is the same name,
+  # capitalised
+  state_teams = toset([for f in fileset("${path.module}/../../..", "**/tofu.tf") : title(split("/", f)[0])])
 
   permission_sets = {
     Administrator = { description = "Administers an account", managed = ["AdministratorAccess"] }
     SecurityAudit = { description = "Reads configuration and findings", managed = ["SecurityAudit"] }
     TofuState = {
-      description = "OpenTofu state, by team"
+      description = "OpenTofu state: becomes a team's role in platform/aws/state"
       inline = jsonencode({
         Version = "2012-10-17"
-        Statement = concat(
-          [{
-            # Without it a state not yet written is a 403, not a 404
-            Sid      = "List"
-            Effect   = "Allow"
-            Action   = "s3:ListBucket"
-            Resource = "arn:aws:s3:::${local.state_bucket}"
-          }],
-          [for team in local.state_teams : {
-            Sid       = "${team}States"
-            Effect    = "Allow"
-            Action    = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-            Resource  = "arn:aws:s3:::${local.state_bucket}/${lower(team)}/*"
-            Condition = { StringEquals = { "aws:PrincipalTag/team-${lower(team)}" = "true" } }
-          }],
-          # The encryption context each layer sends is its state's key in the bucket
-          [for team in local.state_teams : {
-            Sid      = "${team}StateKeys"
-            Effect   = "Allow"
-            Action   = ["kms:GenerateDataKey", "kms:Decrypt"]
-            Resource = "arn:aws:kms:ap-southeast-2:${local.account_ids["Platform"]}:key/*"
-            Condition = {
-              StringEquals               = { "aws:PrincipalTag/team-${lower(team)}" = "true" }
-              StringLike                 = { "kms:EncryptionContext:state" = "${lower(team)}/*" }
-              "ForAnyValue:StringEquals" = { "kms:ResourceAliases" = "alias/tofu-state" }
-            }
-          }],
-        )
+        Statement = [{
+          Effect   = "Allow"
+          Action   = "sts:AssumeRole"
+          Resource = "arn:aws:iam::${local.account_ids["Platform"]}:role/tofu-state/*"
+        }]
       })
     }
   }

@@ -19,7 +19,7 @@ terraform {
   backend "s3" {
     bucket               = "tofu-state-585242447535-ap-southeast-2-an"
     region               = "ap-southeast-2"
-    profile              = "homelab-state"
+    profile              = "homelab-state-platform"
     workspace_key_prefix = "platform/proxmox/admin/root"
     key                  = "terraform.tfstate"
     use_lockfile         = true
@@ -30,7 +30,7 @@ terraform {
       kms_key_id         = "arn:aws:kms:ap-southeast-2:585242447535:alias/tofu-state"
       key_spec           = "AES_256"
       region             = "ap-southeast-2"
-      profile            = "homelab-state"
+      profile            = "homelab-state-platform"
       encryption_context = { state = "platform/proxmox/admin/root/${terraform.workspace}/terraform.tfstate" }
     }
 
