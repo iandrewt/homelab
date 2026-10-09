@@ -3,5 +3,5 @@ output "vm_id" {
 }
 
 output "mac_address" {
-  value = local.mac_address
+  value = proxmox_virtual_environment_vm.this.network_device[0].mac_address
 }

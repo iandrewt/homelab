@@ -1,6 +1,4 @@
 locals {
-  mac_address = format("%s:00:%02x:%02x", lower(var.mac_prefix), floor(var.vm_id / 256), var.vm_id % 256)
-
   static_addresses = [for a in [var.ipv4_address, var.ipv6_address] : a if a != null]
 
   # The search list comes from the lease, which networkd ignores unless told. It shares one
@@ -70,9 +68,9 @@ resource "proxmox_virtual_environment_file" "network_config" {
     data = yamlencode({
       version = 2
       ethernets = {
-        eth0 = merge(
+        primary = merge(
           {
-            match     = { macaddress = local.mac_address }
+            match     = { name = "e*" }
             dhcp4     = var.dhcp4
             dhcp6     = var.dhcp6
             emit-lldp = true
@@ -177,11 +175,10 @@ resource "proxmox_virtual_environment_vm" "this" {
   }
 
   network_device {
-    bridge      = var.vnet
-    mac_address = local.mac_address
-    firewall    = var.enable_firewall
-    model       = "virtio"
-    queues      = var.enable_multiqueue ? var.cpu_cores * var.cpu_sockets : 1
+    bridge   = var.vnet
+    firewall = var.enable_firewall
+    model    = "virtio"
+    queues   = var.enable_multiqueue ? var.cpu_cores * var.cpu_sockets : 1
   }
 
   # Cloud images output to the serial console, not a VGA framebuffer.
@@ -213,12 +210,5 @@ resource "proxmox_virtual_environment_vm" "this" {
     network_data_file_id = proxmox_virtual_environment_file.network_config.id
     vendor_data_file_id  = proxmox_virtual_environment_file.vendor_data.id
     user_data_file_id    = proxmox_virtual_environment_file.user_data.id
-  }
-
-  lifecycle {
-    precondition {
-      condition     = var.vm_id <= 65535
-      error_message = "vm_id must fit in two bytes - it's spliced directly into the locally-administered MAC address."
-    }
   }
 }

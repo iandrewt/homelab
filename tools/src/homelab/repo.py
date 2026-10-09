@@ -21,7 +21,7 @@ class Repo:
 
     @property
     def clusters(self) -> Path:
-        return self.root / "tofu" / "clusters"
+        return self.root / "tofu" / "platform" / "proxmox" / "clusters"
 
     @property
     def unifi(self) -> Path:
@@ -30,9 +30,6 @@ class Repo:
     @property
     def octodns_config(self) -> Path:
         return self.root / "octodns" / "config.yaml"
-
-    def cluster_files(self) -> list[Path]:
-        return sorted(self.clusters.glob("*.yaml"))
 
     def relative(self, path: Path) -> str:
         return str(path.relative_to(self.root))

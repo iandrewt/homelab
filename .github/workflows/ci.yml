@@ -29,38 +29,21 @@ jobs:
           enable-cache: true
       - run: tofu fmt -check -recursive tofu/
       - name: cluster files against their schema
-        run: uvx check-jsonschema --schemafile tofu/clusters/schema.json tofu/clusters/*.yaml
-      - name: validate the admin tree against every cluster
+        run: uvx check-jsonschema --schemafile tofu/platform/proxmox/clusters/schema.json tofu/platform/proxmox/clusters/*.yaml
+      # A layer with workspaces is one per cluster, so it is validated against every one
+      - name: validate every layer
         run: |
           set -euo pipefail
-          for layer in $(find tofu/admin -name tofu.tf -printf '%h\n' | sort); do
+          for layer in $(find tofu -name tofu.tf -not -path '*/.terraform/*' -printf '%h\n' | sort); do
             echo "::group::$layer"
             tofu -chdir="$layer" init -backend=false -input=false
-            for cluster in tofu/clusters/*.yaml; do
-              name=$(basename "$cluster" .yaml)
-              echo "--- $name"
-              TF_WORKSPACE="$name" tofu -chdir="$layer" validate
-            done
-            echo "::endgroup::"
-          done
-
-      - name: validate every workload
-        run: |
-          set -euo pipefail
-          for wl in $(find tofu/workloads -name tofu.tf -printf '%h\n' | sort); do
-            echo "::group::$wl"
-            tofu -chdir="$wl" init -backend=false -input=false
-            tofu -chdir="$wl" validate
-            echo "::endgroup::"
-          done
-
-      - name: validate every AWS layer
-        run: |
-          set -euo pipefail
-          for layer in $(find tofu/aws -name tofu.tf -printf '%h\n' | sort); do
-            echo "::group::$layer"
-            tofu -chdir="$layer" init -backend=false -input=false
-            tofu -chdir="$layer" validate
+            if grep -q workspace_key_prefix "$layer/tofu.tf"; then
+              for cluster in tofu/platform/proxmox/clusters/*.yaml; do
+                TF_WORKSPACE="$(basename "$cluster" .yaml)" tofu -chdir="$layer" validate
+              done
+            else
+              tofu -chdir="$layer" validate
+            fi
             echo "::endgroup::"
           done
 

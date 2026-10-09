@@ -7,28 +7,32 @@ Infrastructure-as-code for my home network and home lab (site `alfheim`): OpenTo
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS
 ansible/      roles, playbooks, and an inventory read from NetBox
-tofu/         modules, one file per cluster, one directory per privilege layer
+tofu/         a directory per team that owns state, a layer per directory, and modules
 unifi/        generated config for the UDM Pro, which nothing here can apply directly
 ```
 
 ```
-tofu/clusters/
-  alfheim.yaml            cluster settings read by admin layers
-  schema.json
-tofu/admin/
-  root/                   root@pam only - the tofu@pve user, ACME
-  access/                 roles, users, pools, realms, every other token
-  cluster/                cluster options, SDN, node firewall, storage, mappings
-  images/                 cloud image downloads
-tofu/workloads/
-  alfheim/network/dns/    hugin, in the Network team's `network/dns` pool
+tofu/platform/
+  aws/                    the organisation, identity, the state bucket and its key, logging
+  proxmox/clusters/
+    alfheim.yaml          cluster settings read by admin layers
+    schema.json
+  proxmox/admin/          one workspace per cluster
+    root/                 root@pam only - the tofu@pve user, ACME
+    access/               roles, users, pools, realms, every other token
+    cluster/              cluster options, SDN, node firewall, storage, mappings
+    images/               cloud image downloads
+tofu/network/
+  aws/dns/                the public copies of internal zones, in Route53
+  proxmox/alfheim/dns/    hugin, in the Network team's `network/dns` pool
+tofu/modules/
 unifi/generated/
   alfheim-frr.conf        BGP toward the resolvers, written by `homelab generate`
 ```
 
 The tofu is shaped in a multi-cluster way to make it easier for others to re-use. To use it, just replace `alfheim.yaml` with your own cluster info.
 
-Workloads are managed separately to the cluster itself. The `tenants` map in the cluster YAML is how you can separate groups of workloads: it gets a pool, a PVE user of its own, a token written to 1Password, and the VNets it may join. The tenant then makes its own workloads as states under `tofu/workloads/<site>/<tenant>/`, organised as it likes - VMs straight in its pool, or in pools of its own under it - and nothing in the cluster YAML changes for a new one. Anything running *inside* a workload that needs the Proxmox API itself is an `integration` under its tenant, and gets its own user, token and roles.
+Workloads are managed separately to the cluster itself. The `tenants` map in the cluster YAML is how you can separate groups of workloads: it gets a pool, a PVE user of its own, a token written to 1Password, and the VNets it may join. The tenant then makes its own workloads as states under `tofu/<tenant>/proxmox/<cluster>/`, organised as it likes - VMs straight in its pool, or in pools of its own under it - and nothing in the cluster YAML changes for a new one. Anything running *inside* a workload that needs the Proxmox API itself is an `integration` under its tenant, and gets its own user, token and roles.
 
 ## Using this repo
 
@@ -56,7 +60,8 @@ There is no inventory file. [`ansible/inventory/netbox.yml`](ansible/inventory/n
 builds it from NetBox: active or staged hosts tagged `ansible-managed`, grouped by device
 role and platform into the groups `site.yml` plays against. What each host needs to know
 about its site comes from [`ansible/vars_plugins/netbox.py`](ansible/vars_plugins/netbox.py),
-which loads the same model `homelab generate` renders from - so Ansible runs through `uv`:
+which loads the same model `homelab generate` renders from - so Ansible runs through `uv`.
+Its secrets come through `community.general.onepassword`, which needs the `op` CLI:
 
 ```
 uv run ansible-galaxy collection install -r ansible/requirements.yml
@@ -68,22 +73,21 @@ cd ansible && uv run ansible-playbook full-upgrade.yml
 
 ### OpenTofu
 
-OpenTofu needs no wrapper. State encryption goes through `homelab tofu-key`, an
-[external key provider](https://opentofu.org/docs/language/state/encryption/) that
-fetches the passphrase from 1Password itself
+OpenTofu needs no wrapper. State and plans are encrypted with OpenTofu's own
+[`aws_kms` key provider](https://opentofu.org/docs/language/state/encryption/), under a
+key in the same account as the state bucket, so the `aws sso login` the backend needs
+covers it too. The 1Password provider reads every other secret.
 
 ```
+aws sso login
 export OP_SERVICE_ACCOUNT_TOKEN=...    # or OP_ACCOUNT=<name> for the desktop app
 
-tofu -chdir=tofu/admin/cluster init
-tofu -chdir=tofu/admin/cluster workspace select alfheim
-tofu -chdir=tofu/admin/cluster plan
+tofu -chdir=tofu/platform/proxmox/admin/cluster init
+tofu -chdir=tofu/platform/proxmox/admin/cluster workspace select alfheim
+tofu -chdir=tofu/platform/proxmox/admin/cluster plan
 
-tofu -chdir=tofu/workloads/alfheim/network/dns plan
+tofu -chdir=tofu/network/proxmox/alfheim/dns plan
 ```
-
-Set `HOMELAB_STATE_PASSPHRASE` to bypass 1Password entirely - that is how CI validates a
-configuration it will never apply.
 
 The `root` layer is the exception: it authenticates as `root@pam` with the install
 password from `PROXMOX_VE_PASSWORD` rather than a token, so there is no bootstrap token
@@ -91,93 +95,45 @@ to create by hand.
 
 ## Status / TODO
 
-**Credentials** (blocks `tofu apply` and any real Ansible run)
+**Rollout of this change**
 
-- [x] Decide the 1Password vault (`Homelab`, in `alfheim.yaml`)
-- [x] Create `homelab control node SSH key` (SSH Key), `alfheim PowerDNS API key` (API Credential)
+- [ ] Tag the primary resolver `dns-primary`, and the VLANs that may reach its API `dns-api`
+- [ ] Point the `homelab-state` profile at Platform's `Administrator` for the migration -
+      `TofuState` reaches either the old keys or the new ones, never both
+- [ ] Apply the KMS key in `platform/aws/state` from the commit that adds it, before any
+      layer switches - OpenTofu asks KMS for a data key before it plans anything
+- [ ] `tofu init -migrate-state` in every layer: the state moves to its new key, rewritten
+      under KMS. Then delete the old keys (`clusters/`, `aws/`, `alfheim/`) from the bucket
+- [ ] Apply `platform/aws/identity` (`TofuState` by `<team>/*`), and point `homelab-state`
+      back at it
+- [ ] Drop each layer's `external` fallback, `homelab tofu-key`, and CI's
+      `HOMELAB_STATE_PASSPHRASE`
+
+**Credentials**
+
 - [ ] Set `OP_SERVICE_ACCOUNT_TOKEN` wherever `tofu`/`ansible` actually run from
-- [x] Put the state/plan encryption passphrase in 1Password as `Tofu State Passphrase` (read by `homelab tofu-key`)
 
-**Before the rebuild**
+**OpenTofu / Proxmox**
 
-- [x] Fill the `REPLACE_ME`s in `bootstrap/proxmox/answer.toml.tmpl`
-- [x] Find the NVMe's `/dev/disk/by-id` path (`ansible-playbook discover-hardware.yml`) and put it in `alfheim.yaml`
-- [x] Confirm `mimir`'s NFS export path and that it's reachable from the servers VLAN - the image datastore depends on it
-- [x] Confirm `eno1`/`eno2` are offered no DHCP lease, or cable only `eno3` for the install
-
-**OpenTofu**
-
-- [x] State in S3, in Platform's bucket, still encrypted client-side
 - [ ] Pin a checksum on the Debian cloud image - `latest` moves
-- [x] ACME account + node certificates, then drop `insecure = true` from every layer
 - [ ] Delete `proxmox-acme-<cluster>` and its access key once an internal CA issues the nodes' certificates
-- [x] Sign in to Proxmox with Entra, Entra app roles as Proxmox groups
+- [ ] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
+- [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
+- [ ] `linux-vm`: let Proxmox allocate the VMID
+- [ ] Everything cluster/Talos-related - arrives as `tofu/platform/proxmox/alfheim/talos/` with its own providers, plus a `tenants.platform` grant in the cluster file carrying its `csi` and `ccm` integrations (commented out there already)
 
 **Ratatoskr (Raspberry Pi)**
 
-- [x] Flash the SD card for real - not hands-on verified against real Pi 3B hardware
-- [x] Add its DHCP reservation once it's on the network
-- [x] Record its reserved IPv4 in NetBox (status `dhcp`), plus `lo` and its `dns` loopbacks
 - [ ] Drop the forky pin for `src:audit` once trixie ships audit 4.0.5 or later (linux-audit/audit-userspace#496)
-- [x] Reinstall from the new seed once `homelab validate` passes: EUI-64, and the lease's DNS
-      rather than the VIP it is about to serve
 
 **BGP / DNS**
 
-- [x] Write and upload the UDM Pro's own FRR config (now generated into `unifi/generated/`)
-- [x] Confirm real ECMP behaviour against the actual UDM Pro firmware in practice
-
-**DNS**
-
-- [x] Zone TTLs, and the same as `netbox_dns` plugin defaults
-- [x] Once both resolvers are up, set UniFi's DHCP DNS and RA RDNSS to the VIP on every internal network; until then clients stay on the UDM
-- [x] UniFi DHCP option 119 per network, per the search list in the DNS plan
-- [x] BGP peer groups and listen sessions in NetBox, replacing the `bgp-listen` tag and the `router` ASN role
 - [ ] IPv6 BGP transport once the UDM's kernel is 5.2 or later
-- [x] octoDNS from `netbox_dns` to PowerDNS, replacing the role's RRset provisioning
-- [ ] Ask the ISP to delegate alfheim's /48 reverse zone to Route53; a `public` view for it and `titmuss.au`
-- [x] DNSSEC stage 1: sign internal zones, trust anchors on both recursors, validation on
-- [x] DNSSEC stage 2: a public copy in Route53, Route53's and PowerDNS's DS at Cloudflare
-- [x] Laptop: drop `alfheim.titmuss.zone`'s trust anchor; the /48's reverse keeps its own until the ISP's delegation is signed
-
-**Other**
-
-- [ ] Reboot-required alerting - needs a monitoring stack
-- [ ] CI: static checks on a hosted runner, a self-hosted runner for anything touching
-      the LAN
-- [ ] Everything cluster/Talos-related - arrives as `tofu/workloads/alfheim/platform/talos/` with its own providers, plus a `tenants.platform` grant in the cluster file carrying its `csi` and `ccm` integrations (commented out there already)
-- [x] Network config for the NAS hosts - addressed in NetBox, not yet applied
-
-**NetBox data**
-
-- [x] Rename devices: drop `alfheim-`, `<role-code>-<nn>` sequenced per site, pets by hostname
-- [x] Fix `ratataskor` → `ratatoskr` on its address's DNS name
-- [x] Give `yggdrasil` a named address - `homelab validate`'s node check needs one
-- [x] Roles: `Hypervisor` (no "Node"), `Wall Plate`, `Power Point`, `Power Circuit`; `ap-01` back to `Access Point`
-- [x] Platform tree via `parent`: Linux › Debian › Debian 13 › Proxmox VE 9.2 / Raspberry Pi OS 13
-- [x] Tag Ansible-managed hosts `ansible-managed`
-- [x] Put `yggdrasil` in the `alfheim` virtualization cluster
-- [x] iDRACs: `mgmt_only` interface + OOB IP on each server, service tag in `serial`
-- [x] Keystones as modules on the plates and `pp-a`; TIA-606 link IDs (`A07`) as cable and port labels
-- [x] Power feed named as printed (`N3`); `circuit-n3` stays as the fan-out
-- [x] Tenant on BGP/LB prefixes (network vs platform)
-- [x] Planned custom fields replaced: ASN roles, a `role` field on `netbox_bgp` communities,
-      a `bgp-listen` VLAN tag, `netbox_dns` zones
-- [x] Renumber hub-shared so `dns` is its base `/26` and the VIP is `10.176.192.53`
-- [x] `netbox_dns` zones, name server, and the default view on the site's top-level prefixes
-- [x] Match UniFi device names to NetBox
-
-**Ansible**
-
-- [x] Add `netbox.netbox` to `requirements.yml`
-- [x] Create read-only NetBox users `homelab`, `tofu` and `ansible`; store each token as `<user> NetBox API token` (API Credential in `Homelab`, URL in `hostname`)
-- [x] Check `role`/`platform` hostvar names with `ansible-inventory --list` against live data
-- [x] Decide whether Proxmox keeps plain `DEBIAN13-CIS` or gets its own group
+- [ ] Ask the ISP to delegate alfheim's reverse zone to Route53; a `public` view for it and `titmuss.au`
 
 **homelab CLI**
 
 - [ ] `bootstrap pi <name>`: look the Device up (site, platform) instead of `--hostname`/`--site`
-- [x] Confirm `match: {name: e*}` binds on a Pi's first boot (`cloud-init.log`, `ip -6 addr`)
 
 **Writers into NetBox**
 
@@ -186,28 +142,17 @@ to create by hand.
 - [ ] A NetBox user per writer, object permissions scoped to what it writes
 - [ ] Webhook receiver inside the network: UniFi Alarm Manager → journal entries (never `status`), NetBox → reconcile runs
 
-**OpenTofu / Proxmox**
-
-- [x] Move `hugin` to its own network-owned workload state
-- [x] Publish NetBox VLANs as SDN VNets from the admin layer, then drop NetBox from `workloads/*`
-- [x] SDN: subnets from NetBox prefixes, `+sdn/<vnet>-all` IPSets in firewall rules, `isolate-ports` on `dmz`; skip SDN's IPAM/DHCP/DNS
-- [ ] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
-- [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
-- [ ] `linux-vm`: match `e*`, let Proxmox allocate the VMID and MAC
-
 **IMDS (day two)**
 
 - [ ] Proxmox-local IMDS from `/etc/pve`: site data from the admin layer, per-VM data from the VM config
 - [ ] Instance identity signed by the node key under the cluster CA
 - [ ] user-data write endpoint, authorised by the caller's Proxmox token (`VM.Config.Cloudinit`)
 
-**Docs**
+**Other**
 
-- [x] CLAUDE.md: owning team (network/platform/apps) in the ownership table; one writer per NetBox object
+- [ ] Reboot-required alerting - needs a monitoring stack
+- [ ] CI: static checks on a hosted runner, a self-hosted runner for anything touching the LAN
 - [ ] CLAUDE.md: the naming scheme - names hold only what no field does, lowercase-hyphen, per-site sequences
 - [ ] CLAUDE.md: nothing needs NetBox at runtime, only at plan/apply; a rebuild restores NetBox to the laptop first
 - [ ] Rehearse a NetBox restore from the NAS backup onto the laptop
-
-**Later**
-
 - [ ] Netboot for disposable Pis: enlist by board serial, then name - never `ratatoskr`

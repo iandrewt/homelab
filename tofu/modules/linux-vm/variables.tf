@@ -22,16 +22,6 @@ variable "region" {
   default     = null
 }
 
-variable "mac_prefix" {
-  description = "Three-octet OUI the VM's MAC derives under. From the cluster file."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[0-9A-Fa-f]{2}(:[0-9A-Fa-f]{2}){2}$", var.mac_prefix))
-    error_message = "mac_prefix must be three colon-separated hex octets, e.g. BC:24:11."
-  }
-}
-
 variable "pool_id" {
   description = "Proxmox pool the VM joins."
   type        = string
