@@ -109,7 +109,6 @@ to create by hand.
 - [ ] Delete `proxmox-acme-<cluster>` and its access key once an internal CA issues the nodes' certificates
 - [ ] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
 - [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
-- [ ] `linux-vm`: let Proxmox allocate the VMID
 - [ ] Everything cluster/Talos-related - arrives as `tofu/platform/proxmox/alfheim/talos/` with its own providers, plus a `tenants.platform` grant in the cluster file carrying its `csi` and `ccm` integrations (commented out there already)
 
 **Ratatoskr (Raspberry Pi)**

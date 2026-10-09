@@ -39,8 +39,7 @@ module "hugin" {
   memory_mb    = 1024
   disk_size_gb = 8
 
-  vm_id = 200
-  vnet  = local.vnet
+  vnet = local.vnet
 
   # Nothing a resolver needs to build itself may come from the VIP it will serve
   dns_servers = one([for v in module.netbox.vlans : v.subnets[*].gateway if v.vnet == local.vnet])

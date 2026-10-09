@@ -3,11 +3,12 @@ variable "node_name" {
 }
 
 variable "vm_id" {
-  description = "Proxmox VMID. Must be unique in the cluster. Nothing derives from it."
+  description = "Proxmox VMID, if the workload cares which. Unset, Proxmox takes the next free one."
   type        = number
+  default     = null
 
   validation {
-    condition     = var.vm_id >= 100
+    condition     = var.vm_id == null || var.vm_id >= 100
     error_message = "Proxmox reserves VMIDs below 100."
   }
 }
