@@ -95,10 +95,13 @@ resource "aws_kms_alias" "dnssec" {
 }
 
 locals {
-  zones = {
-    titmuss_au = aws_route53_zone.titmuss_au
-    acme       = aws_route53_zone.acme
-  }
+  zones = merge(
+    {
+      titmuss_au = aws_route53_zone.titmuss_au
+      acme       = aws_route53_zone.acme
+    },
+    { for name, zone in aws_route53_zone.public_copy : replace(name, ".", "_") => zone },
+  )
 }
 
 resource "aws_route53_key_signing_key" "this" {

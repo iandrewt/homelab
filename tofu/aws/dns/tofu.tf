@@ -6,6 +6,14 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.66"
     }
+    cloudflare = {
+      source  = "cloudflare/cloudflare"
+      version = "~> 5.26"
+    }
+    onepassword = {
+      source  = "1Password/onepassword"
+      version = "~> 3.3"
+    }
   }
 
   backend "s3" {
@@ -44,4 +52,19 @@ provider "aws" {
   default_tags {
     tags = { managed-by = "opentofu", layer = "aws/dns" }
   }
+}
+
+provider "onepassword" {}
+
+data "onepassword_vault" "homelab" {
+  name = "Homelab"
+}
+
+ephemeral "onepassword_item" "cloudflare" {
+  vault = data.onepassword_vault.homelab.uuid
+  title = "Tofu Cloudflare API token"
+}
+
+provider "cloudflare" {
+  api_token = ephemeral.onepassword_item.cloudflare.credential
 }
