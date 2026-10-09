@@ -39,6 +39,8 @@ powerdns_resolver_api_allow_from: >-
 
 powerdns_resolver_api_key: "{{ lookup('community.general.onepassword', 'alfheim PowerDNS API key',
                                       vault=onepassword_vault, field='credential') }}"
+powerdns_resolver_cloudflare_api_token: "{{ lookup('community.general.onepassword', 'Ansible Cloudflare API token',
+                                                   vault=onepassword_vault, field='credential') }}"
 powerdns_resolver_primary_api_url: >-
   http://[{{ netbox_sites.alfheim.resolvers.ratatoskr.ipv6 }}]:8081/api/v1/servers/localhost
 

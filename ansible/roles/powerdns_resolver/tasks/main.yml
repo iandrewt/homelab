@@ -93,6 +93,9 @@
 - name: DNSSEC trust anchors
   ansible.builtin.import_tasks: anchors.yml
 
+- name: DNSSEC delegations
+  ansible.builtin.import_tasks: delegation.yml
+
 - name: Configure the recursor
   ansible.builtin.include_role:
     name: PowerDNS.pdns_recursor
