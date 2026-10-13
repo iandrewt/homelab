@@ -110,7 +110,7 @@ to create by hand.
 
 **NetBox data**
 
-- [ ] Tag the primary resolver `dns-primary`, and the VLANs that may reach its API `dns-api`
+- [x] Tag the primary resolver `dns-primary`, and the VLANs that may reach its API `dns-api`
 
 **OpenTofu / Proxmox**
 
