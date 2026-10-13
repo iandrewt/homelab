@@ -5,6 +5,9 @@ updates:
       - "/tofu/**/*"
     schedule:
       interval: "weekly"
+    groups:
+      tofu:
+        group-by: dependency-name
 
   - package-ecosystem: "github-actions"
     directory: "/"
