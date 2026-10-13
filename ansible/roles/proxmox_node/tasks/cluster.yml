@@ -33,32 +33,49 @@
     - proxmox_node_link0 in ansible_facts.all_ipv6_addresses
 
 # Tasks run across every host before the next starts, so a fresh cluster's first node
-# has created it by the time the others get here
-- name: Read how to join from the member
-  ansible.builtin.command: pvesh get /cluster/config/join --output-format json
-  delegate_to: "{{ proxmox_node_member }}"
-  register: proxmox_node_join_info
-  changed_when: false
+# has created it by the time the others get here. Joining is over SSH, as root from node to
+# node, so nothing here needs a root password.
+- name: Read this node's root key, which Proxmox made at install
+  ansible.builtin.slurp:
+    src: /root/.ssh/id_rsa.pub
+  register: proxmox_node_root_key
   when: &joining
     - inventory_hostname not in proxmox_node_members
     - inventory_hostname != proxmox_node_member
     - proxmox_node_link0 in ansible_facts.all_ipv6_addresses
 
+- name: Let it in to the member, through the cluster's own authorized_keys
+  ansible.posix.authorized_key:
+    user: root
+    path: /etc/pve/priv/authorized_keys
+    manage_dir: false
+    key: "{{ proxmox_node_root_key.content | b64decode }}"
+  delegate_to: "{{ proxmox_node_member }}"
+  when: *joining
+
+- name: Read the member's host key
+  ansible.builtin.slurp:
+    src: /etc/ssh/ssh_host_ed25519_key.pub
+  delegate_to: "{{ proxmox_node_member }}"
+  register: proxmox_node_member_host_key
+  when: *joining
+
+- name: Trust it from this node
+  ansible.builtin.known_hosts:
+    name: "{{ hostvars[proxmox_node_member].primary_ip6 }}"
+    key: "{{ hostvars[proxmox_node_member].primary_ip6 }} {{ proxmox_node_member_host_key.content | b64decode }}"
+    path: /root/.ssh/known_hosts
+  when: *joining
+
 - name: Join the cluster
   ansible.builtin.command:
     argv:
-      - pvesh
-      - create
-      - /cluster/config/join
-      - --hostname
+      - pvecm
+      - add
       - "{{ hostvars[proxmox_node_member].primary_ip6 }}"
-      - --fingerprint
-      - "{{ (proxmox_node_join_info.stdout | from_json).nodelist
-            | selectattr('name', 'eq', proxmox_node_member) | map(attribute='pve_fp') | first }}"
-      - --password
-      - "{{ hostvars[proxmox_node_member].proxmox_root_password }}"
+      - --use_ssh
+      - "1"
       - --link0
       - "{{ proxmox_node_link0 }}"
     creates: /etc/pve/corosync.conf
-  no_log: true
   when: *joining
