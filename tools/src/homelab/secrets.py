@@ -63,8 +63,11 @@ def _auth():
 
 
 async def _resolve(client, references) -> list[str]:
-    try:
-        return [await client.secrets.resolve(reference) for reference in references]
-    except Exception as exc:
-        raise SecretError(f"1Password could not resolve a reference: {exc}") from exc
+    resolved = []
+    for reference in references:
+        try:
+            resolved.append(await client.secrets.resolve(reference))
+        except Exception as exc:
+            raise SecretError(f"1Password could not resolve {reference}: {exc}") from exc
+    return resolved
 
