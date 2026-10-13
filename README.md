@@ -93,7 +93,7 @@ instead, so the layers don't change. The 1Password provider reads every other se
 
 ```
 aws sso login
-export OP_SERVICE_ACCOUNT_TOKEN=...    # or OP_ACCOUNT=<name> for the desktop app
+export OP_ACCOUNT=<name>               # the desktop app; a service account token is for CI
 
 tofu -chdir=tofu/platform/proxmox/admin/cluster init
 tofu -chdir=tofu/platform/proxmox/admin/cluster workspace select alfheim
@@ -111,10 +111,6 @@ to create by hand.
 **NetBox data**
 
 - [ ] Tag the primary resolver `dns-primary`, and the VLANs that may reach its API `dns-api`
-
-**Credentials**
-
-- [ ] Set `OP_SERVICE_ACCOUNT_TOKEN` wherever `tofu`/`ansible` actually run from
 
 **OpenTofu / Proxmox**
 
@@ -153,7 +149,7 @@ to create by hand.
 **Other**
 
 - [ ] Reboot-required alerting - needs a monitoring stack
-- [ ] CI: static checks on a hosted runner, a self-hosted runner for anything touching the LAN
+- [ ] CI: static checks on a hosted runner, a self-hosted runner for anything touching the LAN; 1Password service accounts per team (read-only `Network`, read-write `Platform`), and an OIDC trust statement per team state role
 - [ ] CLAUDE.md: the naming scheme - names hold only what no field does, lowercase-hyphen, per-site sequences
 - [ ] CLAUDE.md: nothing needs NetBox at runtime, only at plan/apply; a rebuild restores NetBox to the laptop first
 - [ ] Rehearse a NetBox restore from the NAS backup onto the laptop

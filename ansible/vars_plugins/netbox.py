@@ -10,7 +10,7 @@ from ansible.errors import AnsibleError
 from ansible.inventory.host import Host
 from ansible.plugins.vars import BaseVarsPlugin
 
-ITEM_REF = os.environ.get("NETBOX_ITEM_REF", "op://Homelab/Ansible NetBox API Token")
+ITEM_REF = os.environ.get("NETBOX_ITEM_REF", "op://Network/NetBox API Token - Ansible")
 
 
 class VarsModule(BaseVarsPlugin):

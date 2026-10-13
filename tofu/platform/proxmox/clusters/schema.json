@@ -9,7 +9,7 @@
     "site",
     "endpoint",
     "onepassword_vault",
-    "onepassword_item_prefix",
+    "onepassword_break_glass_vault",
     "ssh_username",
     "timezone",
     "mailto",
@@ -30,10 +30,11 @@
       "pattern": "^[a-z][a-z0-9]{0,6}[a-z0-9]$"
     },
     "onepassword_vault": {
+      "description": "The team that runs the cluster: its tokens are written here, and `SSH Key - <vault>` is read from here. A tenant's go in the vault named for it.",
       "type": "string"
     },
-    "onepassword_item_prefix": {
-      "description": "Token items are titled \"<prefix> <token> token\".",
+    "onepassword_break_glass_vault": {
+      "description": "Where each node's root login lives: read by hand, at install, and never by automation.",
       "type": "string"
     },
     "ssh_username": {

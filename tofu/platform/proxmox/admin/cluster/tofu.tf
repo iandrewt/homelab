@@ -73,12 +73,12 @@ data "onepassword_vault" "this" {
 
 ephemeral "onepassword_item" "netbox" {
   vault = data.onepassword_vault.this.uuid
-  title = "Tofu NetBox API Token"
+  title = "NetBox API Token - Tofu"
 }
 
 ephemeral "onepassword_item" "token" {
   vault = data.onepassword_vault.this.uuid
-  title = "${local.cluster.onepassword_item_prefix} cluster token"
+  title = "Proxmox API Token - ${terraform.workspace} cluster"
 }
 
 provider "proxmox" {

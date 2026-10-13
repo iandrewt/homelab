@@ -3,6 +3,7 @@ locals {
     for tenant, grant in local.cluster.tenants : {
       for name, integration in try(grant.integrations, {}) :
       "${tenant}-${name}" => {
+        tenant  = tenant
         name    = name
         comment = integration.comment
         acls    = integration.acls
@@ -25,6 +26,7 @@ locals {
   # PVEPoolAdmin lets a tenant make its own workloads, as pools under this one
   tenant_identities = {
     for tenant, grant in local.cluster.tenants : "tenant-${tenant}" => {
+      tenant     = tenant
       token_name = "tofu"
       comment    = grant.comment
 
@@ -61,6 +63,7 @@ locals {
 
   integration_identities = {
     for key, integration in local.integrations : "tenant-${key}" => {
+      tenant     = integration.tenant
       token_name = integration.name
       comment    = integration.comment
 
@@ -102,6 +105,13 @@ resource "proxmox_virtual_environment_role" "integration" {
 }
 
 # --- Pools, users, tokens ------------------------------------------------------------
+
+# A tenant is a team, and its tokens go in the team's own vault
+data "onepassword_vault" "tenant" {
+  for_each = local.cluster.tenants
+
+  name = title(each.key)
+}
 
 resource "proxmox_virtual_environment_pool" "tenant" {
   for_each = local.cluster.tenants
@@ -150,8 +160,9 @@ module "identity_token" {
   comment    = each.value.comment
   acls       = each.value.acls
 
-  onepassword_vault = data.onepassword_vault.this.uuid
-  item_title        = "${local.item_prefix} ${each.key} token"
+  onepassword_vault = data.onepassword_vault.tenant[each.value.tenant].uuid
+  item_title        = "Proxmox API Token - ${terraform.workspace} ${each.key}"
+  endpoint          = local.cluster.endpoint
 
   depends_on = [proxmox_acl.identity]
 }

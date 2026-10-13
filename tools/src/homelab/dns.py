@@ -29,6 +29,9 @@ def register(subparsers) -> None:
     actions = dns.add_subparsers(dest="action", required=True, title="actions")
 
     plan = actions.add_parser("plan", help="show what would change, and its checksum")
+    plan.add_argument(
+        "--force", action="store_true", help="allow changes past octoDNS's safety threshold"
+    )
     plan.set_defaults(run=_plan)
 
     apply = actions.add_parser("apply", help="apply a plan that was reviewed")
@@ -118,7 +121,7 @@ def _secrets(config: dict) -> dict[str, str]:
     env = {_env_name(source["url"]): url, _env_name(source["token"]): token}
     for site, provider in _primaries(config).items():
         env[_env_name(provider["api_key"])] = secrets.resolve_one(
-            f"op://Homelab/{site} PowerDNS API key/credential"
+            f"op://Network/PowerDNS API Key - {site}/credential"
         )
     return env
 

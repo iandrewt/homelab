@@ -11,14 +11,14 @@ locals {
   }
 }
 
+data "onepassword_item" "ssh_key" {
+  vault = data.onepassword_vault.tenant.uuid
+  title = "SSH Key - ${title(local.tenant)}"
+}
+
 resource "proxmox_virtual_environment_pool" "this" {
   pool_id = "${local.tenant}/dns"
   comment = "The resolvers."
-}
-
-data "onepassword_item" "control_ssh_key" {
-  vault = data.onepassword_vault.this.uuid
-  title = "homelab control node SSH key"
 }
 
 module "hugin" {
@@ -44,7 +44,7 @@ module "hugin" {
   # Nothing a resolver needs to build itself may come from the VIP it will serve
   dns_servers = one([for v in module.netbox.vlans : v.subnets[*].gateway if v.vnet == local.vnet])
 
-  ssh_public_keys = [data.onepassword_item.control_ssh_key.public_key]
+  ssh_public_keys = [data.onepassword_item.ssh_key.public_key]
 }
 
 output "vm_ids" {

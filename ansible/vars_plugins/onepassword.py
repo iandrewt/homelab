@@ -15,7 +15,7 @@ from ansible.inventory.host import Host
 from ansible.plugins.vars import BaseVarsPlugin
 
 DECLARED = Path(__file__).parent.parent / "inventory" / "onepassword.yml"
-NETBOX_ITEM_REF = os.environ.get("NETBOX_ITEM_REF", "op://Homelab/Ansible NetBox API Token")
+NETBOX_ITEM_REF = os.environ.get("NETBOX_ITEM_REF", "op://Network/NetBox API Token - Ansible")
 
 _resolved: dict[str, str] = {}
 

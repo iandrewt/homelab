@@ -33,6 +33,11 @@ variable "onepassword_vault" {
   type        = string
 }
 
+variable "endpoint" {
+  description = "The Proxmox API the token is for, recorded on its item."
+  type        = string
+}
+
 variable "item_title" {
   description = "1Password item title."
   type        = string

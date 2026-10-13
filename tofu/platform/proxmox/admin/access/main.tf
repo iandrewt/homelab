@@ -1,6 +1,5 @@
 locals {
   admin_user_id = "tofu@pve"
-  item_prefix   = local.cluster.onepassword_item_prefix
 }
 
 module "cluster_token" {
@@ -16,7 +15,8 @@ module "cluster_token" {
   }]
 
   onepassword_vault = data.onepassword_vault.this.uuid
-  item_title        = "${local.item_prefix} cluster token"
+  item_title        = "Proxmox API Token - ${terraform.workspace} cluster"
+  endpoint          = local.cluster.endpoint
 }
 
 module "images_token" {
@@ -38,5 +38,6 @@ module "images_token" {
   ]
 
   onepassword_vault = data.onepassword_vault.this.uuid
-  item_title        = "${local.item_prefix} images token"
+  item_title        = "Proxmox API Token - ${terraform.workspace} images"
+  endpoint          = local.cluster.endpoint
 }

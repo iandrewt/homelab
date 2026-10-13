@@ -44,7 +44,8 @@ module "access_token" {
   }]
 
   onepassword_vault = data.onepassword_vault.this.uuid
-  item_title        = "${local.cluster.onepassword_item_prefix} access token"
+  item_title        = "Proxmox API Token - ${terraform.workspace} access"
+  endpoint          = local.cluster.endpoint
 
   depends_on = [proxmox_acl.tofu]
 }

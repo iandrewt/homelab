@@ -15,7 +15,7 @@ import pynetbox
 from . import secrets
 
 ITEM_REF_ENV = "NETBOX_ITEM_REF"
-DEFAULT_ITEM_REF = "op://Homelab/homelab NetBox API token"
+DEFAULT_ITEM_REF = "op://Network/NetBox API Token - Homelab"
 
 
 class Unreachable(Exception):

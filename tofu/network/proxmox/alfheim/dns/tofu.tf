@@ -73,18 +73,18 @@ module "netbox" {
 
 provider "onepassword" {}
 
-data "onepassword_vault" "this" {
-  name = local.cluster.onepassword_vault
+data "onepassword_vault" "tenant" {
+  name = title(local.tenant)
 }
 
 ephemeral "onepassword_item" "netbox" {
-  vault = data.onepassword_vault.this.uuid
-  title = "Tofu NetBox API Token"
+  vault = data.onepassword_vault.tenant.uuid
+  title = "NetBox API Token - Tofu"
 }
 
 ephemeral "onepassword_item" "token" {
-  vault = data.onepassword_vault.this.uuid
-  title = "${local.cluster.onepassword_item_prefix} tenant-${local.tenant} token"
+  vault = data.onepassword_vault.tenant.uuid
+  title = "Proxmox API Token - ${local.cluster_name} tenant-${local.tenant}"
 }
 
 provider "proxmox" {

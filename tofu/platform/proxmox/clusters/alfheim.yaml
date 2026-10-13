@@ -2,8 +2,8 @@
 site: alfheim
 endpoint: https://yggdrasil.alfheim.titmuss.zone:8006/
 
-onepassword_vault: Homelab
-onepassword_item_prefix: alfheim Proxmox
+onepassword_vault: Platform
+onepassword_break_glass_vault: Break-glass
 
 ssh_username: tofu
 timezone: Australia/Sydney

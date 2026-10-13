@@ -58,7 +58,7 @@ data "onepassword_vault" "this" {
 
 ephemeral "onepassword_item" "token" {
   vault = data.onepassword_vault.this.uuid
-  title = "${local.cluster.onepassword_item_prefix} images token"
+  title = "Proxmox API Token - ${terraform.workspace} images"
 }
 
 provider "proxmox" {

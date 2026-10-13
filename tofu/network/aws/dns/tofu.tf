@@ -60,13 +60,13 @@ provider "aws" {
 
 provider "onepassword" {}
 
-data "onepassword_vault" "homelab" {
-  name = "Homelab"
+data "onepassword_vault" "network" {
+  name = "Network"
 }
 
 ephemeral "onepassword_item" "cloudflare" {
-  vault = data.onepassword_vault.homelab.uuid
-  title = "Tofu Cloudflare API token"
+  vault = data.onepassword_vault.network.uuid
+  title = "Cloudflare API Token - Tofu"
 }
 
 provider "cloudflare" {

@@ -21,8 +21,8 @@ def render(host: str) -> str:
         raise BootstrapError(f"{host} is a node in no cluster file")
     vault = cluster["onepassword_vault"]
     password, ssh_key = secrets.resolve(
-        f"op://{vault}/{host} Root Login/password",
-        f"op://{vault}/homelab control node SSH key/public key",
+        f"op://{cluster['onepassword_break_glass_vault']}/Proxmox Root Login - {host}/password",
+        f"op://{vault}/SSH Key - {vault}/public key",
     )
     root_hash = run("openssl", "passwd", "-6", "-stdin", input=password, capture=True).strip()
     site = load()["sites"][found["site"]]
