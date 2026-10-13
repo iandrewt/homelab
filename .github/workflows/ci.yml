@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
       - run: uv run pytest
@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: opentofu/setup-opentofu@v2
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
       - run: tofu fmt -check -recursive tofu/
@@ -50,7 +50,7 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       - run: uvx yamllint -s .
 
   ansible-lint:
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
       # ansible-lint pulls ansible-core in, but ansible-galaxy ships with core itself.
       - run: uvx --from ansible-core ansible-galaxy collection install -r ansible/requirements.yml
       - run: uvx --from ansible-core ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles
