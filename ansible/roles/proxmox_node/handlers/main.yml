@@ -9,6 +9,10 @@
   poll: 5
   changed_when: true
 
+- name: Rebuild the initramfs
+  ansible.builtin.command: update-initramfs -u -k all
+  changed_when: true
+
 - name: Reload the VNet guard
   ansible.builtin.systemd_service:
     name: vnet-guard

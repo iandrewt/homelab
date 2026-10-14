@@ -1,0 +1,30 @@
+---
+# Proxmox binds a mapped card to vfio-pci at VM start, as long as no host driver claimed it first
+- name: Keep Intel GPU drivers off the host
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/passthrough.conf
+    mode: "0644"
+    content: |
+      blacklist i915
+      blacklist xe
+  notify: Rebuild the initramfs
+
+- name: Rebuild the initramfs before any reboot
+  ansible.builtin.meta: flush_handlers
+
+- name: Check whether a GPU driver still holds the card
+  ansible.builtin.command: grep -qE '^(i915|xe) ' /proc/modules
+  register: proxmox_node_gpu_driver
+  changed_when: false
+  failed_when: proxmox_node_gpu_driver.rc > 1
+
+- name: Ask to reboot
+  ansible.builtin.pause:
+    prompt: >-
+      {{ inventory_hostname }} still has i915/xe loaded. Reboot now? (yes/no)
+  register: proxmox_node_reboot
+  when: proxmox_node_gpu_driver.rc == 0
+
+- name: Reboot
+  ansible.builtin.reboot:
+  when: proxmox_node_gpu_driver.rc == 0 and proxmox_node_reboot.user_input | default('') | lower == 'yes'

@@ -11,6 +11,10 @@
   ansible.builtin.import_tasks: vnet_guard.yml
   tags: [vnet_guard]
 
+- name: PCI passthrough
+  ansible.builtin.import_tasks: passthrough.yml
+  tags: [passthrough]
+
 - name: Apply the network before the cluster
   ansible.builtin.meta: flush_handlers
 
