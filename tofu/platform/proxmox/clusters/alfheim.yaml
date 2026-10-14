@@ -85,6 +85,17 @@ images:
     content_type: import
     # TODO: pin a checksum
 
+mappings:
+  pci:
+    arc-a40:
+      comment: Intel Arc Pro A40
+      devices:
+        yggdrasil:
+          path: "0000:46:00.0"
+          id: "8086:56b1"
+          subsystem_id: "8086:1210"
+          iommu_group: 17
+
 tenants:
   network:
     comment: "The Network team."

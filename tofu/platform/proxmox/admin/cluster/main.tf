@@ -120,6 +120,25 @@ resource "proxmox_storage_zfspool" "this" {
   depends_on = [module.node]
 }
 
+# --- Mappings ----------------------------------------------------------------------
+
+resource "proxmox_hardware_mapping_pci" "this" {
+  for_each = try(local.cluster.mappings.pci, {})
+
+  name    = each.key
+  comment = try(each.value.comment, null)
+
+  map = [
+    for node, d in each.value.devices : {
+      node         = node
+      path         = d.path
+      id           = d.id
+      subsystem_id = d.subsystem_id
+      iommu_group  = d.iommu_group
+    }
+  ]
+}
+
 # --- Backup ------------------------------------------------------------------------
 
 resource "proxmox_backup_job" "this" {

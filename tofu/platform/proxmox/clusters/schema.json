@@ -227,6 +227,14 @@
               "type": "string"
             }
           },
+          "mappings": {
+            "description": "PCI mappings its VMs may pass through, by name in `mappings.pci`.",
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string"
+            }
+          },
           "integrations": {
             "description": "In-workload components needing their own Proxmox credentials, keyed by a short name. Each gets a user, a privsep token, and one role per ACL entry.",
             "type": "object",
@@ -384,6 +392,62 @@
         "snippet_storage": {
           "description": "Must be a key of `storages`, and must be node-local.",
           "type": "string"
+        }
+      }
+    },
+    "mappings": {
+      "description": "Hardware a guest may be given, by mapping name. A tenant is granted a mapping by name.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pci": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "devices"
+            ],
+            "properties": {
+              "comment": {
+                "type": "string"
+              },
+              "devices": {
+                "description": "The device on each node that has one, keyed by node.",
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "id",
+                    "subsystem_id",
+                    "iommu_group"
+                  ],
+                  "properties": {
+                    "path": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\\.[0-7]$"
+                    },
+                    "id": {
+                      "description": "vendor:device, from `lspci -nn`.",
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{4}:[0-9a-f]{4}$"
+                    },
+                    "subsystem_id": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{4}:[0-9a-f]{4}$"
+                    },
+                    "iommu_group": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

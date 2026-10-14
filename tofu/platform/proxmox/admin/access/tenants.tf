@@ -57,6 +57,11 @@ locals {
           path    = "/sdn/zones/${local.cluster.site}/${vnet}"
           role_id = proxmox_virtual_environment_role.tofu_sdn_use.role_id
         }
+        ], [
+        for mapping in try(grant.mappings, []) : {
+          path    = "/mapping/pci/${mapping}"
+          role_id = "PVEMappingUser"
+        }
       ])
     }
   }
@@ -147,6 +152,13 @@ resource "proxmox_acl" "identity" {
   path      = each.value.path
   role_id   = each.value.role_id
   propagate = true
+
+  lifecycle {
+    precondition {
+      condition     = !startswith(each.value.path, "/mapping/pci/") || contains(keys(try(local.cluster.mappings.pci, {})), trimprefix(each.value.path, "/mapping/pci/"))
+      error_message = "${each.value.path} names no mapping in the cluster file's mappings.pci."
+    }
+  }
 
   depends_on = [proxmox_virtual_environment_pool.tenant]
 }
