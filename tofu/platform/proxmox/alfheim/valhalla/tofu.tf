@@ -77,7 +77,7 @@ module "netbox" {
   source = "../../../../modules/netbox-site"
 
   site_slug    = local.cluster.site
-  prefix_roles = ["pods", "lb-local", "lb-shared", "lb-external"]
+  prefix_roles = ["Kubernetes Pods", "Load Balancer Local", "Load Balancer Shared", "Load Balancer External"]
 }
 
 provider "onepassword" {}

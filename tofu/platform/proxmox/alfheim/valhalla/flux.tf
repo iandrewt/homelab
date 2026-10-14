@@ -119,7 +119,7 @@ module "flux" {
             for f in local.family_order : "${replace(pool, "-", "_")}_${f}" => module.netbox.prefixes[pool][f]
           }
         ]...),
-        { for f in local.family_order : "pods_${f}" => module.netbox.prefixes.pods[f] },
+        { for f in local.family_order : "pods_${f}" => module.netbox.prefixes["kubernetes-pods"][f] },
         {
           cilium_asn             = tostring(local.workload.cilium_asn)
           cilium_veth            = local.workload.host_veth

@@ -24,12 +24,12 @@ output "vlans" {
 
 output "prefixes" {
   value = {
-    for role, r in data.netbox_prefixes.role : role => {
+    for name, r in data.netbox_prefixes.role : data.netbox_ipam_role.prefix[name].slug => {
       for family, v6 in { ipv4 = false, ipv6 = true } : family => one([
         for p in r.prefixes : p.prefix
         if strcontains(p.prefix, ":") == v6 && contains(["active", "container"], p.status)
       ])
     }
   }
-  description = "Each of `prefix_roles`: the site's active or container prefix with that role, per family."
+  description = "Each of `prefix_roles`, by its slug: the site's active or container prefix with that role, per family."
 }

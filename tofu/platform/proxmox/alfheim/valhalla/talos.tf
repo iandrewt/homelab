@@ -24,7 +24,7 @@ locals {
 
   management = flatten([for name in local.cluster.firewall.management_vlans : module.netbox.vlans[name].subnets[*].cidr])
   k8s        = [for f in local.family_order : local.subnets.k8s[f].cidr]
-  pods       = [for f in local.family_order : module.netbox.prefixes.pods[f]]
+  pods       = [for f in local.family_order : module.netbox.prefixes["kubernetes-pods"][f]]
 
   lb_pools = ["lb-local", "lb-shared", "lb-external"]
 }

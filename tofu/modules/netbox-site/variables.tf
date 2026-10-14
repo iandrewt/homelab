@@ -1,7 +1,7 @@
 variable "prefix_roles" {
   type        = list(string)
   default     = []
-  description = "Prefix roles to read the site's prefixes for, by name - a purpose's block, or a container like `pods`."
+  description = "Prefix roles to read the site's prefixes for, by name - the provider can look a role up by nothing else. The output is keyed by slug."
 }
 
 variable "site_slug" {

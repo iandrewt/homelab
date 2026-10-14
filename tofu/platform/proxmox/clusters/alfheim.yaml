@@ -15,7 +15,7 @@ sdn:
 
 firewall:
   management_vlans: [Management, Trusted]
-  api_prefix_roles: [pods]
+  api_prefix_roles: [Kubernetes Pods]
 
 oidc:
   realm: entra
