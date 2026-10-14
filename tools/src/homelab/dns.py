@@ -43,7 +43,7 @@ def register(subparsers) -> None:
 
 
 def _plan(args) -> int:
-    return _sync(*(["--plan"] + (["--force"] if args.force else [])))
+    return _sync(*(["--force"] if args.force else []))
 
 
 def _apply(args) -> int:
