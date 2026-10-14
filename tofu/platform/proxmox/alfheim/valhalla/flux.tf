@@ -65,19 +65,10 @@ module "flux" {
       values_yaml = file("${local.flux}/flux-system/flux-operator-values.yaml")
     }
 
-    # In this order: nothing schedules until Cilium runs, then Proxmox CCM lifts the taint an
-    # external cloud provider puts on every new node
+    # In this order: Proxmox CCM runs on the host network before any CNI, so nodes are
+    # initialized by the time Cilium installs
     prerequisites = {
       charts = [
-        {
-          name                = "cilium"
-          repository          = trimprefix(local.charts.cilium.url, "oci://")
-          namespace           = "kube-system"
-          create_namespace    = false
-          version             = local.charts.cilium.ref.tag
-          values_yaml         = file("${local.flux}/infrastructure/controllers/cilium/values.yaml")
-          flux_adoption_check = { resource = "daemonset", api_group = "apps", name = "cilium", namespace = "kube-system" }
-        },
         {
           name                = "proxmox-cloud-controller-manager"
           repository          = trimprefix(local.charts.proxmox-cloud-controller-manager.url, "oci://")
@@ -86,6 +77,15 @@ module "flux" {
           version             = local.charts.proxmox-cloud-controller-manager.ref.tag
           values_yaml         = yamlencode(merge(yamldecode(file("${local.flux}/infrastructure/controllers/proxmox-ccm/values.yaml")), local.proxmox_ccm))
           flux_adoption_check = { resource = "deployment", api_group = "apps", name = "proxmox-cloud-controller-manager", namespace = "kube-system" }
+        },
+        {
+          name                = "cilium"
+          repository          = trimprefix(local.charts.cilium.url, "oci://")
+          namespace           = "kube-system"
+          create_namespace    = false
+          version             = local.charts.cilium.ref.tag
+          values_yaml         = file("${local.flux}/infrastructure/controllers/cilium/values.yaml")
+          flux_adoption_check = { resource = "daemonset", api_group = "apps", name = "cilium", namespace = "kube-system" }
         },
       ]
     }
