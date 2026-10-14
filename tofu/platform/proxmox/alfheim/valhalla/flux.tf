@@ -37,9 +37,22 @@ data "onepassword_item" "flux_github_app" {
   title = "GitHub App Key - Flux ${local.talos.cluster_name}"
 }
 
+# allow using host-network for the bootstrap job
+resource "kubernetes_namespace_v1" "flux_bootstrap" {
+  metadata {
+    name   = "flux-operator-bootstrap"
+    labels = { "pod-security.kubernetes.io/enforce" = "privileged" }
+  }
+
+  depends_on = [talos_cluster.this]
+}
+
 module "flux" {
   source  = "controlplaneio-fluxcd/flux-operator-bootstrap/kubernetes"
   version = "0.9.0"
+
+  bootstrap_namespace        = kubernetes_namespace_v1.flux_bootstrap.metadata[0].name
+  create_bootstrap_namespace = false
 
   revision = 1
 
@@ -123,6 +136,10 @@ module "flux" {
   job = {
     host_network = true
     tolerations  = [{ operator = "Exists" }]
+    env = {
+      KUBERNETES_SERVICE_HOST = "localhost"
+      KUBERNETES_SERVICE_PORT = "7445"
+    }
   }
 
   # The Talos layer is healthy across the control planes once this exists
