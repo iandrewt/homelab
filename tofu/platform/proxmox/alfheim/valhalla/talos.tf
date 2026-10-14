@@ -189,7 +189,7 @@ locals {
     ]
 
     controlplane = [
-      { cluster = { etcd = { advertisedSubnets = local.k8s } } },
+      { cluster = { etcd = { advertisedSubnets = [local.subnets.k8s.ipv6.cidr] } } },
       { apiVersion = "v1alpha1", kind = "KubeProxyConfig", enabled = false },
       {
         apiVersion = "v1alpha1"
