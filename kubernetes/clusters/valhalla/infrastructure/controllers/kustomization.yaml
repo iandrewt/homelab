@@ -4,3 +4,4 @@ resources:
   - cilium
   - proxmox-ccm
   - intel-gpu
+  - descheduler
