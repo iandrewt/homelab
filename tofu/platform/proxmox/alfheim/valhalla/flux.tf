@@ -19,8 +19,9 @@ locals {
       features = { provider = "default" }
       clusters = [{
         url          = "${trimsuffix(local.cluster.endpoint, "/")}/api2/json"
-        token_id     = data.onepassword_item.proxmox_ccm.section_map["token"].field_map["token id"].value
-        token_secret = data.onepassword_item.proxmox_ccm.password
+        # The item holds the whole token, `user@realm!name=secret`, as the providers take it
+        token_id     = split("=", data.onepassword_item.proxmox_ccm.password)[0]
+        token_secret = split("=", data.onepassword_item.proxmox_ccm.password)[1]
         region       = local.cluster_name
       }]
     }
