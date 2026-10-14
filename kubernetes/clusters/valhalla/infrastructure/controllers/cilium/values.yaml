@@ -46,7 +46,8 @@ bandwidthManager:
 loadBalancer:
   algorithm: maglev
   mode: hybrid
-  acceleration: best-effort
+  # virtio_net runs single-buffer XDP only below MTU 3506, and the k8s link is 9000
+  acceleration: disabled
 
 bgpControlPlane:
   enabled: true
