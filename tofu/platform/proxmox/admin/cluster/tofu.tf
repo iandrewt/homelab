@@ -62,7 +62,8 @@ provider "netbox" {
 module "netbox" {
   source = "../../../../modules/netbox-site"
 
-  site_slug = local.cluster.site
+  site_slug    = local.cluster.site
+  prefix_roles = try(local.cluster.firewall.api_prefix_roles, [])
 }
 
 provider "onepassword" {}

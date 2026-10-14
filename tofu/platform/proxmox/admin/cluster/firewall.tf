@@ -27,7 +27,29 @@ resource "proxmox_virtual_environment_firewall_ipset" "management" {
   }
 }
 
+resource "proxmox_virtual_environment_firewall_ipset" "api" {
+  name    = "api"
+  comment = "Allowed to reach the API, not SSH. Managed by OpenTofu."
+
+  dynamic "cidr" {
+    for_each = flatten([for p in values(module.netbox.prefixes) : [for net in [p.ipv4, p.ipv6] : net if net != null]])
+    content {
+      name = cidr.value
+    }
+  }
+}
+
 resource "proxmox_virtual_environment_firewall_rules" "cluster" {
+  rule {
+    comment = "API"
+    type    = "in"
+    action  = "ACCEPT"
+    source  = "+dc/${proxmox_virtual_environment_firewall_ipset.api.name}"
+    dport   = "8006"
+    proto   = "tcp"
+    log     = "nolog"
+  }
+
   rule {
     comment = "GUI"
     type    = "in"

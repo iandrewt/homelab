@@ -15,6 +15,7 @@ sdn:
 
 firewall:
   management_vlans: [Management, Trusted]
+  api_prefix_roles: [pods]
 
 oidc:
   realm: entra
