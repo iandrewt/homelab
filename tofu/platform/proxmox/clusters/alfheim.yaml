@@ -15,7 +15,8 @@ sdn:
 
 firewall:
   management_vlans: [Management, Trusted]
-  api_prefix_roles: [Kubernetes Pods]
+  # Integrations holding Proxmox credentials of their own run on these nodes' host network
+  api_vnets: [k8s]
 
 oidc:
   realm: entra

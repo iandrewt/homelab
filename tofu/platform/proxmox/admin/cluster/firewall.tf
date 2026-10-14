@@ -32,7 +32,7 @@ resource "proxmox_virtual_environment_firewall_ipset" "api" {
   comment = "Allowed to reach the API, not SSH. Managed by OpenTofu."
 
   dynamic "cidr" {
-    for_each = flatten([for p in values(module.netbox.prefixes) : [for net in [p.ipv4, p.ipv6] : net if net != null]])
+    for_each = flatten([for v in values(module.netbox.vlans) : v.subnets[*].cidr if contains(try(local.cluster.firewall.api_vnets, []), v.vnet)])
     content {
       name = cidr.value
     }

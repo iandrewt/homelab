@@ -66,8 +66,8 @@
             "type": "string"
           }
         },
-        "api_prefix_roles": {
-          "description": "Prefix roles, by NetBox name, allowed to reach the API but not SSH - where in-cluster integrations run.",
+        "api_vnets": {
+          "description": "VLANs, by their `vnet` in NetBox, allowed to reach the API but not SSH - where integrations holding Proxmox credentials of their own, like Proxmox CCM, run on the host network.",
           "type": "array",
           "uniqueItems": true,
           "items": {
