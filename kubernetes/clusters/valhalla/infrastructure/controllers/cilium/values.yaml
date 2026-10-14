@@ -14,7 +14,7 @@ ipam:
         ipv6:
           cidrs:
             - ${pods_ipv6}
-          maskSize: 64
+          maskSize: 80
         ipv4:
           cidrs:
             - ${pods_ipv4}
