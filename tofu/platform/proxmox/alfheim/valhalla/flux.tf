@@ -7,7 +7,6 @@ locals {
       flux-operator                    = "flux-system/flux-operator.yaml"
       cilium                           = "infrastructure/controllers/cilium/release.yaml"
       proxmox-cloud-controller-manager = "infrastructure/controllers/proxmox-ccm/release.yaml"
-      talos-cloud-controller-manager   = "infrastructure/controllers/talos-ccm/release.yaml"
     } : name => yamldecode(split("\n---\n", file("${local.flux}/${path}"))[0]).spec
   }
 
@@ -53,8 +52,8 @@ module "flux" {
       values_yaml = file("${local.flux}/flux-system/flux-operator-values.yaml")
     }
 
-    # In this order: nothing schedules until Cilium runs, Proxmox CCM lifts the taint an
-    # external cloud provider puts on every new node, and Talos CCM approves kubelet certificates
+    # In this order: nothing schedules until Cilium runs, then Proxmox CCM lifts the taint an
+    # external cloud provider puts on every new node
     prerequisites = {
       charts = [
         {
@@ -74,15 +73,6 @@ module "flux" {
           version             = local.charts.proxmox-cloud-controller-manager.ref.tag
           values_yaml         = yamlencode(merge(yamldecode(file("${local.flux}/infrastructure/controllers/proxmox-ccm/values.yaml")), local.proxmox_ccm))
           flux_adoption_check = { resource = "deployment", api_group = "apps", name = "proxmox-cloud-controller-manager", namespace = "kube-system" }
-        },
-        {
-          name                = "talos-cloud-controller-manager"
-          repository          = trimprefix(local.charts.talos-cloud-controller-manager.url, "oci://")
-          namespace           = "kube-system"
-          create_namespace    = false
-          version             = local.charts.talos-cloud-controller-manager.ref.tag
-          values_yaml         = file("${local.flux}/infrastructure/controllers/talos-ccm/values.yaml")
-          flux_adoption_check = { resource = "deployment", api_group = "apps", name = "talos-cloud-controller-manager", namespace = "kube-system" }
         },
       ]
     }

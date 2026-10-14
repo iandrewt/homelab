@@ -29,6 +29,23 @@ locals {
   lb_pools = ["lb-local", "lb-shared", "lb-external"]
 }
 
+data "helm_template" "talos_ccm" {
+  name         = "talos-cloud-controller-manager"
+  namespace    = "kube-system"
+  repository   = "oci://ghcr.io/siderolabs/charts"
+  chart        = "talos-cloud-controller-manager"
+  version      = "0.5.8"
+  kube_version = local.talos.kubernetes_version
+
+  values = [yamlencode({
+    enabledControllers = ["node-csr-approval"]
+    daemonSet = {
+      enabled = true
+      k8s     = { serviceHost = "localhost", servicePort = 7445 }
+    }
+  })]
+}
+
 resource "talos_image_factory_schematic" "class" {
   for_each = local.classes
 
@@ -219,7 +236,12 @@ locals {
           }]
         }
       },
-      # Talos CCM reads each node's platform metadata through the Talos API
+      {
+        apiVersion = "v1alpha1"
+        kind       = "KubeInlineManifestConfig"
+        name       = "talos-cloud-controller-manager"
+        manifest   = data.helm_template.talos_ccm.manifest
+      },
       {
         apiVersion                  = "v1alpha1"
         kind                        = "KubeTalosAPIAccessConfig"
@@ -331,12 +353,6 @@ resource "talos_machine" "node" {
   ignore_kubernetes_upgrade_drift = true
   drain_on_upgrade                = true
   kubeconfig_wo                   = ephemeral.talos_cluster_kubeconfig.admin.kubeconfig_raw
-
-  on_destroy = {
-    graceful = true
-    reset    = true
-    reboot   = false
-  }
 
   depends_on = [module.node]
 }

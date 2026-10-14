@@ -30,7 +30,7 @@ tofu/network/
 tofu/modules/
 kubernetes/clusters/valhalla/
   flux-system/            the FluxInstance and flux-operator, which Flux upgrades itself
-  infrastructure/         controllers (Cilium, Talos CCM, the GPU plugin), then their configs
+  infrastructure/         controllers (Cilium, Proxmox CCM, the GPU plugin), then their configs
   apps/
 unifi/generated/
   alfheim-frr.conf        BGP toward the resolvers, written by `homelab generate`
@@ -115,17 +115,20 @@ to create by hand.
 ### Talos
 
 `tofu/platform/proxmox/alfheim/valhalla` builds the nodes, applies their machine config
-over the Talos API, bootstraps etcd, and installs Cilium, both CCMs and Flux once. From
-then on Flux owns everything in the cluster, its own upgrades included. Each upgrade has
-one owner:
+over the Talos API, bootstraps etcd, and installs Cilium, Proxmox CCM and Flux once. From
+then on Flux owns everything in the cluster but Talos's own manifests, its own upgrades
+included. Each upgrade has one owner:
 
 | | Upgraded by |
 |---|---|
 | Talos | a class's `talos` version in `nodes.tf`, rolled node by node |
 | Kubernetes | `kubernetes_version` in `talos.tf`, through `upgrade-k8s` |
-| Cilium, Proxmox and Talos CCM, Flux | their chart versions under `kubernetes/clusters/valhalla/`, through Flux |
+| CoreDNS, Talos CCM | Talos's own manifests - Talos CCM's chart version in `talos.tf` - re-applied by `upgrade-k8s` |
+| Cilium, Proxmox CCM, Flux | their chart versions under `kubernetes/clusters/valhalla/`, through Flux |
 
 Cilium is never in Talos's own manifests, so `upgrade-k8s` has nothing of it to put back.
+Talos CCM is, because Talos's health checks wait on the kubelet certificates it approves -
+so it runs on the host network, before there is a CNI.
 
 A Talos upgrade only rolls one node at a time - drained, rebooted into the new image, and
 back - when applied without parallelism:
@@ -135,6 +138,9 @@ tofu -chdir=tofu/platform/proxmox/alfheim/valhalla apply -parallelism=1
 op read 'op://Platform/Talos Config - valhalla/notesPlain' > ~/.talos/config
 talosctl kubeconfig                    # break-glass; people sign in with Entra
 ```
+
+Taking a control plane out of the map destroys its VM, but nothing tells etcd: run
+`talosctl -n <node> reset --graceful` first, so it leaves the cluster cleanly.
 
 ## Status / TODO
 

@@ -3,5 +3,4 @@ kind: Kustomization
 resources:
   - cilium
   - proxmox-ccm
-  - talos-ccm
   - intel-gpu
