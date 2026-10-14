@@ -20,7 +20,7 @@ tofu/platform/
   proxmox/admin/          one workspace per cluster
     root/                 root@pam only - the tofu@pve user, ACME
     access/               roles, users, pools, realms, every other token
-    cluster/              cluster options, SDN, node firewall, storage, mappings
+    cluster/              cluster options, SDN, node firewall, storage, mappings, backups
     images/               cloud image downloads
 tofu/network/
   aws/dns/                the public copies of internal zones, in Route53
@@ -116,7 +116,7 @@ to create by hand.
 
 - [ ] Pin a checksum on the Debian cloud image - `latest` moves
 - [ ] Delete `proxmox-acme-<cluster>` and its access key once an internal CA issues the nodes' certificates
-- [ ] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
+- [x] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
 - [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
 - [ ] Everything cluster/Talos-related - arrives as `tofu/platform/proxmox/alfheim/talos/` with its own providers, plus a `tenants.platform` grant in the cluster file carrying its `csi` and `ccm` integrations (commented out there already)
 

@@ -35,6 +35,13 @@ storages:
     options: vers=4.2
     content: [import, iso, vztmpl]
 
+  backups:
+    type: nfs
+    server: mimir.alfheim.titmuss.zone
+    export: /mnt/tank/backups/proxmox
+    options: vers=4.2
+    content: [backup]
+
   tank:
     type: zfspool
     pool: tank
@@ -48,6 +55,12 @@ storages:
 guest_defaults:
   disk_storage: tank
   snippet_storage: local
+
+backup:
+  storage: backups
+  schedule: sat 02:00
+  retention:
+    keep-weekly: 4
 
 nodes:
   yggdrasil:

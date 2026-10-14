@@ -17,6 +17,7 @@
     "sdn",
     "storages",
     "guest_defaults",
+    "backup",
     "nodes",
     "image_storage",
     "images",
@@ -383,6 +384,45 @@
         "snippet_storage": {
           "description": "Must be a key of `storages`, and must be node-local.",
           "type": "string"
+        }
+      }
+    },
+    "backup": {
+      "description": "The one vzdump job, covering every guest on every node.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "storage",
+        "schedule",
+        "retention"
+      ],
+      "properties": {
+        "storage": {
+          "description": "An `nfs` key of `storages`, with `backup` in its content.",
+          "type": "string"
+        },
+        "schedule": {
+          "description": "systemd calendar event.",
+          "type": "string"
+        },
+        "retention": {
+          "description": "Proxmox's prune options, applied after each run.",
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "enum": [
+              "keep-last",
+              "keep-hourly",
+              "keep-daily",
+              "keep-weekly",
+              "keep-monthly",
+              "keep-yearly"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 1
+          }
         }
       }
     },

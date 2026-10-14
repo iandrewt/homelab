@@ -119,3 +119,19 @@ resource "proxmox_storage_zfspool" "this" {
 
   depends_on = [module.node]
 }
+
+# --- Backup ------------------------------------------------------------------------
+
+resource "proxmox_backup_job" "this" {
+  id      = "guests"
+  comment = "Every guest. Managed by OpenTofu."
+
+  all      = true
+  storage  = proxmox_storage_nfs.this[local.cluster.backup.storage].id
+  schedule = local.cluster.backup.schedule
+
+  mode           = "snapshot"
+  compress       = "zstd"
+  notes_template = "{{guestname}}"
+  prune_backups  = { for k, v in local.cluster.backup.retention : k => tostring(v) }
+}
