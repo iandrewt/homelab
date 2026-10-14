@@ -1,0 +1,35 @@
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: lb-local
+spec:
+  blocks:
+    - cidr: ${lb_local_ipv6}
+    - cidr: ${lb_local_ipv4}
+  serviceSelector:
+    matchExpressions:
+      - { key: homelab.io/exposure, operator: NotIn, values: [shared, external] }
+---
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: lb-shared
+spec:
+  blocks:
+    - cidr: ${lb_shared_ipv6}
+    - cidr: ${lb_shared_ipv4}
+  serviceSelector:
+    matchLabels:
+      homelab.io/exposure: shared
+---
+apiVersion: cilium.io/v2
+kind: CiliumLoadBalancerIPPool
+metadata:
+  name: lb-external
+spec:
+  blocks:
+    - cidr: ${lb_external_ipv6}
+    - cidr: ${lb_external_ipv4}
+  serviceSelector:
+    matchLabels:
+      homelab.io/exposure: external

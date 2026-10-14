@@ -86,6 +86,12 @@ images:
     content_type: import
     # TODO: pin a checksum
 
+  # schematic includes qemu-guest-agent
+  talos-metal-secureboot:
+    url: https://factory.talos.dev/image/f171f129b1614a893bd440762f70c2ca4b98f439ca1823cf455d5874ef0da656/v1.14.2/metal-amd64-secureboot.iso
+    file_name: talos-metal-amd64-secureboot.iso
+    content_type: iso
+
 mappings:
   pci:
     arc-a40:
@@ -102,19 +108,22 @@ tenants:
     comment: "The Network team."
     vnets: [servers]
 
-  # Each integration is something running inside a workload that needs its own
-  # Proxmox credentials. It gets a user, a privsep token, and one role per ACL entry -
-  # a Proxmox ACL grants a role on a path, so privileges are declared per path.
-  # platform:
-  #   comment: "The Platform team."
-  #   vnets: [k8s, storage]
-  #   integrations:
-  #     csi:
-  #       comment: "proxmox-csi-plugin: provisions and attaches PVs."
-  #       acls:
-  #         /pool/platform/talos: [VM.Audit, VM.Config.Disk]
-  #         /storage/nvme: [Datastore.Allocate, Datastore.AllocateSpace, Datastore.Audit]
-  #     ccm:
-  #       comment: "proxmox-cloud-controller-manager: labels nodes with their topology."
-  #       acls:
-  #         /pool/platform/talos: [VM.Audit]
+  platform:
+    comment: "The Platform team."
+    vnets: [k8s, storage]
+    mappings: [arc-a40]
+
+    # Each integration is something running inside a workload that needs its own
+    # Proxmox credentials. It gets a user, a privsep token, and one role per ACL entry -
+    # a Proxmox ACL grants a role on a path, so privileges are declared per path.
+    integrations:
+      ccm:
+        comment: "proxmox-cloud-controller-manager: finds each node's VM, for its provider ID and topology."
+        acls:
+          /pool/platform/valhalla: [VM.Audit]
+      # TODO: with proxmox-csi
+      # csi:
+      #   comment: "proxmox-csi-plugin: provisions and attaches PVs."
+      #   acls:
+      #     /pool/platform/valhalla: [VM.Audit, VM.Config.Disk]
+      #     /storage/nvme: [Datastore.Allocate, Datastore.AllocateSpace, Datastore.Audit]

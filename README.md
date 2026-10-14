@@ -8,6 +8,7 @@ Infrastructure-as-code for my home network and home lab (site `alfheim`): OpenTo
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS
 ansible/      roles, playbooks, and an inventory read from NetBox
 tofu/         a directory per team that owns state, a layer per directory, and modules
+kubernetes/   what Flux reconciles, a directory per Talos cluster
 unifi/        generated config for the UDM Pro, which nothing here can apply directly
 ```
 
@@ -21,11 +22,16 @@ tofu/platform/
     root/                 root@pam only - the tofu@pve user, ACME
     access/               roles, users, pools, realms, every other token
     cluster/              cluster options, SDN, node firewall, storage, mappings, backups
-    images/               cloud image downloads
+    images/               cloud image and Talos ISO downloads
+  proxmox/alfheim/valhalla/  the valhalla Talos cluster, through Flux's bootstrap
 tofu/network/
   aws/dns/                the public copies of internal zones, in Route53
   proxmox/alfheim/dns/    hugin, in the Network team's `network/dns` pool
 tofu/modules/
+kubernetes/clusters/valhalla/
+  flux-system/            the FluxInstance and flux-operator, which Flux upgrades itself
+  infrastructure/         controllers (Cilium, Talos CCM, the GPU plugin), then their configs
+  apps/
 unifi/generated/
   alfheim-frr.conf        BGP toward the resolvers, written by `homelab generate`
 ```
@@ -106,6 +112,30 @@ The `root` layer is the exception: it authenticates as `root@pam` with the insta
 password from `PROXMOX_VE_PASSWORD` rather than a token, so there is no bootstrap token
 to create by hand.
 
+### Talos
+
+`tofu/platform/proxmox/alfheim/valhalla` builds the nodes, applies their machine config
+over the Talos API, bootstraps etcd, and installs Cilium, both CCMs and Flux once. From
+then on Flux owns everything in the cluster, its own upgrades included. Each upgrade has
+one owner:
+
+| | Upgraded by |
+|---|---|
+| Talos | a class's `talos` version in `nodes.tf`, rolled node by node |
+| Kubernetes | `kubernetes_version` in `talos.tf`, through `upgrade-k8s` |
+| Cilium, Proxmox and Talos CCM, Flux | their chart versions under `kubernetes/clusters/valhalla/`, through Flux |
+
+Cilium is never in Talos's own manifests, so `upgrade-k8s` has nothing of it to put back.
+
+A Talos upgrade only rolls one node at a time - drained, rebooted into the new image, and
+back - when applied without parallelism:
+
+```
+tofu -chdir=tofu/platform/proxmox/alfheim/valhalla apply -parallelism=1
+op read 'op://Platform/Talos Config - valhalla/notesPlain' > ~/.talos/config
+talosctl kubeconfig                    # break-glass; people sign in with Entra
+```
+
 ## Status / TODO
 
 **NetBox data**
@@ -117,8 +147,18 @@ to create by hand.
 - [ ] Pin a checksum on the Debian cloud image - `latest` moves
 - [ ] Delete `proxmox-acme-<cluster>` and its access key once an internal CA issues the nodes' certificates
 - [x] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
-- [ ] Talos storage NIC: no default route; NFS exports by the storage prefix, so `SDN.Use` on `storage` is the NAS's access control
-- [ ] Everything cluster/Talos-related - arrives as `tofu/platform/proxmox/alfheim/talos/` with its own providers, plus a `tenants.platform` grant in the cluster file carrying its `csi` and `ccm` integrations (commented out there already)
+- [ ] Pin a checksum on the Talos ISO
+- [ ] Entra app registrations into tofu - Proxmox's and `Kubernetes valhalla`
+- [ ] proxmox-csi, with its `csi` integration commented out in the cluster file
+- [ ] Karpenter for Proxmox - revisit; Proxmox CCM already gives every node a provider ID
+
+**Kubernetes**
+
+- [ ] Bring up valhalla: the valhalla layer applied, Flux reconciling, the checks in its plan passed
+- [ ] Renovate for what Dependabot can't see: Talos and Kubernetes versions, Flux's charts and sources
+- [ ] External Secrets with 1Password - only the GitHub App key and its own token stay bootstrap-managed
+- [ ] A self-hosted discovery service, off Sidero's
+- [ ] Talos 1.15: `WorkloadResourceConfig` memory caps, and drop the explicit `lockdown=integrity`
 
 **Ratatoskr (Raspberry Pi)**
 
