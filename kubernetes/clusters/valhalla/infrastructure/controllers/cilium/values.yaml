@@ -55,6 +55,10 @@ bgpControlPlane:
 hubble:
   relay:
     enabled: true
+  # Cilium's own certgen issues and renews these: Helm would re-key them on every upgrade
+  tls:
+    auto:
+      method: cronJob
 
 securityContext:
   capabilities:
