@@ -12,11 +12,6 @@ locals {
 
   instance = yamldecode(file("${local.flux}/flux-system/flux-instance.yaml"))
 
-  gateway_api = one([
-    for d in [for doc in split("\n---\n", file("${local.flux}/infrastructure.yaml")) : yamldecode(doc)] : d
-    if d.kind == "GitRepository" && d.metadata.name == "gateway-api"
-  ])
-
   # Proxmox CCM's whole `config`: Flux merges it over the chart values in Git, and the bootstrap
   # installs the same merge
   proxmox_ccm = {
@@ -45,10 +40,6 @@ data "http" "cilium_crd" {
   for_each = toset(["ciliumbgpclusterconfigs", "ciliumbgppeerconfigs", "ciliumbgpadvertisements"])
 
   url = "https://raw.githubusercontent.com/cilium/cilium/v${local.charts.cilium.ref.tag}/pkg/k8s/apis/cilium.io/client/crds/v2/${each.key}.yaml"
-}
-
-data "http" "gateway_api_crds" {
-  url = "https://github.com/kubernetes-sigs/gateway-api/releases/download/${local.gateway_api.spec.ref.tag}/standard-install.yaml"
 }
 
 data "onepassword_item" "flux_github_app" {
@@ -88,7 +79,6 @@ module "flux" {
     # initialized by the time Cilium installs
     prerequisites = {
       yamls = concat(
-        [data.http.gateway_api_crds.response_body],
         [for crd in data.http.cilium_crd : crd.response_body],
         [file("${local.flux}/infrastructure/configs/bgp.yaml")],
       )

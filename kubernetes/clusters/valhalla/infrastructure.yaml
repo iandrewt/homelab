@@ -1,42 +1,9 @@
-# CRDs a controller only looks for when it starts - Cilium's Gateway controller, and later
-# cert-manager's and external-dns's - so the bootstrap applies this same release first.
-# Never pruned: removing a CRD deletes every object of its kind.
-apiVersion: source.toolkit.fluxcd.io/v1
-kind: GitRepository
-metadata:
-  name: gateway-api
-  namespace: flux-system
-spec:
-  interval: 1h
-  url: https://github.com/kubernetes-sigs/gateway-api.git
-  ref:
-    tag: v1.6.1
-  ignore: |
-    /*
-    !/config/crd/standard/
----
-apiVersion: kustomize.toolkit.fluxcd.io/v1
-kind: Kustomization
-metadata:
-  name: gateway-api-crds
-  namespace: flux-system
-spec:
-  interval: 1h
-  path: ./config/crd/standard
-  prune: false
-  wait: true
-  sourceRef:
-    kind: GitRepository
-    name: gateway-api
----
 apiVersion: kustomize.toolkit.fluxcd.io/v1
 kind: Kustomization
 metadata:
   name: infrastructure-controllers
   namespace: flux-system
 spec:
-  dependsOn:
-    - name: gateway-api-crds
   interval: 1h
   retryInterval: 1m
   path: ./kubernetes/clusters/valhalla/infrastructure/controllers

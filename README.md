@@ -123,7 +123,7 @@ included. Each upgrade has one owner:
 |---|---|
 | Talos | a class's `talos` version in `nodes.tf`, rolled node by node |
 | Kubernetes | `kubernetes_version` in `talos.tf`, through `upgrade-k8s` |
-| CoreDNS, Talos CCM | Talos's own manifests - Talos CCM's chart version in `talos.tf` - re-applied by `upgrade-k8s` |
+| CoreDNS, Talos CCM, Gateway API's CRDs | Talos's own manifests - their versions in `talos.tf` - re-applied by `upgrade-k8s` |
 | Cilium, Proxmox CCM, Flux | their chart versions under `kubernetes/clusters/valhalla/`, through Flux |
 
 Cilium is never in Talos's own manifests, so `upgrade-k8s` has nothing of it to put back.

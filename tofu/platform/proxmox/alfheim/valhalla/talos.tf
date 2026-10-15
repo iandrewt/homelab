@@ -4,6 +4,10 @@ locals {
     contract           = "v1.14" # the version the cluster started with, do not update
     kubernetes_version = "1.37.1"
 
+    # Talos's, like Talos CCM: needed before Cilium's operator starts, and upgraded by nothing
+    # else. Only upgrade-k8s re-applies it, and dropping it would prune every Gateway with it.
+    gateway_api = "v1.6.1"
+
     oidc_client_id = "f0c7bdb5-af0e-44e8-a1c7-abde3b6f7a7c"
 
     vip      = { for family, s in local.subnets.k8s : family => one(s.vips) }
@@ -191,6 +195,12 @@ locals {
     controlplane = [
       { cluster = { etcd = { advertisedSubnets = [local.subnets.k8s.ipv6.cidr] } } },
       { apiVersion = "v1alpha1", kind = "KubeProxyConfig", enabled = false },
+      {
+        apiVersion = "v1alpha1"
+        kind       = "KubeExternalManifestConfig"
+        name       = "gateway-api-crds"
+        url        = "https://github.com/kubernetes-sigs/gateway-api/releases/download/${local.talos.gateway_api}/standard-install.yaml"
+      },
       {
         apiVersion = "v1alpha1"
         kind       = "KubeControllerManagerConfig"
