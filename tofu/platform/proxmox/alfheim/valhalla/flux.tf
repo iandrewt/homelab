@@ -33,6 +33,15 @@ data "onepassword_item" "proxmox_ccm" {
   title = "Proxmox API Token - ${local.cluster_name} tenant-${local.tenant}-ccm"
 }
 
+# Pods are reached only once the router has their routes, and Flux is a pod: the BGP config it
+# would apply is a bootstrap prerequisite, from the same file. Its CRDs come too - the operator
+# registers them only once it runs, after prerequisites are applied - at Cilium's own tag.
+data "http" "cilium_crd" {
+  for_each = toset(["ciliumbgpclusterconfigs", "ciliumbgppeerconfigs", "ciliumbgpadvertisements"])
+
+  url = "https://raw.githubusercontent.com/cilium/cilium/v${local.charts.cilium.ref.tag}/pkg/k8s/apis/cilium.io/client/crds/v2/${each.key}.yaml"
+}
+
 data "onepassword_item" "flux_github_app" {
   vault = data.onepassword_vault.tenant.uuid
   title = "GitHub App Key - Flux ${local.talos.cluster_name}"
@@ -69,6 +78,10 @@ module "flux" {
     # In this order: Proxmox CCM runs on the host network before any CNI, so nodes are
     # initialized by the time Cilium installs
     prerequisites = {
+      yamls = concat(
+        [for crd in data.http.cilium_crd : crd.response_body],
+        [file("${local.flux}/infrastructure/configs/bgp.yaml")],
+      )
       charts = [
         {
           name                = "proxmox-cloud-controller-manager"
@@ -100,7 +113,7 @@ module "flux" {
         metadata   = { name = local.instance.spec.sync.pullSecret }
         type       = "Opaque"
         stringData = {
-          githubAppClientID          = data.onepassword_item.flux_github_app.username
+          githubAppID                = data.onepassword_item.flux_github_app.username
           githubAppInstallationOwner = regex("github\\.com/([^/]+)/", local.instance.spec.sync.url)[0]
           githubAppPrivateKey        = data.onepassword_item.flux_github_app.credential
         }
