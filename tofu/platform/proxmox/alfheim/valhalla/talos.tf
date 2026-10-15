@@ -317,8 +317,9 @@ locals {
             for pool in local.lb_pools : [for f in local.family_order : module.netbox.prefixes[pool][f]]
           ]))
         }]
-        # One IPv4 session carries both families until the router's kernel can take an IPv6 next hop
-        neighbors = [{ address = local.subnets.k8s.ipv4.gateway, peerASN = 0 }]
+        # A session per family: over IPv4, GoBGP's IPv6 next hop is IPv4-mapped, which the
+        # router can't install - its IPv4 group carries IPv6 only for speakers that can
+        neighbors = [for f in local.family_order : { address = local.subnets.k8s[f].gateway, peerASN = 0 }]
       },
     ]
   }
