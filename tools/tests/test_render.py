@@ -20,6 +20,21 @@ def test_frr_requires_both_the_block_and_the_tag(snapshot):
     assert "bgp community-list standard DNS permit 64512:1" in config
 
 
+def test_ipv6_reaches_the_router_with_a_next_hop_it_can_install(snapshot):
+    """GoBGP sends IPv6 routes over an IPv4 session with an IPv4-mapped next hop, which the
+    UDM's kernel rejects. So a listen VLAN has an IPv6 session that carries IPv6 alone, and
+    a mapped next hop is denied before any purpose's permit - from either session.
+    """
+    config = frr.frr_config(site_of(snapshot))
+    ipv4 = config.split(" address-family ipv4 unicast")[1].split(" exit-address-family")[0]
+    ipv6 = config.split(" address-family ipv6 unicast")[1].split(" exit-address-family")[0]
+
+    assert " bgp listen range 2001:db8:0:110::/64 peer-group SERVERS-V6" in config
+    assert "neighbor SERVERS-V6 activate" in ipv6
+    assert "SERVERS-V6" not in ipv4
+    assert "route-map ADVERTISED-V6 deny 5\n match ipv6 next-hop prefix-list IPV4-MAPPED" in config
+
+
 def ethernet(config: str) -> dict:
     return yaml.safe_load(config)["network"]["ethernets"]["primary"]
 

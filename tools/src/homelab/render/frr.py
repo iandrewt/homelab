@@ -18,21 +18,30 @@ def frr_config(site: dict) -> str:
         " no bgp default ipv4-unicast",
     ]
 
+    # A speaker that can set an IPv6 next hop on an IPv4 session (FRR) sends both families
+    # there; one that can't (Talos's GoBGP) sends IPv6 on an IPv6 session of its own, since
+    # this kernel installs no IPv6 route via an IPv4 next hop.
     groups = []
     for vlan_name in site["listen_vlans"]:
-        group = vlan_name.upper()
-        groups.append(group)
-        lines += [
-            " !",
-            f" neighbor {group} peer-group",
-            f" neighbor {group} remote-as external",
-            f" neighbor {group} timers 3 9",
-            f" bgp listen range {site['vlans'][vlan_name]['ipv4']} peer-group {group}",
-        ]
+        vlan = site["vlans"][vlan_name]
+        sessions = [(vlan_name.upper(), vlan["ipv4"], ("ipv4", "ipv6"))]
+        if vlan["ipv6"]:
+            sessions.append((f"{vlan_name.upper()}-V6", vlan["ipv6"], ("ipv6",)))
+        for group, listen, families in sessions:
+            groups.append((group, families))
+            lines += [
+                " !",
+                f" neighbor {group} peer-group",
+                f" neighbor {group} remote-as external",
+                f" neighbor {group} timers 3 9",
+                f" bgp listen range {listen} peer-group {group}",
+            ]
 
     for family, suffix in (("ipv4", "V4"), ("ipv6", "V6")):
         lines += [" !", f" address-family {family} unicast"]
-        for group in groups:
+        for group, families in groups:
+            if family not in families:
+                continue
             lines += [
                 f"  neighbor {group} activate",
                 f"  neighbor {group} soft-reconfiguration inbound",
@@ -41,6 +50,17 @@ def frr_config(site: dict) -> str:
             ]
         lines += ["  maximum-paths 8", " exit-address-family"]
     lines += ["!", "route-map NOTHING deny 10", "exit", "!"]
+
+    # What GoBGP sends IPv6 routes with over an IPv4 session: never installable here, and
+    # never to be chosen over the same route from its IPv6 session
+    lines += [
+        "ipv6 prefix-list IPV4-MAPPED seq 5 permit ::ffff:0:0/96 le 128",
+        "!",
+        "route-map ADVERTISED-V6 deny 5",
+        " match ipv6 next-hop prefix-list IPV4-MAPPED",
+        "exit",
+        "!",
+    ]
 
     for purpose, pool in sorted(site["pools"].items()):
         group = purpose.upper()
