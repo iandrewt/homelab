@@ -52,6 +52,10 @@ loadBalancer:
 bgpControlPlane:
   enabled: true
 
+# Its CRDs are a bootstrap prerequisite: the operator only looks for them when it starts
+gatewayAPI:
+  enabled: true
+
 hubble:
   relay:
     enabled: true
