@@ -173,6 +173,7 @@ Taking a control plane out of the map destroys its VM, but nothing tells etcd: r
 **BGP / DNS**
 
 - [ ] IPv6 BGP transport once the UDM's kernel is 5.2 or later
+- [ ] BFD to the UDM once its FRR ships bfdd - check with UniFi OS 6; until then, timers 3 9
 - [ ] Ask the ISP to delegate alfheim's reverse zone to Route53; a `public` view for it and `titmuss.au`
 
 **homelab CLI**
