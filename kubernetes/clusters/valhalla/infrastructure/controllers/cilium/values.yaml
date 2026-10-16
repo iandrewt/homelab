@@ -2,6 +2,13 @@ cluster:
   name: valhalla
   id: 1
 
+# A changed ConfigMap does nothing until each reads it again
+rollOutCiliumPods: true
+operator:
+  rollOutPods: true
+envoy:
+  rollOutPods: true
+
 k8sServiceHost: localhost
 k8sServicePort: 7445
 kubeProxyReplacement: true
