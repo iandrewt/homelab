@@ -30,7 +30,7 @@ tofu/network/
 tofu/modules/
 kubernetes/clusters/valhalla/
   flux-system/            the FluxInstance and flux-operator, which Flux upgrades itself
-  infrastructure/         controllers (Cilium, Proxmox CCM, the GPU plugin, the descheduler), then their configs
+  infrastructure/         controllers (Cilium, Proxmox CCM, Intel's GPU resource driver, the descheduler), then their configs
   apps/
 unifi/generated/
   alfheim-frr.conf        BGP toward the resolvers, written by `homelab generate`
