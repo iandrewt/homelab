@@ -160,11 +160,15 @@ Taking a control plane out of the map destroys its VM, but nothing tells etcd: r
 
 **Kubernetes**
 
-- [ ] Bring up valhalla: the valhalla layer applied, Flux reconciling, the checks in its plan passed
+- [x] Bring up valhalla: the valhalla layer applied, Flux reconciling, the checks in its plan passed
 - [ ] Renovate for what Dependabot can't see: Talos and Kubernetes versions, Flux's charts and sources
 - [ ] External Secrets with 1Password - only the GitHub App key and its own token stay bootstrap-managed
 - [ ] A self-hosted discovery service, off Sidero's
 - [ ] Talos 1.15: `WorkloadResourceConfig` memory caps, and drop the explicit `lockdown=integrity`
+- [ ] Envoy's xDS back to ADS once cilium/cilium#49181 is fixed
+- [ ] Drop the host firewall's exception for replies to Envoy once cilium/cilium#45565 is fixed
+- [ ] LLDP on the Talos nodes (`siderolabs/lldpd`) once Cilium's host firewall passes it - cilium/cilium#17877
+- [ ] Confirm a DHCP lease renews through the host firewall
 
 **Ratatoskr (Raspberry Pi)**
 
