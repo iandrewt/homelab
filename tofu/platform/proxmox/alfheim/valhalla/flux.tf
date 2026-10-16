@@ -90,7 +90,7 @@ module "flux" {
           create_namespace    = false
           version             = local.charts.proxmox-cloud-controller-manager.ref.tag
           values_yaml         = yamlencode(merge(yamldecode(file("${local.flux}/infrastructure/controllers/proxmox-ccm/values.yaml")), local.proxmox_ccm))
-          flux_adoption_check = { resource = "deployment", api_group = "apps", name = "proxmox-cloud-controller-manager", namespace = "kube-system" }
+          flux_adoption_check = { resource = "daemonset", api_group = "apps", name = "proxmox-cloud-controller-manager", namespace = "kube-system" }
         },
         {
           name                = "cilium"
