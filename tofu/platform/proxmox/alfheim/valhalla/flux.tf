@@ -138,8 +138,8 @@ module "flux" {
         ]...),
         { for f in local.family_order : "pods_${f}" => module.netbox.prefixes["kubernetes-pods"][f] },
         {
-          management_cidrs   = join(",", local.management)
-          dhcp_servers_cidrs = join(",", [for vnet in local.vnets : "${local.subnets[vnet].ipv4.gateway}/32"])
+          management_cidrs   = "[${join(",", local.management)}]"
+          dhcp_servers_cidrs = "[${join(",", [for vnet in local.vnets : "${local.subnets[vnet].ipv4.gateway}/32"])}]"
         },
         {
           cilium_asn             = tostring(local.workload.cilium_asn)
