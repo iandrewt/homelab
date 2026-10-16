@@ -176,21 +176,6 @@ locals {
           }
         }
       ],
-      { apiVersion = "v1alpha1", kind = "NetworkDefaultActionConfig", ingress = "block" },
-      [
-        for name, r in {
-          apid     = { ports = [50000], from = concat(local.management, local.k8s) }
-          kubelet  = { ports = [10250], from = concat(local.k8s, local.pods) }
-          cilium   = { ports = [4240, 4244], from = concat(local.k8s, local.pods) }
-          workload = { ports = [179], from = ["${local.workload.host_address}/127"] }
-          } : {
-          apiVersion   = "v1alpha1"
-          kind         = "NetworkRuleConfig"
-          name         = name
-          portSelector = { ports = r.ports, protocol = "tcp" }
-          ingress      = [for s in r.from : { subnet = s }]
-        }
-      ],
     ]
 
     controlplane = [
@@ -259,19 +244,6 @@ locals {
         allowedRoles                = ["os:reader"]
         allowedKubernetesNamespaces = ["kube-system"]
       },
-      [
-        for name, r in {
-          trustd     = { ports = [50001], from = local.k8s }
-          kubernetes = { ports = [6443], from = concat(local.management, local.k8s, local.pods) }
-          etcd       = { ports = ["2379-2380"], from = local.k8s }
-          } : {
-          apiVersion   = "v1alpha1"
-          kind         = "NetworkRuleConfig"
-          name         = name
-          portSelector = { ports = r.ports, protocol = "tcp" }
-          ingress      = [for s in r.from : { subnet = s }]
-        }
-      ],
     ]
   }
 

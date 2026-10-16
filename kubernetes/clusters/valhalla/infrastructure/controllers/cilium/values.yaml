@@ -52,6 +52,13 @@ loadBalancer:
 bgpControlPlane:
   enabled: true
 
+# Talos's own ingress firewall drops what Cilium's proxy hands to the stack with its original
+# destination - every L7 connection out of the cluster, and every Gateway
+hostFirewall:
+  enabled: true
+# TODO: remove once host-firewall.yaml's verdicts are all allow
+policyAuditMode: true
+
 # Talos applies its CRDs before Cilium: the operator only looks for them when it starts
 gatewayAPI:
   enabled: true
