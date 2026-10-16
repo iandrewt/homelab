@@ -87,7 +87,8 @@ def device(name, role, site_slug=SITE, tags=(), role_name=None) -> dict:
 @pytest.fixture
 def snapshot() -> netbox.Snapshot:
     """One site: two VLANs, one of them dual-stack, a router holding their gateways, and a
-    dns purpose carrying an anycast VIP and one resolver's service addresses."""
+    dns purpose carrying an anycast VIP and one resolver's service addresses, and a purpose
+    whose speaker can't tag its routes."""
     return netbox.Snapshot(
         sites=[site()],
         vlans=[vlan(10, "management"), vlan(110, "servers", tags=["bgp-listen"])],
@@ -98,6 +99,8 @@ def snapshot() -> netbox.Snapshot:
             prefix("2001:db8:0:110::/64", vid=110),
             prefix("10.0.200.0/27", role="dns"),
             prefix("2001:db8::/64", role="dns"),
+            prefix("10.0.201.0/28", role="kubernetes-api"),
+            prefix("2001:db8:0:201::/64", role="kubernetes-api"),
         ],
         addresses=[
             address("10.0.10.5/24", dns_name="hugin.one.test"),
@@ -116,7 +119,7 @@ def snapshot() -> netbox.Snapshot:
             address("10.0.110.1/24", holder="udm"),
             address("2001:db8:0:110::1/64", holder="udm"),
         ],
-        asns=[asn(64512, "router"), asn(64513, "dns")],
+        asns=[asn(64512, "router"), asn(64513, "dns"), asn(64514, "kubernetes-api")],
         communities=[community("64512:1", "dns")],
         zones=[zone("one.test"), zone("10.in-addr.arpa"), zone("8.b.d.0.1.0.0.2.ip6.arpa")],
         records=[

@@ -66,18 +66,20 @@ def frr_config(site: dict) -> str:
         group = purpose.upper()
         lines += _prefix_list("ip", f"{group}-V4", [pool["ipv4"]])
         lines += _prefix_list("ipv6", f"{group}-V6", [pool["ipv6"]] if pool["ipv6"] else [])
-        lines += [
-            f"bgp community-list standard {group} permit {pool['community']}",
-            "!",
-        ]
+        if pool["community"]:
+            lines += [f"bgp community-list standard {group} permit {pool['community']}", "!"]
+        else:
+            # A speaker that can't tag its routes (Talos's own origination) is known by having
+            # originated them itself
+            lines += [f"bgp as-path access-list {group} permit ^{pool['speaker_asn']}$", "!"]
 
     for suffix, family in (("V4", "ip"), ("V6", "ipv6")):
-        for seq, purpose in enumerate(sorted(site["pools"]), start=1):
+        for seq, (purpose, pool) in enumerate(sorted(site["pools"].items()), start=1):
             group = purpose.upper()
             lines += [
                 f"route-map ADVERTISED-{suffix} permit {seq * 10}",
                 f" match {family} address prefix-list {group}-{suffix}",
-                f" match community {group}",
+                f" match community {group}" if pool["community"] else f" match as-path {group}",
                 "exit",
                 "!",
             ]

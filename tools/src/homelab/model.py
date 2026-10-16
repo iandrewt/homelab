@@ -130,8 +130,8 @@ def _vlans(slug: str, snap: netbox.Snapshot, gateways: list) -> tuple[dict, list
 
 
 def _pools(slug: str, snap: netbox.Snapshot) -> dict:
-    """One per purpose: a purpose is whatever a community is tagged for, so adding one is
-    a community and a prefix with that role."""
+    """One per purpose: a purpose is whatever a community is tagged for - or, for a speaker
+    that can't set one, an ASN - so adding one is a prefix with that role and either."""
     communities = {
         role["slug"]: c["value"]
         for c in snap.communities
@@ -140,10 +140,11 @@ def _pools(slug: str, snap: netbox.Snapshot) -> dict:
     pools: dict[str, dict] = {}
     for p in _at(snap.prefixes, slug):
         purpose = _slug(p, "role")
-        if purpose in communities:
+        speaker = _asn(snap, slug, purpose)
+        if purpose in communities or speaker:
             pool = pools.setdefault(purpose, {
-                "ipv4": None, "ipv6": None, "community": communities[purpose],
-                "speaker_asn": _asn(snap, slug, purpose),
+                "ipv4": None, "ipv6": None, "community": communities.get(purpose),
+                "speaker_asn": speaker,
             })
             net = ipaddress.ip_network(p["prefix"])
             pool[f"ipv{net.version}"] = str(net)

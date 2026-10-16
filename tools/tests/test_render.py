@@ -35,6 +35,17 @@ def test_ipv6_reaches_the_router_with_a_next_hop_it_can_install(snapshot):
     assert "route-map ADVERTISED-V6 deny 5\n match ipv6 next-hop prefix-list IPV4-MAPPED" in config
 
 
+def test_an_untagged_purpose_is_its_speakers_own_origination(snapshot):
+    """Talos's BGP sets no communities, so a route it originates itself is accepted by its
+    block and an AS path of its speaker alone - never one it carries on from Cilium."""
+    config = frr.frr_config(site_of(snapshot))
+    assert "bgp as-path access-list KUBERNETES-API permit ^64514$" in config
+    assert (
+        " match ip address prefix-list KUBERNETES-API-V4\n match as-path KUBERNETES-API"
+        in config
+    )
+
+
 def ethernet(config: str) -> dict:
     return yaml.safe_load(config)["network"]["ethernets"]["primary"]
 
