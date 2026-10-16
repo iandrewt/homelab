@@ -45,6 +45,14 @@ spec:
             - { port: "10250", protocol: TCP }
             - { port: "4240", protocol: TCP }
             - { port: "4244", protocol: TCP }
+    # TODO: remove once cilium/cilium#45565 is fixed - a backend's replies to Envoy miss
+    # conntrack and are denied as new connections, on Envoy's ephemeral ports. Talos reserves
+    # 50000-50001 out of the range for apid and trustd.
+    - fromEntities: [cluster]
+      toPorts:
+        - ports:
+            - { port: "32768", endPort: 49999, protocol: TCP }
+            - { port: "50002", endPort: 60999, protocol: TCP }
     # Talos's DNS proxy, which CoreDNS forwards to
     - fromEntities: [cluster]
       toPorts:
