@@ -8,6 +8,9 @@ operator:
   rollOutPods: true
 envoy:
   rollOutPods: true
+  # TODO: back to ADS once cilium/cilium#49181 is fixed - a rejected first listener leaves
+  # Envoy without network policy, and new pods on its node hang
+  xdsMode: split
 
 k8sServiceHost: localhost
 k8sServicePort: 7445
