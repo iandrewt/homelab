@@ -89,10 +89,10 @@ data "netbox_prefixes" "role" {
   }
 }
 
-data "netbox_ip_addresses" "vip" {
+data "netbox_ip_addresses" "anycast" {
   filter {
     name  = "role"
-    value = "vip"
+    value = "anycast"
   }
 
   filter {
@@ -110,13 +110,22 @@ locals {
     ipv6 = [for ip in local.router_ips : ip if strcontains(ip, ":")]
   }
 
-  vips_by_family = {
+  anycast_by_family = {
     for family, v6 in { ipv4 = false, ipv6 = true } : family => [
-      for a in data.netbox_ip_addresses.vip.ip_addresses : {
+      for a in data.netbox_ip_addresses.anycast.ip_addresses : {
         address  = split("/", a.ip_address)[0]
         dns_name = a.dns_name
       }
       if strcontains(a.ip_address, ":") == v6
     ]
+  }
+
+  role_prefixes = {
+    for name, r in data.netbox_prefixes.role : data.netbox_ipam_role.prefix[name].slug => {
+      for family, v6 in { ipv4 = false, ipv6 = true } : family => one([
+        for p in r.prefixes : p.prefix
+        if strcontains(p.prefix, ":") == v6 && contains(["active", "container"], p.status)
+      ])
+    }
   }
 }

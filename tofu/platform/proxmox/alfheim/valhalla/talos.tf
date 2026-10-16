@@ -10,8 +10,9 @@ locals {
 
     oidc_client_id = "f0c7bdb5-af0e-44e8-a1c7-abde3b6f7a7c"
 
-    vip      = { for family, s in local.subnets.k8s : family => one(s.vips) }
-    endpoint = "https://${one(distinct([for v in values(local.subnets.k8s) : one(v.vips).dns_name]))}:6443"
+    # Every control plane originates it from `lo`, so the router spreads clients across them
+    api      = { for family, a in module.netbox.anycast["kubernetes-api"] : family => one(a) }
+    endpoint = "https://${one(distinct(flatten(values(module.netbox.anycast["kubernetes-api"]))[*].dns_name))}:6443"
   }
 
   family_order = ["ipv6", "ipv4"]
@@ -213,18 +214,18 @@ locals {
         labels     = { "node.kubernetes.io/exclude-from-external-load-balancers" = { "$patch" = "delete" } }
         taints     = { "node-role.kubernetes.io/control-plane" = { "$patch" = "delete" } }
       },
-      [
-        for f in local.family_order : {
-          apiVersion = "v1alpha1"
-          kind       = "Layer2VIPConfig"
-          name       = local.talos.vip[f].address
-          link       = local.links.k8s
-        }
-      ],
+      {
+        apiVersion = "v1alpha1"
+        kind       = "LinkConfig"
+        name       = "lo"
+        addresses = [
+          for f in local.family_order : { address = "${local.talos.api[f].address}/${f == "ipv6" ? 128 : 32}" }
+        ]
+      },
       {
         apiVersion    = "v1alpha1"
         kind          = "KubeAPIServerConfig"
-        certExtraSANs = [for f in local.family_order : local.talos.vip[f].address]
+        certExtraSANs = [for f in local.family_order : local.talos.api[f].address]
       },
       {
         apiVersion = "v1alpha1"
@@ -308,9 +309,9 @@ locals {
         kind       = "BGPInstanceConfig"
         name       = "fabric"
         localASN   = local.fabric_asn
-        # The router ID is the first IPv4 address advertised: the node's lease. The router
-        # drops the connected prefixes this originates, as it does anything outside a purpose's block.
-        advertise = [local.links.k8s]
+        # The router ID is the first IPv4 address advertised: the node's lease. The router drops
+        # the node's own addresses, as it does anything outside a purpose's block.
+        advertise = concat([local.links.k8s], local.classes[n.class].machine_type == "controlplane" ? ["lo"] : [])
         importRoutes = [{
           bgpInstance = "workload"
           prefixes = concat(local.pods, flatten([

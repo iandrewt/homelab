@@ -11,25 +11,25 @@ output "vlans" {
             for ip in local.router_ips_by_family[strcontains(p.prefix, ":") ? "ipv6" : "ipv4"] : ip
             if cidrcontains(p.prefix, ip)
           ])
-          vips = [
-            for a in local.vips_by_family[strcontains(p.prefix, ":") ? "ipv6" : "ipv4"] : a
-            if cidrcontains(p.prefix, a.address)
-          ]
         }
       ]
     }
   }
-  description = "Each of the site's VLANs by name: its vid, the SDN VNet NetBox names for it (custom field `vnet`, empty if none), whether its ports are isolated (tag Isolate Ports), and its prefixes, each with the router's address in it and the active `vip`-role addresses inside it."
+  description = "Each of the site's VLANs by name: its vid, the SDN VNet NetBox names for it (custom field `vnet`, empty if none), whether its ports are isolated (tag Isolate Ports), and its prefixes, each with the router's address in it."
 }
 
 output "prefixes" {
+  value       = local.role_prefixes
+  description = "Each of `prefix_roles`, by its slug: the site's active or container prefix with that role, per family."
+}
+
+output "anycast" {
   value = {
-    for name, r in data.netbox_prefixes.role : data.netbox_ipam_role.prefix[name].slug => {
-      for family, v6 in { ipv4 = false, ipv6 = true } : family => one([
-        for p in r.prefixes : p.prefix
-        if strcontains(p.prefix, ":") == v6 && contains(["active", "container"], p.status)
-      ])
+    for role, families in local.role_prefixes : role => {
+      for family, prefix in families : family => [
+        for a in prefix == null ? [] : local.anycast_by_family[family] : a if cidrcontains(prefix, a.address)
+      ]
     }
   }
-  description = "Each of `prefix_roles`, by its slug: the site's active or container prefix with that role, per family."
+  description = "Each of `prefix_roles`, by its slug: the active `anycast`-role addresses inside its prefix, per family, each with its `dns_name`."
 }
