@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=schema.json
+site: alfheim
+number: 1
+asn: 4210002000
+
+talos_contract: v1.14
+kubernetes_version: 1.37.1
+gateway_api: v1.6.1
+
+vnets: [san]
+
+classes:
+  controlplane:
+    machine_type: controlplane
+    lifecycle: permanent
+    talos: v1.14.2
+    extensions: [siderolabs/qemu-guest-agent]
+    install_disk: disk.dev_path == "/dev/sda"
+    vm:
+      cores: 4
+      memory_mb: 10240
+      disk_gb: 32
+  gpu:
+    machine_type: worker
+    lifecycle: permanent
+    talos: v1.14.2
+    extensions: [siderolabs/i915, siderolabs/qemu-guest-agent]
+    install_disk: disk.dev_path == "/dev/sda"
+    labels:
+      node.homelab.io/gpu: arc
+    vm:
+      cores: 4
+      memory_mb: 12288
+      disk_gb: 64
+      pci_mapping: arc-a40
+
+proxmox: [pve-1]
+
+nodes:
+  k8s-1-cp-01: { class: controlplane, proxmox: pve-1, host: yggdrasil }
+  k8s-1-cp-02: { class: controlplane, proxmox: pve-1, host: yggdrasil }
+  k8s-1-cp-03: { class: controlplane, proxmox: pve-1, host: yggdrasil }
+  k8s-1-gpu-01: { class: gpu, proxmox: pve-1, host: yggdrasil }
+
+tenants: {}
+
+proxmox_integrations:
+  ccm:
+    comment: "proxmox-cloud-controller-manager: finds each node's VM, for its provider ID and topology."
+    pool: [VM.Audit]

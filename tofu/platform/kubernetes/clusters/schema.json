@@ -1,0 +1,213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/iandrewt/homelab/tofu/platform/kubernetes/clusters/schema.json",
+  "title": "A Kubernetes cluster",
+  "description": "A Talos cluster at one site, named for the file: `k8s-<number>`, org-unique. Its addresses and pools are NetBox's.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "site",
+    "number",
+    "asn",
+    "talos_contract",
+    "kubernetes_version",
+    "gateway_api",
+    "classes",
+    "nodes",
+    "proxmox"
+  ],
+  "properties": {
+    "site": {
+      "description": "NetBox site slug.",
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]{0,6}[a-z0-9]$"
+    },
+    "number": {
+      "description": "The cluster's number, org-wide: NetBox's cluster `number`, and Cilium's cluster.id.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 255
+    },
+    "asn": {
+      "description": "The cluster's ASN in NetBox: the provider can't find one by its cluster. Talos's workload instance is +1, Cilium +2.",
+      "type": "integer",
+      "minimum": 4200000000,
+      "maximum": 4294967294
+    },
+    "talos_contract": {
+      "description": "The Talos version the cluster started with. Never updated.",
+      "type": "string",
+      "pattern": "^v\\d+\\.\\d+$"
+    },
+    "kubernetes_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "gateway_api": {
+      "description": "Gateway API's release, whose CRDs Talos applies.",
+      "type": "string",
+      "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+    },
+    "vnets": {
+      "description": "NICs after the node network, in order, by `vnet`.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "classes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "machine_type",
+          "lifecycle",
+          "talos",
+          "extensions",
+          "install_disk"
+        ],
+        "properties": {
+          "machine_type": {
+            "enum": [
+              "controlplane",
+              "worker"
+            ]
+          },
+          "lifecycle": {
+            "description": "permanent: volumes sealed to the TPM. transient: tainted node.homelab.io/lifecycle=transient:NoSchedule, volumes keyed to the node.",
+            "enum": [
+              "permanent",
+              "transient"
+            ]
+          },
+          "talos": {
+            "description": "Talos version, which talos_machine upgrades to.",
+            "type": "string",
+            "pattern": "^v\\d+\\.\\d+\\.\\d+$"
+          },
+          "extensions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "install_disk": {
+            "description": "CEL picking the install disk.",
+            "type": "string"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "vm": {
+            "description": "A VM's size, for classes VMs use.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "cores",
+              "memory_mb",
+              "disk_gb"
+            ],
+            "properties": {
+              "cores": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "memory_mb": {
+                "type": "integer",
+                "minimum": 1024
+              },
+              "disk_gb": {
+                "type": "integer",
+                "minimum": 8
+              },
+              "pci_mapping": {
+                "description": "A PCI mapping, by name in the Proxmox cluster's mappings.pci.",
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "nodes": {
+      "description": "VMs. Metal nodes are NetBox devices in the virtualization cluster.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "class",
+          "proxmox",
+          "host"
+        ],
+        "properties": {
+          "class": {
+            "type": "string"
+          },
+          "proxmox": {
+            "description": "The Proxmox cluster, by its file in tofu/platform/proxmox/clusters.",
+            "type": "string"
+          },
+          "host": {
+            "description": "The Proxmox node.",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "tenants": {
+      "description": "Teams, from tofu/platform/tenancy/teams, who may sign in. What each may do is RBAC in the cluster's directory.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false
+      }
+    },
+    "proxmox": {
+      "description": "The Proxmox clusters its VMs may be on: a superset, since a provider has to outlive what it made.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "proxmox_integrations": {
+      "description": "Something in the cluster that needs Proxmox credentials of its own, on each Proxmox cluster it uses: `admin/access` makes a user and token, with `pool` privileges on the cluster's pool and `storages` privileges by storage.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "comment",
+          "pool"
+        ],
+        "properties": {
+          "comment": {
+            "type": "string"
+          },
+          "pool": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "storages": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -26,8 +26,20 @@ data "netbox_vlans" "site" {
   }
 }
 
-data "netbox_tag" "isolate_ports" {
-  name = "Isolate Ports"
+data "netbox_tags" "all" {}
+
+data "netbox_prefixes" "trusted" {
+  for_each = var.trust_tags
+
+  filter {
+    name  = "tag"
+    value = each.key
+  }
+
+  filter {
+    name  = "site_id"
+    value = tostring(data.netbox_site.this.id)
+  }
 }
 
 data "netbox_prefixes" "vlan" {
@@ -89,10 +101,13 @@ data "netbox_prefixes" "role" {
   }
 }
 
-data "netbox_ip_addresses" "anycast" {
+# The provider returns object custom fields, like an address's origins, as JSON
+data "netbox_ip_addresses" "role" {
+  for_each = toset(flatten([for r in data.netbox_prefixes.role : r.prefixes[*].prefix]))
+
   filter {
-    name  = "role"
-    value = "anycast"
+    name  = "parent_prefix"
+    value = each.key
   }
 
   filter {
@@ -110,22 +125,28 @@ locals {
     ipv6 = [for ip in local.router_ips : ip if strcontains(ip, ":")]
   }
 
-  anycast_by_family = {
-    for family, v6 in { ipv4 = false, ipv6 = true } : family => [
-      for a in data.netbox_ip_addresses.anycast.ip_addresses : {
-        address  = split("/", a.ip_address)[0]
-        dns_name = a.dns_name
+  families = { ipv4 = false, ipv6 = true }
+
+  tag_slugs = { for t in data.netbox_tags.all.tags : t.tag_id => t.slug }
+  vlan_tags = { for v in data.netbox_vlans.site.vlans : v.name => [for id in v.tag_ids : local.tag_slugs[id]] }
+
+  role_prefixes = {
+    for name, r in data.netbox_prefixes.role : data.netbox_ipam_role.prefix[name].slug => [
+      for p in r.prefixes : {
+        prefix = p.prefix
+        family = strcontains(p.prefix, ":") ? "ipv6" : "ipv4"
+        origin = try(jsondecode(p.custom_fields["origin"]).asn, null)
       }
-      if strcontains(a.ip_address, ":") == v6
+      if contains(["active", "container"], p.status)
     ]
   }
 
-  role_prefixes = {
-    for name, r in data.netbox_prefixes.role : data.netbox_ipam_role.prefix[name].slug => {
-      for family, v6 in { ipv4 = false, ipv6 = true } : family => one([
-        for p in r.prefixes : p.prefix
-        if strcontains(p.prefix, ":") == v6 && contains(["active", "container"], p.status)
-      ])
+  owned_addresses = [
+    for a in distinct(flatten([for r in data.netbox_ip_addresses.role : r.ip_addresses])) : {
+      address  = split("/", a.ip_address)[0]
+      family   = strcontains(a.ip_address, ":") ? "ipv6" : "ipv4"
+      dns_name = a.dns_name
     }
-  }
+    if var.origin_asn != null && contains(try([for o in jsondecode(a.custom_fields["origins"]) : o.asn], []), var.origin_asn)
+  ]
 }
