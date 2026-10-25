@@ -1,51 +1,48 @@
 ---
-dns_resolver: "{{ netbox_site.resolvers[inventory_hostname] }}"
+dns_resolver: "{{ netbox_site.dns.servers[inventory_hostname] }}"
+# Zones replicate across every site's servers
+dns_resolver_all: >-
+  {{ netbox_sites.values() | map(attribute='dns') | map(attribute='servers')
+     | map('dict2items') | flatten | items2dict }}
 dns_resolver_primary: >-
-  {{ netbox_site.resolvers.values() | selectattr('primary') | first }}
+  {{ dns_resolver_all.values() | selectattr('primary') | first }}
+dns_resolver_peers: >-
+  {{ dns_resolver_all | dict2items | rejectattr('key', 'eq', inventory_hostname)
+     | map(attribute='value') | list }}
+dns_resolver_vlan: "{{ netbox_site.vlans[dns_resolver.vlan] }}"
 
-frr_bgp_local_asn: "{{ netbox_site.pools.dns.speaker_asn }}"
+frr_bgp_local_asn: "{{ netbox_site.dns.asn }}"
 frr_bgp_peer_asn: "{{ netbox_site.router_asn }}"
-frr_bgp_community: "{{ netbox_site.pools.dns.community }}"
-frr_bgp_peer_address: "{{ netbox_site.vlans[dns_resolver.vlan].gateway_ipv4 }}"
+frr_bgp_peer_address: "{{ dns_resolver_vlan.gateway_ipv4 }}"
+frr_bgp_gateways: "{{ [dns_resolver_vlan.gateway_ipv4, dns_resolver_vlan.gateway_ipv6] | select | list }}"
 
-frr_bgp_service_addresses: ["{{ dns_resolver.ipv4 }}", "{{ dns_resolver.ipv6 }}"]
-
-dns_resolver_siblings: >-
-  {{ netbox_site.resolvers | dict2items | rejectattr('key', 'eq', inventory_hostname)
-     | map(attribute='value') | selectattr('vlan', 'eq', dns_resolver.vlan) | list }}
-frr_bgp_siblings: "{{ dns_resolver_siblings | map(attribute='lan_ipv6') | list }}"
-frr_bgp_sibling_service_addresses: >-
-  {{ dns_resolver_siblings | map(attribute='ipv4') | list
-   + dns_resolver_siblings | map(attribute='ipv6') | list }}
-frr_bgp_anycast_addresses: ["{{ netbox_site.anycast.ipv4 }}", "{{ netbox_site.anycast.ipv6 }}"]
+frr_bgp_service_addresses: "{{ [dns_resolver.ipv4, dns_resolver.ipv6] | select | list }}"
+frr_bgp_anycast_addresses: >-
+  {{ [netbox_site.dns.recursor.ipv4, netbox_site.dns.recursor.ipv6] | select | list }}
 frr_bgp_anycast_service: dnsdist.service
 frr_bgp_anycast_needs: [pdns-recursor.service]
 
-powerdns_resolver_anycast_v4: "{{ netbox_site.anycast.ipv4 }}"
-powerdns_resolver_anycast_v6: "{{ netbox_site.anycast.ipv6 }}"
+powerdns_resolver_anycast_v4: "{{ netbox_site.dns.recursor.ipv4 }}"
+powerdns_resolver_anycast_v6: "{{ netbox_site.dns.recursor.ipv6 }}"
 powerdns_resolver_service_v4: "{{ dns_resolver.ipv4 }}"
 powerdns_resolver_service_v6: "{{ dns_resolver.ipv6 }}"
 powerdns_resolver_gua_prefix: "{{ netbox_site.gua_prefix }}"
 
-# Peers are reached at their service addresses, which the router advertises back to us
 powerdns_resolver_peer_addresses: >-
-  {{ netbox_site.resolvers | dict2items | rejectattr('key', 'eq', inventory_hostname)
-     | map(attribute='value') | map(attribute='ipv4') | list
-   + netbox_site.resolvers | dict2items | rejectattr('key', 'eq', inventory_hostname)
-     | map(attribute='value') | map(attribute='ipv6') | list }}
+  {{ dns_resolver_peers | map(attribute='ipv4') | select | list
+   + dns_resolver_peers | map(attribute='ipv6') | select | list }}
+powerdns_resolver_primary_addresses: "{{ [dns_resolver_primary.ipv4, dns_resolver_primary.ipv6] | select | list }}"
 
 powerdns_resolver_role: "{{ 'primary' if dns_resolver.primary else 'secondary' }}"
 
-powerdns_resolver_api_allow_from: >-
-  {{ netbox_site.vlans.values() | selectattr('tags', 'contains', 'dns-api') | map(attribute='ipv4') | list
-   + netbox_site.vlans.values() | selectattr('tags', 'contains', 'dns-api') | map(attribute='ipv6') | select | list
-   + [netbox_site.pools.get('kubernetes-pods', {}).get('ipv4'),
-      netbox_site.pools.get('kubernetes-pods', {}).get('ipv6')] | select | list }}
+dns_resolver_api_sources: "{{ netbox_site.services[inventory_hostname]['PowerDNS API'].sources }}"
+powerdns_resolver_api_allow_from: "{{ dns_resolver_api_sources.ipv4 + dns_resolver_api_sources.ipv6 }}"
 
 powerdns_resolver_api_key: "{{ powerdns_api_key }}"
-powerdns_resolver_cloudflare_api_token: "{{ cloudflare_api_token }}"
 powerdns_resolver_primary_api_url: >-
-  http://[{{ dns_resolver_primary.ipv6 }}]:8081/api/v1/servers/localhost
+  {{ 'http://[%s]:8081/api/v1/servers/localhost' % dns_resolver_primary.ipv6
+     if dns_resolver_primary.ipv6 else
+     'http://%s:8081/api/v1/servers/localhost' % dns_resolver_primary.ipv4 }}
 
 powerdns_resolver_zones: "{{ netbox_zones }}"
 powerdns_resolver_sites: "{{ netbox_sites }}"

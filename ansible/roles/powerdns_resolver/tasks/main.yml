@@ -17,11 +17,15 @@
 - name: Zones and records
   ansible.builtin.import_tasks: zones.yml
 
-- name: Compute the peer's notify addresses
+- name: Write the peers' and the primary's addresses with their port
   ansible.builtin.set_fact:
     powerdns_resolver_peer_notify_addresses: >-
       {{ (powerdns_resolver_peer_addresses | reject('search', ':') | map('regex_replace', '$', ':53') | list)
          + (powerdns_resolver_peer_addresses | select('search', ':') | map('regex_replace', '^', '[')
+            | map('regex_replace', '$', ']:53') | list) }}
+    powerdns_resolver_primary_targets: >-
+      {{ (powerdns_resolver_primary_addresses | reject('search', ':') | map('regex_replace', '$', ':53') | list)
+         + (powerdns_resolver_primary_addresses | select('search', ':') | map('regex_replace', '^', '[')
             | map('regex_replace', '$', ']:53') | list) }}
 
 # The API listens on `::`, where an IPv4 client arrives as ::ffff:a.b.c.d - and PowerDNS
@@ -48,7 +52,7 @@
              'allow-axfr-ips': powerdns_resolver_peer_addresses | join(',')}
             if powerdns_resolver_role == 'primary' else
             {'secondary': true, 'webserver': false, 'api': false,
-             'allow-notify-from': powerdns_resolver_peer_addresses | join(',')}
+             'allow-notify-from': powerdns_resolver_primary_addresses | join(',')}
           )
         | combine({'log-dns-queries': true, 'loglevel': 5} if powerdns_resolver_query_logging | bool else {})
       }}
@@ -66,7 +70,7 @@
   ansible.builtin.set_fact:
     powerdns_resolver_secondary_zone_commands: >-
       {{ (powerdns_resolver_secondary_zone_commands | default([]))
-         + [{'args': 'create-secondary-zone ' ~ item.name ~ ' ' ~ (powerdns_resolver_peer_notify_addresses | join(' ')),
+         + [{'args': 'create-secondary-zone ' ~ item.name ~ ' ' ~ (powerdns_resolver_primary_targets | join(' ')),
              'unless': 'list-zone ' ~ item.name}] }}
   loop: "{{ powerdns_resolver_zones }}"
   loop_control:
@@ -90,11 +94,28 @@
     pdns_provision_pdnsutils: "{{ powerdns_resolver_secondary_zone_commands | default([]) }}"
     pdns_provision_cryptokeys: "{{ (powerdns_resolver_provision_cryptokeys | default([])) if powerdns_resolver_role == 'primary' else [] }}"
 
+# create-secondary-zone only runs while a zone doesn't exist, so a primary that moves never
+# reaches an existing one. pdnsutil can't say whether this changed anything.
+- name: Point each secondary zone at the primary's current addresses
+  ansible.builtin.command:
+    argv: "{{ ['pdnsutil', 'change-secondary-zone-primary', item.name] + powerdns_resolver_primary_targets }}"
+  loop: "{{ powerdns_resolver_zones }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  when: powerdns_resolver_role == 'secondary'
+
+- name: Fetch each secondary zone from it now, rather than at the next refresh
+  ansible.builtin.command:
+    argv: [pdns_control, retrieve, "{{ item.name }}"]
+  loop: "{{ powerdns_resolver_zones }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  when: powerdns_resolver_role == 'secondary'
+
 - name: DNSSEC trust anchors
   ansible.builtin.import_tasks: anchors.yml
-
-- name: DNSSEC delegations
-  ansible.builtin.import_tasks: delegation.yml
 
 - name: Configure the recursor
   ansible.builtin.include_role:
@@ -156,8 +177,9 @@
       {% if not powerdns_resolver_cross_site_ipv6 %}
       {%   for owner in powerdns_resolver_sites.values() if owner.forward_zone %}
       {%     set others = powerdns_resolver_sites.values() | rejectattr('slug', 'eq', owner.slug)
-                          | map(attribute='vlans') | map('dict2items') | flatten | map(attribute='value') %}
-      {%     set clients = (others | map(attribute='ipv4') | list) + (others | map(attribute='ipv6') | select | list) %}
+                          | map(attribute='vlans') | map('dict2items') | flatten | map(attribute='value') | list %}
+      {#     A VLAN-only network has no IPv4, and some none of IPv6 #}
+      {%     set clients = (others | map(attribute='ipv4') | select | list) + (others | map(attribute='ipv6') | select | list) %}
       {%     set zone = (powerdns_resolver_zones | selectattr('name', 'eq', owner.forward_zone) | first) %}
       {%     if clients %}
       -- {{ owner.slug }}'s IPv6 addresses aren't reachable from another site

@@ -3,15 +3,20 @@
 frr_bgp_local_asn: ~
 frr_bgp_peer_asn: ~
 frr_bgp_peer_address: ~  # the router's address on this VLAN
-frr_bgp_community: ~
+# The router's addresses on this VLAN, which replies from routed addresses leave through
+frr_bgp_gateways: []
 
+# Instance addresses, on lo
 frr_bgp_service_addresses: []
+
+# Anycast service addresses, on anycast0
 frr_bgp_anycast_addresses: []
 frr_bgp_anycast_service: ~
 frr_bgp_anycast_needs: []
 
-# Other members of this ASN for on-link routing
-frr_bgp_siblings: []
-frr_bgp_sibling_service_addresses: []
+# The netplan ID of the uplink, as cloud-init and the install seeds name it
+frr_bgp_uplink: primary
+frr_bgp_uplink_match: "e*"
+frr_bgp_reply_table: 200
 
 frr_bgp_router_id: "{{ frr_bgp_service_addresses | reject('search', ':') | first | default('') }}"

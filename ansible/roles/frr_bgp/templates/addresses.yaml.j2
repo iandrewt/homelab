@@ -1,8 +1,9 @@
 # Managed by Ansible (frr_bgp role).
+{% set routed = frr_bgp_service_addresses + frr_bgp_anycast_addresses %}
 network:
   version: 2
-{% if frr_bgp_service_addresses %}
   ethernets:
+{% if frr_bgp_service_addresses %}
     lo:
       match:
         name: lo
@@ -11,6 +12,23 @@ network:
         - {{ address }}/{{ 128 if ':' in address else 32 }}
 {% endfor %}
 {% endif %}
+    # Answered on-link, a reply leaves the router's firewall seeing half a flow.
+    # netplan appends these to cloud-init's definition of the same interface.
+    {{ frr_bgp_uplink }}:
+      match:
+        name: "{{ frr_bgp_uplink_match }}"
+      routes:
+{% for gateway in frr_bgp_gateways %}
+        - to: default
+          via: {{ gateway }}
+          table: {{ frr_bgp_reply_table }}
+          on-link: true
+{% endfor %}
+      routing-policy:
+{% for address in routed %}
+        - from: {{ address }}/{{ 128 if ':' in address else 32 }}
+          table: {{ frr_bgp_reply_table }}
+{% endfor %}
 {% if frr_bgp_anycast_addresses %}
   dummy-devices:
     anycast0:

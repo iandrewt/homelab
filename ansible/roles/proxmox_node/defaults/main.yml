@@ -1,6 +1,9 @@
 ---
 proxmox_node_cluster: "{{ cluster }}"
-proxmox_node_link0: "{{ primary_ip6 }}"
+# Corosync's: the VLAN NetBox puts in the cluster
+proxmox_node_corosync: >-
+  {{ netbox_site.vlans.values() | selectattr('cluster', 'eq', proxmox_node_cluster) | first }}
+proxmox_node_link0: "{{ interfaces | address_in(proxmox_node_corosync.ipv6) }}"
 
 # Every VNet at the site but those the node holds an interface for
 proxmox_node_unjoined_vnets: >-
