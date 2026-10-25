@@ -1,15 +1,38 @@
 locals {
-  integrations = merge([
-    for tenant, grant in local.cluster.tenants : {
-      for name, integration in try(grant.integrations, {}) :
-      "${tenant}-${name}" => {
-        tenant  = tenant
-        name    = name
-        comment = integration.comment
-        acls    = integration.acls
+  # A Kubernetes cluster on this one asks for its integrations in its own file, on its own pool
+  kubernetes = {
+    for f in fileset("${path.module}/../../../kubernetes/clusters", "*.yaml") :
+    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../../../kubernetes/clusters/${f}"))
+    if contains(try(yamldecode(file("${path.module}/../../../kubernetes/clusters/${f}")).proxmox, []), terraform.workspace)
+  }
+
+  integrations = merge(
+    merge([
+      for tenant, grant in local.cluster.tenants : {
+        for name, integration in try(grant.integrations, {}) :
+        "${tenant}-${name}" => {
+          tenant  = tenant
+          name    = name
+          comment = integration.comment
+          acls    = integration.acls
+        }
       }
-    }
-  ]...)
+    ]...),
+    merge([
+      for k8s, c in local.kubernetes : {
+        for name, integration in try(c.proxmox_integrations, {}) :
+        "platform-${k8s}-${name}" => {
+          tenant  = "platform"
+          name    = "${k8s}-${name}"
+          comment = integration.comment
+          acls = merge(
+            { "/pool/platform/${k8s}" = integration.pool },
+            { for storage, privileges in try(integration.storages, {}) : "/storage/${storage}" => privileges },
+          )
+        }
+      }
+    ]...),
+  )
 
   # A Proxmox ACL grants one role on one path, so privileges that differ per path are
   # different roles. Integrations declare their own, unlike tenants, which all want the
@@ -28,7 +51,7 @@ locals {
     for tenant, grant in local.cluster.tenants : "tenant-${tenant}" => {
       tenant     = tenant
       token_name = "tofu"
-      comment    = grant.comment
+      comment    = module.tenancy.teams[tenant].comment
 
       acls = concat([
         {
@@ -115,14 +138,14 @@ resource "proxmox_virtual_environment_role" "integration" {
 data "onepassword_vault" "tenant" {
   for_each = local.cluster.tenants
 
-  name = title(each.key)
+  name = module.tenancy.teams[each.key].title
 }
 
 resource "proxmox_virtual_environment_pool" "tenant" {
   for_each = local.cluster.tenants
 
   pool_id = each.key
-  comment = each.value.comment
+  comment = module.tenancy.teams[each.key].comment
 }
 
 resource "proxmox_virtual_environment_user" "identity" {

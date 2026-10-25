@@ -10,6 +10,10 @@ terraform {
       source  = "1Password/onepassword"
       version = "~> 3.3"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.10"
+    }
   }
 
   backend "s3" {
@@ -50,6 +54,13 @@ locals {
   cluster = yamldecode(file("${path.module}/../../clusters/${terraform.workspace}.yaml"))
 }
 
+module "tenancy" {
+  source = "../../../../modules/tenancy"
+}
+
+# Reads only: the groups and this cluster's app, which platform/entra makes
+provider "azuread" {}
+
 provider "onepassword" {}
 
 data "onepassword_vault" "this" {
@@ -63,6 +74,7 @@ ephemeral "onepassword_item" "token" {
 
 provider "proxmox" {
   endpoint  = local.cluster.endpoint
+  insecure  = try(local.cluster.insecure, false)
   api_token = ephemeral.onepassword_item.token.password
 
   ssh {

@@ -60,9 +60,12 @@ resource "aws_kms_alias" "state" {
   target_key_id = aws_kms_key.state.key_id
 }
 
+module "tenancy" {
+  source = "../../../modules/tenancy"
+}
+
 locals {
-  # A team owns state once it has a directory in tofu/
-  teams = toset([for f in fileset("${path.module}/../../..", "**/tofu.tf") : split("/", f)[0]])
+  teams = toset(keys(module.tenancy.teams))
 }
 
 # One role per team, and one policy for them all: the role's own `team` tag is what scopes

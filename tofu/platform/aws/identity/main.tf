@@ -1,12 +1,14 @@
 data "aws_ssoadmin_instances" "this" {}
 
+module "tenancy" {
+  source = "../../../modules/tenancy"
+}
+
 locals {
   instance_arn      = one(data.aws_ssoadmin_instances.this.arns)
   identity_store_id = one(data.aws_ssoadmin_instances.this.identity_store_ids)
 
-  # A team owns state once it has a directory in tofu/; its Entra group is the same name,
-  # capitalised
-  state_teams = toset([for f in fileset("${path.module}/../../..", "**/tofu.tf") : title(split("/", f)[0])])
+  state_teams = toset([for team in module.tenancy.teams : team.title])
 
   permission_sets = {
     Administrator = { description = "Administers an account", managed = ["AdministratorAccess"] }
@@ -38,9 +40,9 @@ locals {
   )
 }
 
-# Entra's, synced by SCIM
+# Entra's, synced by SCIM: every group platform/entra makes, whose members it provisions
 data "aws_identitystore_group" "this" {
-  for_each = toset(local.assignments[*].group)
+  for_each = module.tenancy.groups
 
   identity_store_id = local.identity_store_id
 

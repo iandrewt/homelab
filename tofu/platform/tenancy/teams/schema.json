@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/iandrewt/homelab/tofu/platform/tenancy/teams/schema.json",
+  "title": "A team",
+  "description": "A team, named for the file: its Entra group, 1Password vault and state role.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "title",
+    "comment"
+  ],
+  "properties": {
+    "title": {
+      "description": "Its name in Title Case: the Entra group's display name and the 1Password vault's.",
+      "type": "string",
+      "pattern": "^[A-Z][A-Za-z0-9 ]*$"
+    },
+    "comment": {
+      "description": "What the team is for, carried into every platform's description of it.",
+      "type": "string"
+    }
+  }
+}

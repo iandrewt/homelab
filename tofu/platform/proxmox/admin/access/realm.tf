@@ -1,48 +1,65 @@
-locals {
-  oidc_realms = try({ (local.cluster.oidc.realm) = local.cluster.oidc }, {})
+data "azuread_client_config" "this" {}
 
-  # The app roles a user is assigned in Entra, which Proxmox suffixes with the realm. Each
-  # tenant's team gets what its tofu identity has.
-  oidc_groups = merge([
-    for realm in keys(local.oidc_realms) : merge(
-      {
-        "administrator-${realm}" = [{ path = "/", role_id = "Administrator" }]
-        "security-${realm}"      = [{ path = "/", role_id = "PVEAuditor" }]
-      },
-      { for tenant in keys(local.cluster.tenants) : "${tenant}-${realm}" => local.tenant_identities["tenant-${tenant}"].acls },
-    )
-  ]...)
+# platform/entra/apps's
+data "azuread_application" "this" {
+  display_name = "Proxmox ${terraform.workspace}"
+}
+
+locals {
+  realm = "entra"
+
+  # A tenant's team gets what its tofu identity has
+  oidc_grants = merge(
+    {
+      Administrators = [{ path = "/", role_id = "Administrator" }]
+      Security       = [{ path = "/", role_id = "PVEAuditor" }]
+    },
+    { for tenant in keys(local.cluster.tenants) : module.tenancy.teams[tenant].title => local.tenant_identities["tenant-${tenant}"].acls },
+  )
+}
+
+data "azuread_group" "oidc" {
+  for_each = local.oidc_grants
+
+  display_name     = each.key
+  security_enabled = true
+}
+
+locals {
+  # Proxmox names a claimed group `<value>-<realm>`, and Entra Free's values are object IDs
+  oidc_groups = { for name, group in data.azuread_group.oidc : name => "${group.object_id}-${local.realm}" }
 
   oidc_group_acls = merge([
-    for group, acls in local.oidc_groups : {
-      for acl in acls : "${group}|${acl.path}|${acl.role_id}" => merge(acl, { group = group })
+    for name, acls in local.oidc_grants : {
+      for acl in acls : "${name}|${acl.path}|${acl.role_id}" => merge(acl, { group = name })
     }
   ]...)
 }
 
 # No client key: Proxmox always uses PKCE, so Entra registers it as a public client
 resource "proxmox_realm_openid" "this" {
-  for_each = local.oidc_realms
+  realm      = local.realm
+  issuer_url = "https://login.microsoftonline.com/${data.azuread_client_config.this.tenant_id}/v2.0"
+  client_id  = data.azuread_application.this.client_id
 
-  realm      = each.key
-  issuer_url = each.value.issuer_url
-  client_id  = each.value.client_id
-
-  username_claim = try(each.value.username_claim, "username")
+  # Proxmox's name for preferred_username, so a user is <upn>@entra
+  username_claim = "username"
   query_userinfo = false
-  comment        = each.value.comment
+  comment        = "Entra ID"
 
-  groups_claim     = "roles"
+  groups_claim     = "groups"
   groups_overwrite = true
 
   autocreate = true
   default    = false
 }
 
+# A group nothing grants has no Proxmox group, so groups-overwrite drops it at sign-in
 resource "proxmox_virtual_environment_group" "oidc" {
   for_each = local.oidc_groups
 
-  group_id = each.key
+  group_id = each.value
+  comment  = each.key
 }
 
 resource "proxmox_acl" "oidc" {
