@@ -1,6 +1,6 @@
-# NetBox's internal view to each site's primary. Run through `homelab dns plan` and
-# `homelab dns apply`, which add a PowerDNS target per site - its resolver tagged
-# `dns-primary` - and fill in the env/ values from 1Password.
+# NetBox's internal view to the one primary, and its public view to Cloudflare and Route53.
+# Run through `homelab dns plan` and `homelab dns apply`, which add the primary as a target
+# and as the source of each delegation's DS, and fill in the env/ values.
 manager:
   enable_checksum: true
   plan_outputs:
@@ -15,7 +15,39 @@ providers:
     view: _default_
     make_absolute: true
     ns_ttl_mode: record
+  netbox-public:
+    class: octodns_netbox_dns.NetBoxDNSProvider
+    url: env/NETBOX_URL
+    token: env/NETBOX_TOKEN
+    view: public
+    make_absolute: true
+    ns_ttl_mode: record
+  cloudflare:
+    class: octodns_cloudflare.CloudflareProvider
+    token: env/CLOUDFLARE_TOKEN
+    pagerules: false
+  route53:
+    class: octodns_route53.Route53Provider
+    profile: homelab-network
+
+processors:
+  ownership:
+    class: octodns.processor.ownership.OwnershipProcessor
+  no-root-ns:
+    class: octodns.processor.filter.IgnoreRootNsFilter
 
 zones:
   "*":
     sources: [netbox]
+  titmuss.house.:
+    sources: [netbox-public]
+    processors: [no-root-ns]
+    targets: [cloudflare]
+  titmuss.zone.:
+    sources: [netbox-public, delegations]
+    processors: [no-root-ns]
+    targets: [cloudflare]
+  titmuss.au.:
+    sources: [netbox-public]
+    processors: [no-root-ns, ownership]
+    targets: [route53]

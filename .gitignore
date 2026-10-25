@@ -61,3 +61,6 @@ ansible/roles/DEBIAN13-CIS/
 
 # ansible-lint / ansible-galaxy scratch
 .ansible/
+
+# Holds the site's public prefix, and is regenerated from NetBox whenever it's pasted in
+unifi/generated/

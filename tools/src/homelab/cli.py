@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import bootstrap, dns, netbox
+from . import bootstrap, dns, fleet, netbox
 from .bootstrap.shell import BootstrapError
 from .model import load
 from .render import frr, seed
@@ -43,6 +43,7 @@ def build_parser() -> argparse.ArgumentParser:
     network_config.set_defaults(run=_network_config)
 
     dns.register(subparsers)
+    fleet.register(subparsers)
 
     boot = subparsers.add_parser(
         "bootstrap", help="build install media", description="Build install media."
@@ -65,7 +66,7 @@ def _generate(args) -> int:
     rendered = {
         repo.unifi / f"{site['slug']}-frr.conf": frr.frr_config(site)
         for site in model["sites"].values()
-        if site["router_asn"] and site["pools"]
+        if site["router_asn"] and site["speakers"]
     }
     changed = [p for p, body in sorted(rendered.items()) if not p.exists() or p.read_text() != body]
     stale = sorted(set(repo.unifi.glob("*-frr.conf")) - set(rendered))

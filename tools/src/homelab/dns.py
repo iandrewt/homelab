@@ -1,4 +1,4 @@
-"""octoDNS, from NetBox's internal view to each site's primary.
+"""octoDNS: NetBox's internal view to the one primary, its public view to Cloudflare and Route53.
 
 `plan` prints the changes and a checksum; `apply` takes that checksum and applies only if
 the plan still matches it, so what reaches PowerDNS is what was reviewed.
@@ -16,10 +16,16 @@ from pathlib import Path
 import yaml
 
 from . import netbox, secrets
-from .model import load, unzoned
+from .model import PRIMARY_TAG, load, unzoned
 from .repo import Repo
 
 POWERDNS = "octodns_powerdns.PowerDnsProvider"
+DELEGATIONS = "homelab.dns_sources.PowerDnsDelegations"
+CLOUDFLARE_TOKEN_REF = "op://Network/Cloudflare API Token - octoDNS/credential"
+
+
+class DnsError(Exception):
+    pass
 
 
 def register(subparsers) -> None:
@@ -59,7 +65,11 @@ def _sync(*flags: str) -> int:
     for problem in unzoned(model):
         print(f"UNZONED: {problem}", file=sys.stderr)
 
-    config = _config(model)
+    try:
+        config = _config(model)
+    except DnsError as bad:
+        print(f"FAIL: {bad}", file=sys.stderr)
+        return 1
     env = _secrets(config)
     zones = {f"{name}." for name in model["zones"]}
 
@@ -82,24 +92,46 @@ def _sync(*flags: str) -> int:
 
 
 def _config(model: dict) -> dict:
-    """The committed config, plus a target per site: the primary NetBox tags, by the name
-    of its service address."""
+    """The committed config, plus the one primary NetBox tags, by its authoritative address: the
+    internal zones' target, and where the delegations' DS come from. Each internal zone
+    octoDNS writes is listed, and one holding another's delegation publishes its DS."""
     config = yaml.safe_load(Repo.discover().octodns_config.read_text())
+    primaries = [
+        (slug, server)
+        for slug, site in sorted(model["sites"].items())
+        for server in site["dns"]["servers"].values()
+        if server["primary"]
+    ]
+    if len(primaries) > 1:
+        # Every resolver would replicate from whichever came first
+        raise DnsError(f"{len(primaries)} servers are tagged {PRIMARY_TAG}; zones have one primary")
     targets = []
-    for slug, site in sorted(model["sites"].items()):
-        primary = next((r for r in site["resolvers"].values() if r["primary"]), None)
-        if primary is None:
-            continue
-        config["providers"][slug] = {
-            "class": POWERDNS,
-            "host": site["named"][primary["ipv6"]],
-            "api_key": f"env/{slug.upper()}_POWERDNS_API_KEY",
-            "enable_dynamic": False,
+    for slug, primary in primaries:
+        # By address: its name is served by the primary itself, so it's only right once synced
+        host = primary["ipv4"] or f"[{primary['ipv6']}]"
+        api_key = f"env/{slug.upper()}_POWERDNS_API_KEY"
+        config["providers"][slug] = {"class": POWERDNS, "host": host, "api_key": api_key,
+                                     "enable_dynamic": False}
+        config["providers"]["delegations"] = {
+            "class": DELEGATIONS, "url": f"http://{host}:8081/api/v1/servers/localhost", "api_key": api_key,
         }
         targets.append(slug)
-    for zone in config["zones"].values():
-        zone["targets"] = targets
+    # By name rather than `*`: a zone its owner writes over RFC 2136 would lose every record
+    template = config["zones"].pop("*")
+    for name, zone in sorted(model["zones"].items()):
+        if not zone["octodns"]:
+            continue
+        sources = template["sources"]
+        if any(_parent(other, model["zones"]) == name for other in model["zones"]):
+            sources = [*sources, "delegations"]
+        config["zones"][f"{name}."] = {**template, "sources": sources, "targets": targets}
     return config
+
+
+def _parent(name: str, zones) -> str | None:
+    """The nearest zone enclosing this one, which holds its delegation."""
+    enclosing = [z for z in zones if name.endswith(f".{z}")]
+    return max(enclosing, key=len, default=None)
 
 
 def _primaries(config: dict) -> dict[str, dict]:
@@ -118,7 +150,8 @@ def _secrets(config: dict) -> dict[str, str]:
     """The config's env/ values, named as the config names them."""
     source = config["providers"]["netbox"]
     url, token = netbox.connection()
-    env = {_env_name(source["url"]): url, _env_name(source["token"]): token}
+    env = {_env_name(source["url"]): url, _env_name(source["token"]): token,
+           _env_name(config["providers"]["cloudflare"]["token"]): secrets.resolve_one(CLOUDFLARE_TOKEN_REF)}
     for site, provider in _primaries(config).items():
         env[_env_name(provider["api_key"])] = secrets.resolve_one(
             f"op://Network/PowerDNS API Key - {site}/credential"

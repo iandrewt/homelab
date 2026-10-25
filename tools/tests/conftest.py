@@ -1,7 +1,14 @@
+import zlib
+
 import pytest
 from homelab import netbox
 
 SITE = "one"
+OTHER = "two"
+SPOKE = "three"
+
+ROUTER_ONE, DNS_ONE, K8S_1 = 4210000000, 4210001000, 4210002000
+ROUTER_TWO, DNS_TWO = 4210100000, 4210101000
 
 
 def _site_ref(slug: str) -> dict:
@@ -12,18 +19,21 @@ def site(slug=SITE) -> dict:
     return {**_site_ref(slug), "custom_fields": {}}
 
 
-def vlan(vid, name, *, group=SITE, tags=()) -> dict:
+def vlan(vid, name, *, group=SITE, tags=(), vnet=None, zone=None) -> dict:
     return {
         "vid": vid,
         "name": name,
-        "custom_fields": {"vnet": name},
+        "custom_fields": {"vnet": vnet},
+        "role": zone and {"slug": zone},
         "status": {"value": "active"},
         "group": {"slug": group},
         "tags": [{"slug": t} for t in tags],
     }
 
 
-def prefix(cidr, *, site_slug=SITE, vid=None, role=None, status="active") -> dict:
+def prefix(cidr, *, site_slug=SITE, vid=None, role=None, status="active", origin=None,
+           tags=(), zone=None) -> dict:
+    fields = {"origin": {"asn": origin} if origin else None, "zone": zone and {"slug": zone}}
     return {
         "prefix": cidr,
         "status": {"value": status},
@@ -31,31 +41,44 @@ def prefix(cidr, *, site_slug=SITE, vid=None, role=None, status="active") -> dic
         "scope": _site_ref(site_slug) if site_slug else None,
         "vlan": {"vid": vid} if vid is not None else None,
         "role": {"slug": role} if role else None,
+        "tags": [{"slug": t} for t in tags],
+        "custom_fields": fields,
     }
 
 
-def address(addr, *, dns_name="", role=None, status="active", holder=None) -> dict:
+def segment(cidr, role, *, site_slug=SITE) -> dict:
+    return prefix(cidr, site_slug=site_slug, role=role, status="container", zone="workloads")
+
+
+def address(addr, *, dns_name="", role=None, status="active", holder=None, origins=()) -> dict:
     return {
         "address": addr,
         "dns_name": dns_name,
         "role": {"value": role} if role else None,
         "status": {"value": status},
-        "assigned_object": {"name": "lo", "device": {"name": holder}} if holder else None,
+        "assigned_object": {"name": "lo", "device": {"id": _id(holder), "name": holder}} if holder else None,
+        "custom_fields": {"origins": [{"asn": o} for o in origins]},
     }
 
 
-def asn(number, role, site_slug=SITE) -> dict:
-    return {"asn": number, "role": {"slug": role}, "sites": [_site_ref(site_slug)]}
+def asn(number, role, site_slug=SITE, *, name="", cluster=None) -> dict:
+    return {"asn": number, "role": {"slug": role}, "sites": [_site_ref(site_slug)],
+            "description": name, "custom_fields": {"cluster": cluster and {"name": cluster}}}
 
 
-def community(value, purpose) -> dict:
-    # The plugin's own `role` is an ID its UI never shows; the custom field is what's read.
-    return {"value": value, "role": None, "custom_fields": {"role": {"slug": purpose}}}
+def peer_group(name) -> dict:
+    return {"name": name, "extra_attributes": {"keepalive": 3, "holdtime": 9},
+            "export_policies": [{"name": "NOTHING"}]}
 
 
-def zone(name, view="_default_") -> dict:
+def session(asn, group, remote_prefix, *, site_slug=SITE, status="active") -> dict:
+    return {"site": _site_ref(site_slug), "status": {"value": status}, "peer_group": {"name": group},
+            "remote_prefix": {"prefix": remote_prefix}, "remote_as": {"asn": asn}, "max_prefixes": 1000}
+
+
+def zone(name, view="_default_", tags=()) -> dict:
     return {"name": name, "active": True, "default_ttl": 3600, "view": {"name": view},
-            "nameservers": [{"name": "ratatoskr-dns.one.test"}]}
+            "nameservers": [{"name": "ratatoskr-dns.one.test"}], "tags": [{"slug": t} for t in tags]}
 
 
 def dnssec_policy(name, *key_types, algorithm="ECDSAP256SHA256") -> dict:
@@ -75,9 +98,16 @@ def soa(zone_name, view="_default_") -> dict:
                   view=view)
 
 
-def device(name, role, site_slug=SITE, tags=(), role_name=None) -> dict:
+def _id(name: str) -> int:
+    return zlib.crc32(name.encode())
+
+
+def device(name, role, site_slug=SITE, tags=(), role_name=None, primary_ip6=None) -> dict:
     return {
+        "id": _id(name),
+        "device_type": {"model": "test"},
         "name": name,
+        "primary_ip6": primary_ip6 and {"address": primary_ip6},
         "role": {"slug": role, "name": role_name or role},
         "site": _site_ref(site_slug),
         "tags": [{"slug": t} for t in tags],
@@ -86,47 +116,97 @@ def device(name, role, site_slug=SITE, tags=(), role_name=None) -> dict:
 
 @pytest.fixture
 def snapshot() -> netbox.Snapshot:
-    """One site: two VLANs, one of them dual-stack, a router holding their gateways, and a
-    dns purpose carrying an anycast VIP and one resolver's service addresses, and a purpose
-    whose speaker can't tag its routes."""
+    """Two sites, each with its own DNS fleet, and a spoke with none; the recursor is one global address both
+    fleets originate. `one` also runs a Kubernetes cluster, with a pod block, a trusted
+    sub-pool, and an API address in a pool every cluster's API shares; it also has an
+    IPv6-only, VLAN-only network."""
     return netbox.Snapshot(
-        sites=[site()],
-        vlans=[vlan(10, "management"), vlan(110, "servers", tags=["bgp-listen"])],
+        sites=[site(), site(OTHER), site(SPOKE)],
+        vlans=[
+            vlan(10, "network"),
+            vlan(210, "san", vnet="san"),
+            vlan(300, "servers", tags=["dns-api"], vnet="servers"),
+            vlan(81, "k8s-1", vnet="k8s-1"),
+            vlan(300, "servers", group=OTHER),
+        ],
         prefixes=[
-            prefix("10.0.0.0/16", status="container"),
-            prefix("10.0.10.0/24", vid=10),
-            prefix("10.0.110.0/24", vid=110),
-            prefix("2001:db8:0:110::/64", vid=110),
-            prefix("10.0.200.0/27", role="dns"),
-            prefix("2001:db8::/64", role="dns"),
-            prefix("10.0.201.0/28", role="kubernetes-api"),
-            prefix("2001:db8:0:201::/64", role="kubernetes-api"),
+            # global, carried by every site
+            prefix("10.239.0.0/16", site_slug=None, role="global", status="container"),
+            segment("10.239.0.0/21", "global-services", site_slug=None),
+            prefix("10.239.0.0/26", site_slug=None, role="dns-recursor"),
+            prefix("2001:db8::/52", site_slug=None, role="global", status="container"),
+            segment("2001:db8::/56", "global-services", site_slug=None),
+            prefix("2001:db8::/64", site_slug=None, role="dns-recursor"),
+            # one
+            prefix("10.0.0.0/16", role="hub", status="container"),
+            prefix("10.0.0.64/26", vid=10),
+            prefix("10.0.8.0/24", role="kubernetes-nodes", status="container"),
+            prefix("2001:db8:1:1080::/60", role="kubernetes-nodes", status="container"),
+            prefix("10.0.8.0/27", vid=81),
+            prefix("10.0.30.0/24", vid=300),
+            prefix("2001:db8:1:1300::/64", vid=300),
+            prefix("2001:db8:1:1210::/64", vid=210),
+            segment("10.0.16.0/20", "site-services"),
+            segment("10.0.32.0/21", "home-services"),
+            segment("10.0.40.0/21", "home-instances"),
+            segment("10.0.128.0/17", "site-instances"),
+            prefix("10.0.16.128/27", role="kubernetes-api"),
+            prefix("10.0.40.0/28", role="dns-authoritative"),
+            prefix("2001:db8:1:3100::/64", role="dns-authoritative"),
+            prefix("10.0.128.0/21", role="pods", origin=K8S_1),
+            prefix("10.0.132.0/27", role="pods-storage", origin=K8S_1, tags=["proxmox-api"]),
+            # two
+            prefix("10.1.0.0/16", site_slug=OTHER, role="hub", status="container"),
+            prefix("10.1.30.0/24", site_slug=OTHER, vid=300),
+            segment("10.1.40.0/21", "home-instances", site_slug=OTHER),
+            prefix("10.1.40.0/28", site_slug=OTHER, role="dns-authoritative"),
         ],
         addresses=[
-            address("10.0.10.5/24", dns_name="hugin.one.test"),
-            address("10.0.200.1/27", dns_name="dns.one.test", role="anycast"),
-            address("2001:db8::53/64", dns_name="dns.one.test", role="anycast"),
-            address("10.0.200.2/27", dns_name="ratatoskr-dns.one.test", role="loopback",
+            address("10.239.0.53/26", dns_name="dns.one.test", role="anycast",
+                    origins=[DNS_ONE, DNS_TWO]),
+            address("2001:db8::53/64", dns_name="dns.one.test", role="anycast",
+                    origins=[DNS_ONE, DNS_TWO]),
+            address("10.0.16.128/27", dns_name="k8s-1.one.test", role="anycast", origins=[K8S_1]),
+            address("10.0.40.1/28", dns_name="ratatoskr-dns.one.test", role="loopback",
+                    holder="ratatoskr", origins=[DNS_ONE]),
+            address("2001:db8:1:3100::1/64", dns_name="ratatoskr-dns.one.test", role="loopback",
+                    holder="ratatoskr", origins=[DNS_ONE]),
+            address("10.0.30.9/24", dns_name="ratatoskr.one.test", status="dhcp",
                     holder="ratatoskr"),
-            address("2001:db8::2/64", dns_name="ratatoskr-dns.one.test", role="loopback",
+            address("2001:db8:1:1300::9/64", dns_name="ratatoskr.one.test", status="slaac",
                     holder="ratatoskr"),
-            address("10.0.110.9/24", dns_name="ratatoskr.one.test", status="dhcp",
-                    holder="ratatoskr"),
-            address("2001:db8:0:110::9/64", dns_name="ratatoskr.one.test", status="slaac",
-                    holder="ratatoskr"),
+            address("10.1.40.1/28", dns_name="munin-dns.two.test", role="loopback",
+                    holder="munin", origins=[DNS_TWO]),
+            address("10.1.30.9/24", holder="munin", status="dhcp"),
             address("192.0.2.9/24", dns_name="elsewhere.example"),
-            address("10.0.10.254/24", holder="udm"),
-            address("10.0.110.1/24", holder="udm"),
-            address("2001:db8:0:110::1/64", holder="udm"),
+            address("10.0.0.65/26", holder="udm"),
+            address("10.0.8.1/27", holder="udm"),
+            address("10.0.30.1/24", holder="udm"),
+            address("2001:db8:1:1300::1/64", holder="udm"),
+            address("10.1.30.1/24", holder="udm-two"),
         ],
-        asns=[asn(64512, "router"), asn(64513, "dns"), asn(64514, "kubernetes-api")],
-        communities=[community("64512:1", "dns")],
+        asns=[
+            asn(ROUTER_ONE, "router"), asn(DNS_ONE, "dns"),
+            asn(K8S_1, "kubernetes", name="k8s-1", cluster="k8s-1"),
+            asn(ROUTER_TWO, "router", OTHER), asn(DNS_TWO, "dns", OTHER),
+        ],
+        bgp_peer_groups=[peer_group("SERVICES"), peer_group("KUBERNETES-NODES"), peer_group("KUBERNETES-NODES-V6")],
+        bgp_sessions=[
+            session(DNS_ONE, "SERVICES", "10.0.30.0/24"),
+            session(K8S_1, "KUBERNETES-NODES", "10.0.8.0/24"),
+            session(K8S_1, "KUBERNETES-NODES-V6", "2001:db8:1:1080::/60"),
+            session(DNS_TWO, "SERVICES", "10.1.30.0/24", site_slug=OTHER),
+        ],
+        routing_policy_rules=[{"routing_policy": {"name": "NOTHING"}, "index": 10, "action": "deny"}],
         zones=[zone("one.test"), zone("10.in-addr.arpa"), zone("8.b.d.0.1.0.0.2.ip6.arpa")],
         records=[
             soa("one.test"), soa("10.in-addr.arpa"), soa("8.b.d.0.1.0.0.2.ip6.arpa"),
-            record("one.test", "dns.one.test.", "A", "10.0.200.1"),
+            record("one.test", "dns.one.test.", "A", "10.239.0.53"),
         ],
-        devices=[device("ratatoskr", "dns-resolver", tags=["dns-primary"]),
-                 device("udm", "router-firewall", role_name="Router Firewall")],
+        devices=[
+            device("ratatoskr", "dns-resolver", tags=["dns-primary"]),
+            device("udm", "router-firewall", role_name="Router Firewall"),
+            device("munin", "dns-resolver", OTHER),
+            device("udm-two", "router-firewall", OTHER, role_name="Router Firewall"),
+        ],
     )
-
