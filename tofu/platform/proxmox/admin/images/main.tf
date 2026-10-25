@@ -3,7 +3,7 @@ locals {
 }
 
 resource "proxmox_download_file" "this" {
-  for_each = local.cluster.images
+  for_each = local.library.images
 
   node_name    = local.fetch_node
   datastore_id = local.cluster.image_storage
@@ -11,8 +11,8 @@ resource "proxmox_download_file" "this" {
   url          = each.value.url
   file_name    = each.value.file_name
 
-  checksum           = try(each.value.checksum, null)
-  checksum_algorithm = try(each.value.checksum_algorithm, null)
+  checksum           = each.value.checksum
+  checksum_algorithm = each.value.checksum_algorithm
 }
 
 output "volume_ids" {

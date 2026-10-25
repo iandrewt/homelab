@@ -54,6 +54,7 @@ locals {
   cluster = yamldecode(file("${path.module}/../../clusters/${terraform.workspace}.yaml"))
 }
 
+# TODO: drop once an apply has destroyed the ACME user
 provider "aws" {
   region  = "ap-southeast-2"
   profile = "homelab-network"
@@ -71,5 +72,6 @@ data "onepassword_vault" "this" {
 
 provider "proxmox" {
   endpoint = local.cluster.endpoint
+  insecure = try(local.cluster.insecure, false)
   username = "root@pam"
 }

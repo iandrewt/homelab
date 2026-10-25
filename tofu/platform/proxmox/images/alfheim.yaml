@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=schema.json
+images:
+  debian-13-genericcloud:
+    url: https://cloud.debian.org/images/cloud/trixie/20261017-2634/debian-13-genericcloud-amd64-20261017-2634.qcow2
+    file_name: debian-13-genericcloud-amd64.qcow2
+    content_type: import
+    checksum: ec584ccabfef7120b4c4f7482adf0e615894d9292cedec446b64194b951ebe5dd97c336b5dcbae458333764b0edd516334506017f33c4f2020ef8d38b569ffe3
+    checksum_algorithm: sha512
+
+  # schematic includes qemu-guest-agent
+  talos-metal-secureboot:
+    url: https://factory.talos.dev/image/f171f129b1614a893bd440762f70c2ca4b98f439ca1823cf455d5874ef0da656/v1.14.2/metal-amd64-secureboot.iso
+    file_name: talos-metal-amd64-secureboot.iso
+    content_type: iso
+    checksum: c1300ace650b2512f9b14aea4f3736a018db478ff9aa3c559874bd09bbb3658e
+    checksum_algorithm: sha256

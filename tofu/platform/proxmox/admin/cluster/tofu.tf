@@ -59,10 +59,24 @@ provider "netbox" {
   api_token  = ephemeral.onepassword_item.netbox.credential
 }
 
+data "netbox_cluster" "this" {
+  name = terraform.workspace
+}
+
+data "netbox_devices" "nodes" {
+  filter {
+    name  = "cluster_id"
+    value = data.netbox_cluster.this.id
+  }
+}
+
 module "netbox" {
   source = "../../../../modules/netbox-site"
 
-  site_slug = local.cluster.site
+  site_slug  = local.cluster.site
+  trust_tags = ["proxmox-api"]
+  # The nodes' management network states who may manage them
+  destinations = { management = split("/", data.netbox_devices.nodes.devices[0].primary_ipv6)[0] }
 }
 
 provider "onepassword" {}
@@ -83,6 +97,7 @@ ephemeral "onepassword_item" "token" {
 
 provider "proxmox" {
   endpoint  = local.cluster.endpoint
+  insecure  = try(local.cluster.insecure, false)
   api_token = ephemeral.onepassword_item.token.password
 
   ssh {

@@ -46,8 +46,16 @@ terraform {
   }
 }
 
+# A workspace per site: every cluster there mounts the library, so one downloads it
 locals {
-  cluster = yamldecode(file("${path.module}/../../clusters/${terraform.workspace}.yaml"))
+  library = yamldecode(file("${path.module}/../../images/${terraform.workspace}.yaml"))
+
+  clusters = {
+    for f in fileset("${path.module}/../../clusters", "*.yaml") :
+    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../../clusters/${f}"))
+  }
+  fetch_cluster = sort([for name, c in local.clusters : name if c.site == terraform.workspace])[0]
+  cluster       = local.clusters[local.fetch_cluster]
 }
 
 provider "onepassword" {}
@@ -58,11 +66,12 @@ data "onepassword_vault" "this" {
 
 ephemeral "onepassword_item" "token" {
   vault = data.onepassword_vault.this.uuid
-  title = "Proxmox API Token - ${terraform.workspace} images"
+  title = "Proxmox API Token - ${local.fetch_cluster} images"
 }
 
 provider "proxmox" {
   endpoint  = local.cluster.endpoint
+  insecure  = try(local.cluster.insecure, false)
   api_token = ephemeral.onepassword_item.token.password
 
   ssh {

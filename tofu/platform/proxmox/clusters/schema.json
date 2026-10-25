@@ -13,14 +13,12 @@
     "ssh_username",
     "timezone",
     "mailto",
-    "firewall",
     "sdn",
     "storages",
     "guest_defaults",
     "backup",
     "nodes",
     "image_storage",
-    "images",
     "tenants",
     "mac_prefix"
   ],
@@ -31,7 +29,7 @@
       "pattern": "^[a-z][a-z0-9]{0,6}[a-z0-9]$"
     },
     "onepassword_vault": {
-      "description": "The team that runs the cluster: its tokens are written here, and `SSH Key - <vault>` is read from here. A tenant's go in the vault named for it.",
+      "description": "The running team's vault: its tokens go here, and `SSH Key - <vault>` comes from here.",
       "type": "string"
     },
     "onepassword_break_glass_vault": {
@@ -50,32 +48,6 @@
       "description": "root's email address, set by the installer.",
       "type": "string"
     },
-    "firewall": {
-      "description": "Datacenter firewall policy. INPUT and FORWARD default to DROP, so management_vlans is the only way in to 8006 and 22.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "management_vlans"
-      ],
-      "properties": {
-        "management_vlans": {
-          "description": "VLANs allowed to reach the GUI and SSH.",
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "string"
-          }
-        },
-        "api_vnets": {
-          "description": "VLANs, by their `vnet` in NetBox, allowed to reach the API but not SSH - where integrations holding Proxmox credentials of their own, like Proxmox CCM, run on the host network.",
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
     "sdn": {
       "description": "The SDN VLAN zone every VNet is in.",
       "type": "object",
@@ -92,34 +64,6 @@
         "mtu": {
           "type": "integer",
           "minimum": 1280
-        }
-      }
-    },
-    "oidc": {
-      "description": "OIDC realm, such as Entra.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "realm",
-        "issuer_url",
-        "client_id"
-      ],
-      "properties": {
-        "realm": {
-          "type": "string"
-        },
-        "issuer_url": {
-          "type": "string",
-          "format": "uri"
-        },
-        "client_id": {
-          "type": "string"
-        },
-        "username_claim": {
-          "type": "string"
-        },
-        "comment": {
-          "type": "string"
         }
       }
     },
@@ -173,60 +117,13 @@
         }
       }
     },
-    "images": {
-      "type": "object",
-      "additionalProperties": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "url",
-          "file_name"
-        ],
-        "properties": {
-          "url": {
-            "type": "string",
-            "format": "uri"
-          },
-          "file_name": {
-            "type": "string"
-          },
-          "content_type": {
-            "enum": [
-              "import",
-              "iso",
-              "vztmpl"
-            ]
-          },
-          "checksum": {
-            "type": "string"
-          },
-          "checksum_algorithm": {
-            "type": "string"
-          }
-        },
-        "dependentRequired": {
-          "checksum": [
-            "checksum_algorithm"
-          ],
-          "checksum_algorithm": [
-            "checksum"
-          ]
-        }
-      }
-    },
     "tenants": {
-      "description": "A team Platform grants a share of the cluster: a pool, a privsep token that makes its own workloads as pools under it, and the VNets it may join. Anything running inside a workload that needs the Proxmox API itself is an integration, and gets its own identity.",
+      "description": "Teams, from tofu/platform/tenancy/teams, granted a share: a pool, a token that makes its workloads as pools under it, and the VNets it may join.",
       "type": "object",
       "additionalProperties": {
         "type": "object",
         "additionalProperties": false,
-        "required": [
-          "comment"
-        ],
         "properties": {
-          "comment": {
-            "type": "string"
-          },
           "vnets": {
             "description": "SDN VNets its VMs may join, by each VLAN's `vnet` in NetBox.",
             "type": "array",
@@ -244,7 +141,7 @@
             }
           },
           "integrations": {
-            "description": "In-workload components needing their own Proxmox credentials, keyed by a short name. Each gets a user, a privsep token, and one role per ACL entry.",
+            "description": "Something inside a workload that needs Proxmox credentials of its own: a user, a privsep token, and a role per ACL path.",
             "type": "object",
             "additionalProperties": {
               "type": "object",
@@ -258,7 +155,7 @@
                   "type": "string"
                 },
                 "acls": {
-                  "description": "Privileges granted, keyed by ACL path. Nothing is granted implicitly, so the workload's own pool is listed like anything else. A /storage/<id> path must name a key of `storages`, a /pool/<id> a tenant or one of its workloads.",
+                  "description": "Privileges by ACL path. Nothing is implicit, the workload's own pool included.",
                   "type": "object",
                   "minProperties": 1,
                   "propertyNames": {
@@ -499,7 +396,7 @@
       }
     },
     "image_storage": {
-      "description": "Storage the image library lives on. Must be a key of `storages`.",
+      "description": "The storage holding the site's image library. A key of `storages`.",
       "type": "string"
     },
     "mac_prefix": {
@@ -511,6 +408,10 @@
       "description": "Proxmox API URL.",
       "type": "string",
       "format": "uri"
+    },
+    "insecure": {
+      "description": "Skip verifying the nodes' certificates: true until the private CA issues them.",
+      "type": "boolean"
     }
   }
 }

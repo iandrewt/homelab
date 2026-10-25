@@ -20,7 +20,7 @@ resource "proxmox_virtual_environment_firewall_ipset" "management" {
   comment = "Allowed to reach the GUI and SSH. Managed by OpenTofu."
 
   dynamic "cidr" {
-    for_each = flatten([for name in try(local.cluster.firewall.management_vlans, []) : module.netbox.vlans[name].subnets[*].cidr])
+    for_each = concat(module.netbox.audiences["management"].ipv6, module.netbox.audiences["management"].ipv4)
     content {
       name = cidr.value
     }
@@ -32,7 +32,7 @@ resource "proxmox_virtual_environment_firewall_ipset" "api" {
   comment = "Allowed to reach the API, not SSH. Managed by OpenTofu."
 
   dynamic "cidr" {
-    for_each = flatten([for v in values(module.netbox.vlans) : v.subnets[*].cidr if contains(try(local.cluster.firewall.api_vnets, []), v.vnet)])
+    for_each = module.netbox.trusted["proxmox-api"]
     content {
       name = cidr.value
     }

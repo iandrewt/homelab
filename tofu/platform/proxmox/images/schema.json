@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/iandrewt/homelab/tofu/platform/proxmox/images/schema.json",
+  "title": "A site's image library",
+  "description": "A site's image library, named for its slug, on storage every cluster there mounts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "images"
+  ],
+  "properties": {
+    "images": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "file_name",
+          "content_type",
+          "checksum",
+          "checksum_algorithm"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Pinned: a dated release, never a `latest`."
+          },
+          "file_name": {
+            "type": "string",
+            "description": "Stable across releases, since guests name the file."
+          },
+          "content_type": {
+            "enum": [
+              "import",
+              "iso",
+              "vztmpl"
+            ]
+          },
+          "checksum": {
+            "type": "string"
+          },
+          "checksum_algorithm": {
+            "enum": [
+              "md5",
+              "sha1",
+              "sha224",
+              "sha256",
+              "sha384",
+              "sha512"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

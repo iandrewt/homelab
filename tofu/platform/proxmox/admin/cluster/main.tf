@@ -54,7 +54,7 @@ resource "proxmox_sdn_vnet" "this" {
   zone          = proxmox_sdn_zone_vlan.this.id
   tag           = each.value.vid
   alias         = each.value.name
-  isolate_ports = each.value.isolated
+  isolate_ports = contains(each.value.tags, "isolate-ports")
 
   depends_on = [proxmox_sdn_applier.finalizer]
 }

@@ -1,0 +1,92 @@
+# yaml-language-server: $schema=schema.json
+site: alfheim
+endpoint: https://yggdrasil.alfheim.titmuss.zone:8006/
+# Self-signed until the private CA exists
+insecure: true
+
+onepassword_vault: Platform
+onepassword_break_glass_vault: Break-glass
+
+ssh_username: tofu
+timezone: Australia/Sydney
+mailto: pve@titmuss.house
+mac_prefix: "BC:24:11"
+sdn:
+  bridge: vmbr0
+  mtu: 9000
+
+storages:
+  local:
+    type: directory
+    path: /var/lib/vz
+    content: [snippets]
+
+  images:
+    type: nfs
+    server: mimir.alfheim.titmuss.zone
+    export: /mnt/tank/infra/proxmox
+    options: vers=4.2
+    content: [import, iso, vztmpl]
+
+  backups:
+    type: nfs
+    server: mimir.alfheim.titmuss.zone
+    export: /mnt/tank/backups/proxmox
+    options: vers=4.2
+    content: [backup]
+
+  tank:
+    type: zfspool
+    pool: tank
+    content: [images, rootdir]
+
+  nvme:
+    type: zfspool
+    pool: nvme
+    content: [images]
+
+guest_defaults:
+  disk_storage: tank
+  snippet_storage: local
+
+backup:
+  storage: backups
+  schedule: sat 02:00
+  retention:
+    keep-weekly: 4
+
+nodes:
+  yggdrasil:
+    pools:
+      tank:
+        raidlevel: raid10
+        devices:
+          - /dev/disk/by-id/wwn-0x5002538fc242310d
+          - /dev/disk/by-id/wwn-0x5002538fc24230c7
+          - /dev/disk/by-id/wwn-0x5002538fc2423113
+          - /dev/disk/by-id/wwn-0x5002538fc24230cb
+      nvme:
+        raidlevel: single
+        devices:
+          - /dev/disk/by-id/nvme-eui.0025385301b095c0
+
+image_storage: images
+
+mappings:
+  pci:
+    arc-a40:
+      comment: Intel Arc Pro A40
+      devices:
+        yggdrasil:
+          path: "0000:46:00.0"
+          id: "8086:56b1"
+          subsystem_id: "8086:1210"
+          iommu_group: 17
+
+tenants:
+  network:
+    vnets: [services]
+
+  platform:
+    vnets: [k8s1, san]
+    mappings: [arc-a40]
