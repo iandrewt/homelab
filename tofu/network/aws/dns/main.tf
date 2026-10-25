@@ -8,23 +8,6 @@ resource "aws_route53_zone" "titmuss_au" {
   }
 }
 
-# ACME challenge CNAMEs
-resource "aws_route53_zone" "acme" {
-  name = "acme.titmuss.au"
-
-  lifecycle {
-    prevent_destroy = true
-  }
-}
-
-resource "aws_route53_record" "acme_delegation" {
-  zone_id = aws_route53_zone.titmuss_au.zone_id
-  name    = aws_route53_zone.acme.name
-  type    = "NS"
-  ttl     = 3600
-  records = aws_route53_zone.acme.name_servers
-}
-
 resource "aws_route53domains_registered_domain" "titmuss_au" {
   domain_name = aws_route53_zone.titmuss_au.name
   auto_renew  = true
@@ -95,13 +78,7 @@ resource "aws_kms_alias" "dnssec" {
 }
 
 locals {
-  zones = merge(
-    {
-      titmuss_au = aws_route53_zone.titmuss_au
-      acme       = aws_route53_zone.acme
-    },
-    { for name, zone in aws_route53_zone.public_copy : replace(name, ".", "_") => zone },
-  )
+  zones = { titmuss_au = aws_route53_zone.titmuss_au }
 }
 
 resource "aws_route53_key_signing_key" "this" {
@@ -116,14 +93,4 @@ resource "aws_route53_hosted_zone_dnssec" "this" {
   for_each = local.zones
 
   hosted_zone_id = aws_route53_key_signing_key.this[each.key].hosted_zone_id
-}
-
-resource "aws_route53_record" "acme_ds" {
-  zone_id = aws_route53_zone.titmuss_au.zone_id
-  name    = aws_route53_zone.acme.name
-  type    = "DS"
-  ttl     = 3600
-  records = [aws_route53_key_signing_key.this["acme"].ds_record]
-
-  depends_on = [aws_route53_hosted_zone_dnssec.this]
 }

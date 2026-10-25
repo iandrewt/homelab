@@ -69,6 +69,7 @@ ephemeral "onepassword_item" "cloudflare" {
   title = "Cloudflare API Token - Tofu"
 }
 
+# TODO: drop Cloudflare and 1Password once an apply has destroyed the public copy's records
 provider "cloudflare" {
   api_token = ephemeral.onepassword_item.cloudflare.credential
 }
