@@ -1,0 +1,66 @@
+# Every pool NetBox gives the cluster but the default: a pod pool, which a pod joins by
+# annotation (ipam.cilium.io/ip-pool), or a LoadBalancer pool, which a Service joins by its
+# homelab.io/exposure label
+apiVersion: fluxcd.controlplane.io/v1
+kind: ResourceSet
+metadata:
+  name: pools
+  namespace: flux-system
+spec:
+  inputs: ${pools}
+  resourcesTemplate: |
+    <<- if eq inputs.kind "pod" >>
+    apiVersion: cilium.io/v2alpha1
+    kind: CiliumPodIPPool
+    metadata:
+      name: << inputs.name >>
+    spec:
+      ipv6:
+        cidrs:
+          - << inputs.ipv6 | quote >>
+        maskSize: 80
+      ipv4:
+        cidrs:
+          - << inputs.ipv4 | quote >>
+        maskSize: << inputs.mask4 >>
+    ---
+    apiVersion: cilium.io/v2
+    kind: CiliumBGPAdvertisement
+    metadata:
+      name: pods-<< inputs.name >>
+      labels:
+        advertise: talos-workload
+    spec:
+      advertisements:
+        - advertisementType: CiliumPodIPPool
+          selector:
+            matchLabels:
+              io.cilium.podippool.name: << inputs.name >>
+    <<- else >>
+    apiVersion: cilium.io/v2
+    kind: CiliumLoadBalancerIPPool
+    metadata:
+      name: << inputs.name >>
+    spec:
+      blocks:
+        - cidr: << inputs.ipv6 | quote >>
+        - cidr: << inputs.ipv4 | quote >>
+      serviceSelector:
+        matchLabels:
+          homelab.io/exposure: << inputs.exposure >>
+    ---
+    apiVersion: cilium.io/v2
+    kind: CiliumBGPAdvertisement
+    metadata:
+      name: << inputs.name >>
+      labels:
+        advertise: talos-workload
+    spec:
+      advertisements:
+        - advertisementType: Service
+          service:
+            addresses: [LoadBalancerIP]
+          selector:
+            matchLabels:
+              homelab.io/exposure: << inputs.exposure >>
+    <<- end >>

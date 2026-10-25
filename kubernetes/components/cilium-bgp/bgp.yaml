@@ -1,0 +1,37 @@
+# Cilium peers only with Talos's `workload` instance, over the node's veth pair; Talos's
+# `fabric` instance carries the routes on to the router. With the default pool, this is what
+# routes pods at all, so the bootstrap's.
+apiVersion: cilium.io/v2
+kind: CiliumBGPClusterConfig
+metadata:
+  name: talos-workload
+spec:
+  bgpInstances:
+    - name: talos-workload
+      localASN: ${cilium_asn}
+      peers:
+        - name: talos-workload
+          peerASN: ${talos_workload_asn}
+          peerAddress: ${talos_workload_address}
+          peerConfigRef:
+            name: talos-workload
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPPeerConfig
+metadata:
+  name: talos-workload
+spec:
+  transport:
+    peerPort: 179
+    sourceInterface: ${cilium_veth}
+  families:
+    - afi: ipv6
+      safi: unicast
+      advertisements:
+        matchLabels:
+          advertise: talos-workload
+    - afi: ipv4
+      safi: unicast
+      advertisements:
+        matchLabels:
+          advertise: talos-workload

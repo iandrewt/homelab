@@ -1,0 +1,33 @@
+# Canary: release candidates too
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: fleet
+  namespace: flux-system
+spec:
+  interval: 5m
+  url: oci://ghcr.io/iandrewt/homelab-fleet
+  ref:
+    semver: ">=0.0.0-0"
+  # While the repository is private
+  secretRef:
+    name: ghcr-pull
+  verify:
+    provider: cosign
+    matchOIDCIdentity:
+      - issuer: ^https://token\.actions\.githubusercontent\.com$
+        subject: ^https://github\.com/iandrewt/homelab/\.github/workflows/fleet\.yml@refs/(heads/main|tags/v.+)$
+---
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: cluster
+  namespace: flux-system
+spec:
+  interval: 1h
+  retryInterval: 1m
+  path: ./clusters/k8s-1
+  prune: true
+  sourceRef:
+    kind: OCIRepository
+    name: fleet

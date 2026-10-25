@@ -1,0 +1,29 @@
+# Every component, and what's true of it wherever it runs. The bootstrap installs those with a
+# `bootstrap` kind: the operator, the charts by `order`, then the manifests.
+apiVersion: fluxcd.controlplane.io/v1
+kind: ResourceSetInputProvider
+metadata:
+  name: fleet-catalog
+  namespace: flux-system
+spec:
+  type: Static
+  defaultValues:
+    components:
+      flux-operator:
+        bootstrap: { kind: operator }
+      proxmox-ccm:
+        bootstrap: { kind: chart, order: 1, adopt: proxmox-cloud-controller-manager }
+      cilium:
+        bootstrap: { kind: chart, order: 2, adopt: cilium }
+      cilium-bgp:
+        dependsOn: [cilium]
+        bootstrap: { kind: manifests }
+      pools:
+        dependsOn: [cilium-bgp]
+      host-firewall:
+        dependsOn: [cilium]
+      oidc-rbac: {}
+      intel-gpu:
+        dependsOn: [cilium]
+      descheduler:
+        dependsOn: [cilium]

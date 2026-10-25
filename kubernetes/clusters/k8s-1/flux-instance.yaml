@@ -1,0 +1,35 @@
+# Syncs only the ring; everything else, this included, comes from the artifact
+apiVersion: fluxcd.controlplane.io/v1
+kind: FluxInstance
+metadata:
+  name: flux
+  namespace: flux-system
+spec:
+  distribution:
+    version: "2.9.6"
+    registry: ghcr.io/fluxcd
+  components:
+    - source-controller
+    - kustomize-controller
+    - helm-controller
+    - notification-controller
+  cluster:
+    type: kubernetes
+    networkPolicy: true
+  sync:
+    kind: GitRepository
+    provider: github
+    url: https://github.com/iandrewt/homelab.git
+    ref: refs/heads/main
+    path: kubernetes/fleet/k8s-1
+    pullSecret: flux-github-app
+  # A component a cluster takes but whose pool NetBox doesn't give it fails, not substitutes ""
+  kustomize:
+    patches:
+      - target:
+          kind: Deployment
+          name: kustomize-controller
+        patch: |
+          - op: add
+            path: /spec/template/spec/containers/0/args/-
+            value: --feature-gates=StrictPostBuildSubstitutions=true

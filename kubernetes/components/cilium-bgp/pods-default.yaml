@@ -1,0 +1,29 @@
+# The pool a pod takes unless it names another. Cilium's own auto-created pool is never updated.
+apiVersion: cilium.io/v2alpha1
+kind: CiliumPodIPPool
+metadata:
+  name: default
+spec:
+  ipv6:
+    cidrs:
+      - ${pods_default_ipv6}
+    maskSize: 80
+  ipv4:
+    cidrs:
+      - ${pods_default_ipv4}
+    maskSize: 28
+  allowFirstIP: true
+  allowLastIP: true
+---
+apiVersion: cilium.io/v2
+kind: CiliumBGPAdvertisement
+metadata:
+  name: pods-default
+  labels:
+    advertise: talos-workload
+spec:
+  advertisements:
+    - advertisementType: CiliumPodIPPool
+      selector:
+        matchLabels:
+          io.cilium.podippool.name: default

@@ -1,0 +1,19 @@
+# What k8s-1 takes, from components/fleet/catalog.yaml
+apiVersion: fluxcd.controlplane.io/v1
+kind: ResourceSetInputProvider
+metadata:
+  name: cluster
+  namespace: flux-system
+spec:
+  type: Static
+  defaultValues:
+    components:
+      - flux-operator
+      - proxmox-ccm
+      - cilium
+      - cilium-bgp
+      - pools
+      - host-firewall
+      - oidc-rbac
+      - intel-gpu
+      - descheduler

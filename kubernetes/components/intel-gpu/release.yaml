@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: intel-gpu
+  labels:
+    pod-security.kubernetes.io/enforce: privileged
+    # xpumd watches every GPU on its node through an adminAccess claim
+    resource.kubernetes.io/admin-access: "true"
+---
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: intel-gpu-resource-driver
+  namespace: intel-gpu
+spec:
+  interval: 1h
+  url: oci://ghcr.io/intel/intel-gpu-resource-driver-chart
+  ref:
+    tag: 0.12.1
+    digest: sha256:1901047392b64f7c7913f6be61ce06a3428395e3c855476b32be02d3f89e01de
+  layerSelector:
+    mediaType: application/vnd.cncf.helm.chart.content.v1.tar+gzip
+    operation: copy
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: intel-gpu-resource-driver
+  namespace: intel-gpu
+spec:
+  interval: 1h
+  releaseName: intel-gpu-resource-driver
+  chartRef:
+    kind: OCIRepository
+    name: intel-gpu-resource-driver
+  values:
+    kubeletPlugin:
+      nodeSelector:
+        node.homelab.io/gpu: arc
+      # Only the VFIO DeviceClass needs the driver to rebind a GPU, and nothing here runs KubeVirt
+      manageBinding:
+        enabled: false
+
+    # Talos's containerd reads CDI specs from /run/cdi alone, and its /etc is read-only
+    cdi:
+      staticPath: /run/cdi
+      dynamicPath: /run/cdi
+
+    # Health monitoring, on by default, reads from xpumd
+    xpumdEnabled: true
+    xpumd:
+      nodeSelector:
+        node.homelab.io/gpu: arc
