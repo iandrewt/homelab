@@ -1,3 +1,4 @@
 # yaml-language-server: $schema=schema.json
 title: Platform
 comment: The Platform team.
+kind: infrastructure

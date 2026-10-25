@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import bootstrap, dns, fleet, netbox
+from . import bootstrap, dns, fleet, netbox, schema
 from .bootstrap.shell import BootstrapError
 from .model import load
 from .render import frr, seed
@@ -44,6 +44,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     dns.register(subparsers)
     fleet.register(subparsers)
+    schema.register(subparsers)
 
     boot = subparsers.add_parser(
         "bootstrap", help="build install media", description="Build install media."

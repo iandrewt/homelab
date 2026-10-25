@@ -1,3 +1,4 @@
 # yaml-language-server: $schema=schema.json
 title: Network
 comment: The Network team.
+kind: infrastructure

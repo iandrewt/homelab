@@ -1,0 +1,493 @@
+# NetBox's schema: what every consumer in this repo reads NetBox by, the same in anyone's
+# NetBox. `homelab netbox plan` shows what differs from it, and `apply` makes it so. Allocations
+# - prefixes, VLANs, addresses, sessions, devices - are NetBox's, and never here. Everything is
+# Network's unless it says otherwise; tenants come from tofu/platform/tenancy/teams/.
+owner_groups:
+  Household IT:
+    description: Teams that change NetBox
+owners:
+  Network:
+    group: Household IT
+    description: ''
+  Platform:
+    group: Household IT
+    description: ''
+  Facilities:
+    group: Household IT
+    description: Power, cabling and racks
+tenant_groups:
+  infrastructure:
+    name: Infrastructure
+    description: Teams running the platforms
+  applications:
+    name: Applications
+    description: Teams running on the platforms
+rirs:
+  rfc-1918:
+    name: RFC 1918
+    is_private: true
+  rfc-4193:
+    name: RFC 4193
+    is_private: true
+  rfc-6598:
+    name: RFC 6598
+    is_private: true
+  rfc-6996:
+    name: RFC 6996
+    is_private: true
+  apnic:
+    name: APNIC
+    is_private: false
+roles:
+  people:
+    name: People
+    description: Our own devices
+  work:
+    name: Work
+    description: The employer's laptop
+  devices:
+    name: Devices
+    description: Household devices
+  cameras:
+    name: Cameras
+    description: ''
+  guests:
+    name: Guests
+    description: Visitors
+  infrastructure:
+    name: Infrastructure
+    description: Host and storage management
+  appliances:
+    name: Appliances
+    description: Network gear, power and BMCs
+  provisioning:
+    name: Provisioning
+    description: Machines being built
+  workloads:
+    name: Workloads
+    description: Servers, VMs and clusters
+  lab:
+    name: Lab
+    description: Experiments
+  dmz:
+    name: DMZ
+    description: Internet-facing VMs
+  internet:
+    name: Internet
+    description: Anywhere outside
+  site-services:
+    name: Site Services
+    description: Anycast and load balancers reached at their site
+  site-instances:
+    name: Site Instances
+    description: Instance addresses reached at their site
+  home-services:
+    name: Home Services
+    description: Anycast and load balancers every site reaches
+  home-instances:
+    name: Home Instances
+    description: Instance addresses every site reaches
+  internet-services:
+    name: Internet Services
+    description: Internet-reachable anycast and load balancers
+  internet-instances:
+    name: Internet Instances
+    description: Internet-reachable instance addresses
+  global-services:
+    name: Global Services
+    description: Anycast served at every site
+  land:
+    name: Land
+    description: Sites
+  cloud:
+    name: Cloud
+    description: Cloud providers
+  hub:
+    name: Hub
+    description: A site other sites use
+  site:
+    name: Site
+    description: A spoke
+  global:
+    name: Global
+    description: Served at every site
+  kubernetes-nodes:
+    name: Kubernetes Nodes
+    description: Cluster node networks
+  dns-recursor:
+    name: DNS Recursor
+    description: ''
+  dns-authoritative:
+    name: DNS Authoritative
+    description: Authoritative servers
+  kubernetes-api:
+    name: Kubernetes API
+    description: Cluster APIs
+  pods-site:
+    name: Pods Site
+    description: A cluster's pods at its site
+  pods-default:
+    name: Pods Default
+    description: Pods by default
+  pods-storage:
+    name: Pods Storage
+    description: CSI controllers
+  pods-internet:
+    name: Pods Internet
+    description: Internet-reachable pods
+  lb-site:
+    name: Load Balancer Site
+    description: Load balancers reached at their site
+  lb-home:
+    name: Load Balancer Home
+    description: Load balancers every site reaches
+  lb-internet:
+    name: Load Balancer Internet
+    description: Internet-reachable load balancers
+  router:
+    name: Router
+    description: Site routers
+  upstream:
+    name: Upstream
+    description: Upstream providers
+  dns-fleet:
+    name: DNS Fleet
+    description: DNS fleets
+  kubernetes-cluster:
+    name: Kubernetes Cluster
+    description: Kubernetes clusters
+tags:
+  ansible-managed:
+    name: ansible-managed
+    description: In Ansible's inventory
+    object_types:
+      - dcim.device
+      - virtualization.virtualmachine
+  dns-primary:
+    name: dns-primary
+    description: Primary for every zone
+    object_types:
+      - dcim.device
+      - virtualization.virtualmachine
+  isolate-ports:
+    name: Isolate Ports
+    description: VNet port isolation
+    object_types:
+      - ipam.vlan
+  rfc2136:
+    name: RFC 2136
+    description: Records written over RFC 2136
+    object_types:
+      - netbox_dns.zone
+  proxmox-boot:
+    name: proxmox-boot
+    description: Proxmox install disk
+    object_types:
+      - dcim.module
+  connector:
+    name: Connector
+    description: WARP and edge connector
+    object_types:
+      - dcim.device
+      - ipam.prefix
+      - ipam.vlan
+      - virtualization.virtualmachine
+  breakglass:
+    name: Break-glass
+    description: Break-glass WireGuard clients
+    object_types:
+      - dcim.device
+      - ipam.prefix
+      - ipam.vlan
+      - virtualization.virtualmachine
+  proxmox-api:
+    name: Proxmox API
+    description: Trusted by the Proxmox API
+    object_types:
+      - dcim.device
+      - ipam.prefix
+      - ipam.vlan
+      - virtualization.virtualmachine
+  nas-api:
+    name: NAS API
+    description: Trusted by the NAS API
+    object_types:
+      - dcim.device
+      - ipam.prefix
+      - ipam.vlan
+      - virtualization.virtualmachine
+  bmc-control:
+    name: BMC Control
+    description: Trusted with BMC power control
+    object_types:
+      - dcim.device
+      - ipam.prefix
+      - ipam.vlan
+      - virtualization.virtualmachine
+  storage-client:
+    name: Storage Client
+    description: Trusted with NFS and block storage
+    object_types:
+      - dcim.device
+      - ipam.prefix
+      - ipam.vlan
+      - virtualization.virtualmachine
+custom_fields:
+  origin:
+    object_types:
+      - ipam.prefix
+    type: object
+    related_object_type: ipam.asn
+    label: Origin
+    description: Originating speaker group
+  origins:
+    object_types:
+      - ipam.ipaddress
+    type: multiobject
+    related_object_type: ipam.asn
+    label: Origins
+    description: Originating speaker groups
+  cluster:
+    object_types:
+      - ipam.asn
+      - ipam.vlan
+    type: object
+    related_object_type: virtualization.cluster
+    label: Cluster
+    description: Cluster served
+  number:
+    object_types:
+      - virtualization.cluster
+    type: integer
+    label: Number
+    description: Home-wide cluster number
+  zone:
+    object_types:
+      - ipam.prefix
+    type: object
+    related_object_type: ipam.role
+    label: Zone
+    description: Firewall zone as a source
+  audience:
+    object_types:
+      - ipam.ipaddress
+      - ipam.prefix
+      - ipam.service
+    type: multiobject
+    related_object_type: ipam.role
+    label: Audience
+    description: Zones allowed in
+  audience_tags:
+    object_types:
+      - ipam.ipaddress
+      - ipam.prefix
+      - ipam.service
+    type: multiobject
+    related_object_type: extras.tag
+    label: Audience Tags
+    description: Trust tags allowed in
+  audience_sites:
+    object_types:
+      - ipam.ipaddress
+      - ipam.prefix
+      - ipam.service
+    type: multiobject
+    related_object_type: dcim.site
+    label: Audience Sites
+    description: Sites the audience counts at
+  edge:
+    object_types:
+      - netbox_dns.record
+    type: object
+    related_object_type: dcim.site
+    label: Edge
+    description: Site of the serving tunnel
+  vnet:
+    object_types:
+      - ipam.vlan
+    type: text
+    label: VNet
+    description: Proxmox SDN VNet ID
+cluster_types:
+  proxmox-ve:
+    name: Proxmox VE
+    owner: Platform
+  kubernetes:
+    name: Kubernetes
+    owner: Platform
+asn_ranges:
+  land:
+    name: Land
+    rir: rfc-6996
+    start: 4210000000
+    end: 4219999999
+  cloud:
+    name: Cloud
+    rir: rfc-6996
+    start: 4220000000
+    end: 4229999999
+  lab:
+    name: Lab
+    rir: rfc-6996
+    start: 4230000000
+    end: 4239999999
+service_templates:
+  SSH:
+    protocol: tcp
+    ports:
+      - 22
+  iDRAC:
+    protocol: tcp
+    ports:
+      - 22
+      - 443
+      - 5900
+  Redfish:
+    protocol: tcp
+    ports:
+      - 443
+  IPMI:
+    protocol: udp
+    ports:
+      - 623
+  PowerDNS API:
+    protocol: tcp
+    ports:
+      - 8081
+  DNS (UDP):
+    protocol: udp
+    ports:
+      - 53
+      - 443
+      - 853
+  DNS (TCP):
+    protocol: tcp
+    ports:
+      - 53
+      - 443
+      - 853
+  Proxmox:
+    protocol: tcp
+    ports:
+      - 8006
+  TrueNAS:
+    protocol: tcp
+    ports:
+      - 443
+  SMB:
+    protocol: tcp
+    ports:
+      - 445
+  NFS:
+    protocol: tcp
+    ports:
+      - 2049
+  iSCSI:
+    protocol: tcp
+    ports:
+      - 3260
+  NVMe/TCP:
+    protocol: tcp
+    ports:
+      - 4420
+  Kubernetes API:
+    protocol: tcp
+    ports:
+      - 6443
+  Talos API:
+    protocol: tcp
+    ports:
+      - 50000
+dns_views:
+  _default_:
+    description: ''
+  public:
+    description: What octoDNS publishes to Cloudflare and Route53
+routing_policies:
+  NOTHING:
+    rules:
+      10: deny
+peer_groups:
+  SERVICES:
+    export_policies:
+      - NOTHING
+    extra_attributes:
+      keepalive: 3
+      holdtime: 9
+  KUBERNETES-NODES:
+    export_policies:
+      - NOTHING
+    extra_attributes:
+      keepalive: 3
+      holdtime: 9
+  KUBERNETES-NODES-V6:
+    export_policies:
+      - NOTHING
+    extra_attributes:
+      keepalive: 3
+      holdtime: 9
+# Who may do what, applied only with `apply --identity` and an admin's token, since whoever can
+# grant a permission can grant themselves any. A user per consumer, so the changelog says
+# which; its token, made by hand and kept in 1Password, can do only what its groups can
+groups:
+  readers:
+    description: Every consumer that reads NetBox
+  schema:
+    description: Keeps NetBox's schema
+users:
+  homelab:
+    groups:
+      - readers
+  ansible:
+    groups:
+      - readers
+  tofu-network:
+    groups:
+      - readers
+  tofu-platform:
+    groups:
+      - readers
+  schema:
+    groups:
+      - readers
+      - schema
+permissions:
+  Read everything:
+    description: Every public type but who may do what
+    # `*` is every public type NetBox has, plugins' included, but those excepted
+    object_types:
+      - '*'
+    except:
+      - users.user
+      - users.group
+      - users.objectpermission
+      - users.token
+      - users.userconfig
+    actions:
+      - view
+    groups:
+      - readers
+  Change the schema:
+    description: The types netbox/schema.yaml states
+    object_types:
+      - users.ownergroup
+      - users.owner
+      - tenancy.tenantgroup
+      - tenancy.tenant
+      - ipam.rir
+      - ipam.role
+      - extras.tag
+      - extras.customfield
+      - virtualization.clustertype
+      - ipam.asnrange
+      - ipam.servicetemplate
+      - netbox_dns.view
+      - netbox_bgp.routingpolicy
+      - netbox_bgp.routingpolicyrule
+      - netbox_bgp.bgppeergroup
+    actions:
+      - add
+      - change
+      - delete
+    groups:
+      - schema

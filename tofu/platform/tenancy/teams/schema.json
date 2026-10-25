@@ -7,7 +7,8 @@
   "additionalProperties": false,
   "required": [
     "title",
-    "comment"
+    "comment",
+    "kind"
   ],
   "properties": {
     "title": {
@@ -18,6 +19,10 @@
     "comment": {
       "description": "What the team is for, carried into every platform's description of it.",
       "type": "string"
+    },
+    "kind": {
+      "description": "Whether it runs the platforms or runs on them: its NetBox tenant group.",
+      "enum": ["infrastructure", "application"]
     }
   }
 }
