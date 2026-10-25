@@ -1,0 +1,7 @@
+---
+# Installed by ansible-galaxy from ansible/requirements.yml, and theirs to lint
+exclude_paths:
+  - ansible/roles/PowerDNS.dnsdist/
+  - ansible/roles/PowerDNS.pdns/
+  - ansible/roles/PowerDNS.pdns_recursor/
+  - ansible/roles/DEBIAN13-CIS/

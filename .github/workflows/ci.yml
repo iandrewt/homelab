@@ -10,8 +10,8 @@ jobs:
     name: tests
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: true
       - run: uv run pytest
@@ -20,45 +20,92 @@ jobs:
     name: tofu fmt + validate
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: opentofu/setup-opentofu@v2
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4  # v2.0.2
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: true
       - run: tofu fmt -check -recursive tofu/
       - name: cluster files against their schema
         run: uvx check-jsonschema --schemafile tofu/platform/proxmox/clusters/schema.json tofu/platform/proxmox/clusters/*.yaml
-      # A layer with workspaces is one per cluster, so it is validated against every one
+      - name: teams against their schema
+        run: uvx check-jsonschema --schemafile tofu/platform/tenancy/teams/schema.json tofu/platform/tenancy/teams/*.yaml
+      - name: Kubernetes clusters against their schema
+        run: uvx check-jsonschema --schemafile tofu/platform/kubernetes/clusters/schema.json tofu/platform/kubernetes/clusters/*.yaml
+      - name: image libraries against their schema
+        run: uvx check-jsonschema --schemafile tofu/platform/proxmox/images/schema.json tofu/platform/proxmox/images/*.yaml
+      # A layer with workspaces is validated as each of its instances: a site for the image
+      # library and the resolvers, a Kubernetes cluster for its layer, a Proxmox cluster for the
+      # rest. Init too,
+      # since a provider's for_each can depend on the instance.
       - name: validate every layer
         run: |
           set -euo pipefail
           for layer in $(find tofu -name tofu.tf -not -path '*/.terraform/*' -printf '%h\n' | sort); do
             echo "::group::$layer"
-            tofu -chdir="$layer" init -backend=false -input=false
             if grep -q workspace_key_prefix "$layer/tofu.tf"; then
-              for cluster in tofu/platform/proxmox/clusters/*.yaml; do
-                TF_WORKSPACE="$(basename "$cluster" .yaml)" tofu -chdir="$layer" validate
+              case "$layer" in
+                */admin/images | tofu/network/dns) instances=tofu/platform/proxmox/images/*.yaml ;;
+                tofu/platform/kubernetes) instances=tofu/platform/kubernetes/clusters/*.yaml ;;
+                *) instances=tofu/platform/proxmox/clusters/*.yaml ;;
+              esac
+              for instance in $instances; do
+                export TF_WORKSPACE="$(basename "$instance" .yaml)"
+                tofu -chdir="$layer" init -backend=false -input=false
+                tofu -chdir="$layer" validate
               done
+              unset TF_WORKSPACE
             else
+              tofu -chdir="$layer" init -backend=false -input=false
               tofu -chdir="$layer" validate
             fi
             echo "::endgroup::"
           done
 
+  # Each cluster as Flux builds it: its ring, the Kustomizations its fleet ResourceSet makes,
+  # and every component they point at
+  kubernetes:
+    name: kubernetes
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: fluxcd/flux2/action@b9c17924adb533d3617ec7de97a7b0f4acc07b39  # v2.9.6
+      - uses: controlplaneio-fluxcd/flux-operator/actions/setup@8e761853ba15347181cee6cb23e7c9e622e2a93d  # v0.61.0
+      - working-directory: kubernetes
+        run: |
+          set -euo pipefail
+          for cluster in clusters/*/; do
+            name=$(basename "$cluster")
+            echo "::group::$name"
+            flux build kustomization cluster --path "./clusters/$name" \
+              --kustomization-file "./fleet/$name/ring.yaml" --dry-run > /dev/null
+            { cat components/fleet/catalog.yaml; echo ---; cat "$cluster/cluster.yaml"; } > "$RUNNER_TEMP/providers.yaml"
+            flux-operator build resourceset -f components/fleet/resourceset.yaml \
+              --inputs-from-provider "$RUNNER_TEMP/providers.yaml" > "$RUNNER_TEMP/fleet.yaml"
+            for ks in $(awk '/^kind: Kustomization/ { k = 1 } k && /^  name:/ { print $2; k = 0 }' "$RUNNER_TEMP/fleet.yaml"); do
+              flux build kustomization "$ks" --path "./components/$ks" \
+                --kustomization-file "$RUNNER_TEMP/fleet.yaml" --dry-run > /dev/null
+            done
+            echo "::endgroup::"
+          done
+          export pools='[{"name":"a","kind":"pod","ipv4":"10.0.0.0/27","ipv6":"2001:db8::/64","mask4":30},{"name":"b","kind":"lb","exposure":"b","ipv4":"10.0.1.0/27","ipv6":"2001:db8:1::/64"}]'
+          flux envsubst --strict < components/pools/pools.yaml > "$RUNNER_TEMP/pools.yaml"
+          flux-operator build resourceset -f "$RUNNER_TEMP/pools.yaml" > /dev/null
+
   yamllint:
     name: yamllint
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
       - run: uvx yamllint -s .
 
   ansible-lint:
     name: ansible-lint
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
       # ansible-lint pulls ansible-core in, but ansible-galaxy ships with core itself.
       - run: uvx --from ansible-core ansible-galaxy collection install -r ansible/requirements.yml
       - run: uvx --from ansible-core ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles
