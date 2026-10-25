@@ -1,6 +1,6 @@
 # homelab
 
-Infrastructure-as-code for my home network and home lab (site `alfheim`): OpenTofu builds the Proxmox cluster and its guests, Ansible configures the hosts, and NetBox is the source of truth for every address either of them uses.
+Infrastructure-as-code for my home network and home lab (site `alfheim`): OpenTofu builds the Proxmox cluster and its guests, Ansible configures the hosts, and NetBox is the source of truth for every address either of them uses. [`docs/netbox.md`](docs/netbox.md) says what to put in yours.
 
 ## Layout
 
@@ -10,6 +10,9 @@ ansible/      roles, playbooks, and an inventory read from NetBox
 tofu/         a directory per team that owns state, a layer per directory, and modules
 kubernetes/   what Flux reconciles, a directory per Talos cluster
 unifi/        generated config for the UDM Pro, which nothing here can apply directly
+octodns/      octoDNS's config: NetBox's internal view to the one primary, its public view out
+netbox/       NetBox's schema, which `homelab netbox apply` puts in any NetBox
+docs/         how to stand this up yourself, starting with what goes in NetBox
 ```
 
 ```
@@ -65,6 +68,7 @@ export NETBOX_API=https://netbox.example
 ```
 
 ```
+uv run homelab netbox plan              # what NetBox's schema lacks; `apply` adds it
 uv run homelab generate                 # rewrite unifi/generated/; --check reports drift instead
 uv run homelab network-config alfheim   # the network-config for a site's install media
 ```
