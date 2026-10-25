@@ -14,31 +14,43 @@ unifi/        generated config for the UDM Pro, which nothing here can apply dir
 
 ```
 tofu/platform/
+  tenancy/teams/          the teams: each one's Entra group, 1Password vault and state role
+  entra/                  directory (groups, the aws extension), aws (Identity Center's app), apps (one per platform instance)
   aws/                    the organisation, identity, the state bucket and its key, logging
-  proxmox/clusters/
-    alfheim.yaml          cluster settings read by admin layers
-    schema.json
-  proxmox/admin/          one workspace per cluster
-    root/                 root@pam only - the tofu@pve user, ACME
-    access/               roles, users, pools, realms, every other token
+  proxmox/clusters/       a file per Proxmox cluster, read by the admin layers (pve-1.yaml, schema.json)
+  proxmox/images/         a pinned image library per site (alfheim.yaml)
+  proxmox/admin/          a workspace per cluster (images: per site)
+    root/                 root@pam only - the tofu@pve user
+    access/               roles, users, pools, the Entra realm, every other token
     cluster/              cluster options, SDN, node firewall, storage, mappings, backups
-    images/               cloud image and Talos ISO downloads
-  proxmox/alfheim/valhalla/  the valhalla Talos cluster, through Flux's bootstrap
+    images/               the site's library, downloaded once through one of its clusters
+  kubernetes/             a workspace per Talos cluster, a file each in clusters/ (k8s-1.yaml)
 tofu/network/
-  aws/dns/                the public copies of internal zones, in Route53
-  proxmox/alfheim/dns/    hugin, in the Network team's `network/dns` pool
-tofu/modules/
-kubernetes/clusters/valhalla/
-  flux-system/            the FluxInstance and flux-operator, which Flux upgrades itself
-  infrastructure/         controllers (Cilium, Proxmox CCM, Intel's GPU resource driver, the descheduler), then their configs
-  apps/
+  aws/dns/                titmuss.au in Route53, and its signing key
+  dns/                    a workspace per site: the resolvers NetBox records as VMs
+tofu/modules/             talos-cluster, fleet-bootstrap, talos-vm, linux-vm, netbox-site, entra-app, ...
+kubernetes/
+  components/             cluster-neutral: Flux's operator, Cilium and its BGP, Proxmox CCM, Intel's GPU driver, the descheduler, the pools NetBox gives, the host firewall, OIDC RBAC; fleet/, the catalog and the ResourceSet that turns a cluster's list into Kustomizations
+  clusters/k8s-1/         its FluxInstance, and the components it takes from fleet/catalog.yaml
+  fleet/k8s-1/            k8s-1's ring: the one thing it syncs from Git
 unifi/generated/
-  alfheim-frr.conf        BGP toward the resolvers, written by `homelab generate`
+  alfheim-frr.conf        BGP toward the speakers, written by `homelab generate`; never committed
 ```
 
-The tofu is shaped in a multi-cluster way to make it easier for others to re-use. To use it, just replace `alfheim.yaml` with your own cluster info.
+The tofu is shaped for n of everything: a layer per kind of thing, a workspace and a data file
+per instance. Adding a Proxmox cluster, a Kubernetes cluster or a site's resolvers is a file (or
+NetBox records) and `tofu workspace new`.
 
-Workloads are managed separately to the cluster itself. The `tenants` map in the cluster YAML is how you can separate groups of workloads: it gets a pool, a PVE user of its own, a token written to 1Password, and the VNets it may join. The tenant then makes its own workloads as states under `tofu/<tenant>/proxmox/<cluster>/`, organised as it likes - VMs straight in its pool, or in pools of its own under it - and nothing in the cluster YAML changes for a new one. Anything running *inside* a workload that needs the Proxmox API itself is an `integration` under its tenant, and gets its own user, token and roles.
+Teams are defined once, in `tofu/platform/tenancy/teams/`, and vended everywhere: an Entra group,
+a state role, and whatever each platform grants them. A Proxmox cluster file's `tenants` says
+only what a team gets there - a pool, a token written to 1Password, the VNets it may join - and
+the team makes its own workloads under `tofu/<team>/`. Anything running *inside* a workload
+that needs the Proxmox API itself is an `integration` under its tenant, with its own user,
+token and roles.
+
+Kubernetes clusters run a fleet in rings: CI pushes `kubernetes/` as a signed OCI artifact on
+every commit (a release candidate) and every `v*` tag (a release), and each cluster's ring picks
+the newest it allows. Promoting is tagging a release canary has run.
 
 ## Using this repo
 
@@ -105,7 +117,8 @@ tofu -chdir=tofu/platform/proxmox/admin/cluster init
 tofu -chdir=tofu/platform/proxmox/admin/cluster workspace select alfheim
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan
 
-tofu -chdir=tofu/network/proxmox/alfheim/dns plan
+tofu -chdir=tofu/network/dns workspace select alfheim
+tofu -chdir=tofu/network/dns plan
 ```
 
 The `root` layer is the exception: it authenticates as `root@pam` with the install
@@ -114,17 +127,18 @@ to create by hand.
 
 ### Talos
 
-`tofu/platform/proxmox/alfheim/valhalla` builds the nodes, applies their machine config
-over the Talos API, bootstraps etcd, and installs Cilium, Proxmox CCM and Flux once. From
+`tofu/platform/kubernetes`, in the cluster's workspace, builds the nodes, applies their
+machine config over the Talos API, bootstraps etcd, and installs Cilium, Proxmox CCM and Flux
+once, from the files of the artifact the cluster's ring resolves to. From
 then on Flux owns everything in the cluster but Talos's own manifests, its own upgrades
 included. Each upgrade has one owner:
 
 | | Upgraded by |
 |---|---|
-| Talos | a class's `talos` version in `nodes.tf`, rolled node by node |
-| Kubernetes | `kubernetes_version` in `talos.tf`, through `upgrade-k8s` |
-| CoreDNS, Talos CCM, Gateway API's CRDs | Talos's own manifests - their versions in `talos.tf` - re-applied by `upgrade-k8s` |
-| Cilium, Proxmox CCM, Flux | their chart versions under `kubernetes/clusters/valhalla/`, through Flux |
+| Talos | a class's `talos` version in the cluster's data file, rolled node by node |
+| Kubernetes | `kubernetes_version` in the cluster's data file, through `upgrade-k8s` |
+| CoreDNS, Talos CCM, Gateway API's CRDs | Talos's own manifests - `gateway_api` in the data file, Talos CCM's chart in `talos-cluster` - re-applied by `upgrade-k8s` |
+| Cilium, Proxmox CCM, Flux | their chart versions under `kubernetes/components/`, through Flux, ring by ring |
 
 Cilium is never in Talos's own manifests, so `upgrade-k8s` has nothing of it to put back.
 Talos CCM is, because Talos's health checks wait on the kubelet certificates it approves -
@@ -134,12 +148,13 @@ A Talos upgrade only rolls one node at a time - drained, rebooted into the new i
 back - when applied without parallelism:
 
 ```
-tofu -chdir=tofu/platform/proxmox/alfheim/valhalla apply -parallelism=1
-op read 'op://Platform/Talos Config - valhalla/notesPlain' > ~/.talos/config
+tofu -chdir=tofu/platform/kubernetes workspace select k8s-1
+tofu -chdir=tofu/platform/kubernetes apply -parallelism=1
+op read 'op://Platform/Talos Config - k8s-1/notesPlain' > ~/.talos/config
 talosctl kubeconfig                    # break-glass; people sign in with Entra
 ```
 
-Taking a control plane out of the map destroys its VM, but nothing tells etcd: run
+Taking a control plane out of `nodes` destroys its VM, but nothing tells etcd: run
 `talosctl -n <node> reset --graceful` first, so it leaves the cluster cleanly.
 
 ## Status / TODO
@@ -150,17 +165,17 @@ Taking a control plane out of the map destroys its VM, but nothing tells etcd: r
 
 **OpenTofu / Proxmox**
 
-- [ ] Pin a checksum on the Debian cloud image - `latest` moves
-- [ ] Delete `proxmox-acme-<cluster>` and its access key once an internal CA issues the nodes' certificates
+- [ ] Drop `insecure` from each Proxmox cluster file once the private CA issues the nodes' certificates
+- [ ] Replace the Kubernetes layer's `external` fleet read: an antipattern
 - [x] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
-- [ ] Pin a checksum on the Talos ISO
-- [ ] Entra app registrations into tofu - Proxmox's and `Kubernetes valhalla`
-- [ ] proxmox-csi, with its `csi` integration commented out in the cluster file
+- [ ] proxmox-csi: a `csi` entry in k8s-1's `proxmox_integrations` (`pool: [VM.Audit, VM.Config.Disk]`, `storages: {nvme: [Datastore.Allocate, Datastore.AllocateSpace, Datastore.Audit]}`)
 - [ ] Karpenter for Proxmox - revisit; Proxmox CCM already gives every node a provider ID
 
 **Kubernetes**
 
-- [x] Bring up valhalla: the valhalla layer applied, Flux reconciling, the checks in its plan passed
+- [ ] Bring up k8s-1 on address plan v2, replacing valhalla
+- [ ] Make the repository public, and drop the GHCR pull token
+- [ ] The boot service: cached Image Factory artifacts for UEFI HTTP Boot and iPXE, then metal nodes
 - [ ] Renovate for what Dependabot can't see: Talos and Kubernetes versions, Flux's charts and sources
 - [ ] External Secrets with 1Password - only the GitHub App key and its own token stay bootstrap-managed
 - [ ] A self-hosted discovery service, off Sidero's

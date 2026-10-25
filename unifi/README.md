@@ -6,23 +6,21 @@ generated here and pasted in by hand.
 
 ## `generated/<site>-frr.conf`
 
-BGP toward every speaker at the site, from NetBox: one peer group per VLAN tagged
-`bgp-listen`, and per purpose a prefix-list and a community-list that a route has to match
-both of. It names no speaker, so adding or replacing one needs no change here.
+BGP toward every speaker at the site, from NetBox: a peer group per listen range in the BGP
+plugin, accepting only the speaker groups with a session on it, and only what each one
+originates. It names no speaker, so adding or replacing one needs no change here.
+
+It isn't committed: its listen ranges and prefix lists are the site's own public prefix.
 
 ```
-uv run homelab generate           # rewrite it after changing NetBox
+uv run homelab generate           # write it after changing NetBox
 uv run homelab generate --check   # exit 1 if it no longer matches NetBox
 ```
 
-Paste it into the UDM Pro's FRR configuration.
+Paste it, whole, into the UDM Pro's BGP configuration. It has no `router ospf`: UniFi
+writes that itself, and refuses a pasted one.
 
 ## Fixed IPs
 
-Reservations are UniFi's, entered in the console. NetBox records a leased address as status
-`dhcp` whether or not it has one.
-
-## `firewall.md`
-
-The zones, rules and switching settings applied by hand in the console - the intent, with
-the console as the record of whether it is true.
+None. A firewall rule names a host by its EUI-64, so nothing needs a reservation; NetBox
+records a leased address as status `dhcp`.
