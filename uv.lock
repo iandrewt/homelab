@@ -559,12 +559,12 @@ wheels = [
 
 [[package]]
 name = "onepassword-sdk"
-version = "0.4.1"
+version = "0.4.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/df/06/989f5b40e802e11e37c44bc72faabcdd362dcba3392fbfc48be6da49e147/onepassword_sdk-0.4.1.tar.gz", hash = "sha256:4b9224208aa6e35e13bad8534e6521d3abf5ba166ea4efd370fcdc918c4a4d26", size = 34561961, upload-time = "2026-07-30T13:56:12.309Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e4/e7/cb26b13a2ce863719d5d48993e8929fe28c450ce04044367cf45f5694d8f/onepassword_sdk-0.4.2.tar.gz", hash = "sha256:fbe98d7e16e16952d1e34d75f2674899cec91d3b26de975168a60b07dc5e6a84", size = 34545111, upload-time = "2026-10-22T20:40:27.478Z" }
 
 [[package]]
 name = "packaging"
