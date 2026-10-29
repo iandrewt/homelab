@@ -64,3 +64,6 @@ ansible/roles/DEBIAN13-CIS/
 
 # Holds the site's public prefix, and is regenerated from NetBox whenever it's pasted in
 unifi/generated/
+
+# Claude Code, per user
+.claude/settings.local.json
