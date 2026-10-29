@@ -9,8 +9,8 @@ images:
 
   # schematic includes qemu-guest-agent
   talos-metal-secureboot:
-    url: https://factory.talos.dev/image/f171f129b1614a893bd440762f70c2ca4b98f439ca1823cf455d5874ef0da656/v1.14.2/metal-amd64-secureboot.iso
+    url: https://factory.talos.dev/image/f171f129b1614a893bd440762f70c2ca4b98f439ca1823cf455d5874ef0da656/v1.14.5/metal-amd64-secureboot.iso
     file_name: talos-metal-amd64-secureboot.iso
     content_type: iso
-    checksum: c1300ace650b2512f9b14aea4f3736a018db478ff9aa3c559874bd09bbb3658e
+    checksum: 743cf724b8328d050b3d05ece7e9269f78eac3bc3e5f48ead0a6b2b718e582fc
     checksum_algorithm: sha256

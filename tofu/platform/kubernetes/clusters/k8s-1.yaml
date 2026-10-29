@@ -4,7 +4,7 @@ number: 1
 asn: 4210002000
 
 talos_contract: v1.14
-kubernetes_version: 1.37.1
+kubernetes_version: 1.37.2
 gateway_api: v1.6.1
 
 vnets: [san]
@@ -13,7 +13,7 @@ classes:
   controlplane:
     machine_type: controlplane
     lifecycle: permanent
-    talos: v1.14.2
+    talos: v1.14.5
     extensions: [siderolabs/qemu-guest-agent]
     install_disk: disk.dev_path == "/dev/sda"
     vm:
@@ -23,7 +23,7 @@ classes:
   gpu:
     machine_type: worker
     lifecycle: permanent
-    talos: v1.14.2
+    talos: v1.14.5
     extensions: [siderolabs/i915, siderolabs/qemu-guest-agent]
     install_disk: disk.dev_path == "/dev/sda"
     labels:
