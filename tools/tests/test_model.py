@@ -39,6 +39,14 @@ def test_a_sites_vlans_are_in_the_group_named_by_its_slug(snapshot):
     assert set(loads(snapshot)["sites"][SITE]["vlans"]) == {"network", "san", "servers", "k8s-1"}
 
 
+def test_a_sites_forward_zone_is_its_substrate_zone_not_its_home_networks(snapshot):
+    """Both start with the slug. It's the Proxmox nodes' search domain and the zone the
+    resolvers answer negatively for, so the home network's would break both in silence."""
+    zones = [*snapshot.zones, zone("one.home.test"), zone("one.infra.test")]
+    records = [*snapshot.records, soa("one.home.test"), soa("one.infra.test")]
+    assert loads(snapshot, zones=zones, records=records)["sites"][SITE]["forward_zone"] == "one.infra.test"
+
+
 def test_a_gateway_is_the_routers_address_not_the_first_in_the_prefix(snapshot):
     vlans = loads(snapshot)["sites"][SITE]["vlans"]
     assert vlans["network"]["gateway_ipv4"] == "10.0.0.65"

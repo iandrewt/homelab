@@ -1,4 +1,4 @@
-# What k8s-1 takes, from components/fleet/catalog.yaml
+# What au1-shared takes, from components/fleet/catalog.yaml
 apiVersion: fluxcd.controlplane.io/v1
 kind: ResourceSetInputProvider
 metadata:

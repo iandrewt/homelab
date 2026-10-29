@@ -246,7 +246,7 @@ def documents(
     site, hostname: str, ssh_key: str, user_data: Path | None
 ) -> dict[str, bytes]:
     return {
-        "meta-data": seed.meta_data(hostname, site["slug"], ssh_keys=[ssh_key]).encode(),
+        "meta-data": seed.meta_data(hostname, site["region"], ssh_keys=[ssh_key]).encode(),
         "vendor-data": seed.cloud_config(IMAGE_REPAIR).encode(),
         "user-data": user_data.read_bytes() if user_data else b"",
         "network-config": seed.network_config(

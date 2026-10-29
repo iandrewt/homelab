@@ -14,12 +14,12 @@ def _document(payload: dict) -> str:
     return yaml.dump(payload, Dumper=IndentedDumper, sort_keys=False)
 
 
-def meta_data(hostname: str, site: str, *, ssh_keys=(), instance_id: str | None = None) -> str:
+def meta_data(hostname: str, region: str | None, *, ssh_keys=(), instance_id: str | None = None) -> str:
     return _document({
         "instance-id": instance_id or uuid.uuid4().hex,
         "local-hostname": hostname,
         "cloud-name": "homelab",
-        "region": site,
+        **({"region": region} if region else {}),
         "public-keys": list(ssh_keys),
     })
 

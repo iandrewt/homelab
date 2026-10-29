@@ -1,6 +1,6 @@
 variable "name" {
   type        = string
-  description = "`k8s-<number>`, org-unique."
+  description = "`<region>-<name>`: unique in its region, and so everywhere."
 }
 
 variable "contract" {

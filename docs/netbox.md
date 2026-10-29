@@ -73,6 +73,11 @@ its NetBox name is where it is, which the repo never needs.
 **Sites and VLANs**
 
 - A Site per place, with a short code in `facility` (`alf`), which prefixes its gear's names.
+  Regions stay geographic, as NetBox means them.
+- A Site Group per cloud region (`au1`), holding the site or sites its AZs are at. A site in
+  none is a branch: a network people use, with nothing of the cloud's.
+- An AZ is a Location of its site (`alf-az1`), holding the rooms with capacity in one failure
+  domain. Other rooms stay directly under the site.
 - A VLAN group per site, its slug the site's, scoped to the site, with `vid_ranges` the VIDs
   the site may have.
 - A VLAN per network, whose Role is its firewall zone. A VLAN a guest's NIC can join names its
@@ -103,8 +108,9 @@ its NetBox name is where it is, which the repo never needs.
 - A routed address is a host route, `/32` or `/128`, naming in `origins` every speaker group
   that originates it. One many hosts serve - anycast - goes on an FHRP group, protocol
   `other`, whose members are the interfaces serving it.
-- A `dns_name` on every interface address: `<host>.<site>.titmuss.zone` on a host's primary,
-  `<network>.<host>.<site>.titmuss.zone` on the rest; a VM's is `<vm>.<team>.<cluster>`.
+- A `dns_name` on every interface address the cloud runs: `<host>.<site>.infra.titmuss.zone`
+  on a host's primary, `<network>.<host>.<site>.infra.titmuss.zone` on the rest. An address
+  that exists for a service is named by it, under `<region>.sys.titmuss.zone`.
 
 **Routing**
 
@@ -123,7 +129,9 @@ its NetBox name is where it is, which the repo never needs.
 - Names: a pet from a theme; gear `<site code>-<role>-<nn>`; the cabling plant as
   [TIA-606](https://en.wikipedia.org/wiki/TIA-606) labels it - a panel by its letter, a jack by
   the panel port it lands on.
-- A Proxmox or Kubernetes cluster as a Virtualization Cluster, with its home-wide `number`.
+- A Proxmox cluster as a Virtualization Cluster scoped to its AZ, named as gear is
+  (`alf-pve-01`); a Kubernetes cluster scoped to its region's Site Group, named
+  `<region>-<name>` (`au1-shared`), its `number` Cilium's cluster ID.
 - A source narrower than a zone carries a trust tag (`connector`, `proxmox-api`, ...), on its
   prefix, its VLAN, or its device or VM.
 
@@ -131,9 +139,11 @@ its NetBox name is where it is, which the repo never needs.
 
 - The `_default_` view names everything inside; give it your blocks as its prefixes. The
   `public` view holds what's published, and the nameservers' and recursor's pools.
-- A forward zone per site whose first label is its slug, a reverse zone per block, and a zone
-  per team, Proxmox cluster and Kubernetes cluster. One a team or external-dns writes itself is
-  tagged `rfc2136`. A zone is signed while its DNSSEC policy is active.
+- Zones by who answers for the names in them: `<site>.infra` for what the cloud runs at a site,
+  `<region>.sys` for its services, `<site>.home` and `clients.<site>.home` for the home's
+  network, and `<team>.int` for each team, all under `titmuss.zone`, and a reverse zone per
+  block. One a team or external-dns writes itself is tagged `rfc2136`. A zone is signed while
+  its DNSSEC policy is active.
 - The resolvers are devices or VMs with role `dns-resolver`, holding their authoritative
   addresses; the zones' one primary is tagged `dns-primary`.
 

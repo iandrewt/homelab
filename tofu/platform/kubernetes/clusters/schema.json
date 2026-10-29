@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/iandrewt/homelab/tofu/platform/kubernetes/clusters/schema.json",
   "title": "A Kubernetes cluster",
-  "description": "A Talos cluster at one site, named for the file: `k8s-<number>`, org-unique. Its addresses and pools are NetBox's.",
+  "description": "A Talos cluster in one region, named for the file: `<region>-<name>`, its name unique in its region. Its addresses and pools are NetBox's.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -23,7 +23,7 @@
       "pattern": "^[a-z][a-z0-9]{0,6}[a-z0-9]$"
     },
     "number": {
-      "description": "The cluster's number, org-wide: NetBox's cluster `number`, and Cilium's cluster.id.",
+      "description": "NetBox's cluster `number`: Cilium's cluster.id, unique within a mesh.",
       "type": "integer",
       "minimum": 1,
       "maximum": 255

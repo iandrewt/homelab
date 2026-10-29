@@ -21,7 +21,7 @@ spec:
     provider: github
     url: https://github.com/iandrewt/homelab.git
     ref: refs/heads/main
-    path: kubernetes/fleet/k8s-1
+    path: kubernetes/fleet/au1-shared
     pullSecret: flux-github-app
   # A component a cluster takes but whose pool NetBox doesn't give it fails, not substitutes ""
   kustomize:

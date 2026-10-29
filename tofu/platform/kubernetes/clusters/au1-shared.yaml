@@ -7,7 +7,7 @@ talos_contract: v1.14
 kubernetes_version: 1.37.2
 gateway_api: v1.6.1
 
-vnets: [san]
+vnets: [shrdsan]
 
 classes:
   controlplane:
@@ -34,13 +34,13 @@ classes:
       disk_gb: 64
       pci_mapping: arc-a40
 
-proxmox: [pve-1]
+proxmox: [alf-pve-01]
 
 nodes:
-  k8s-1-cp-01: { class: controlplane, proxmox: pve-1, host: yggdrasil }
-  k8s-1-cp-02: { class: controlplane, proxmox: pve-1, host: yggdrasil }
-  k8s-1-cp-03: { class: controlplane, proxmox: pve-1, host: yggdrasil }
-  k8s-1-gpu-01: { class: gpu, proxmox: pve-1, host: yggdrasil }
+  au1-shared-cp-01: { class: controlplane, proxmox: alf-pve-01, host: yggdrasil }
+  au1-shared-cp-02: { class: controlplane, proxmox: alf-pve-01, host: yggdrasil }
+  au1-shared-cp-03: { class: controlplane, proxmox: alf-pve-01, host: yggdrasil }
+  au1-shared-gpu-01: { class: gpu, proxmox: alf-pve-01, host: yggdrasil }
 
 tenants: {}
 

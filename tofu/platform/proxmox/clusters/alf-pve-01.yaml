@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=schema.json
 site: alfheim
-endpoint: https://yggdrasil.alfheim.titmuss.zone:8006/
+endpoint: https://yggdrasil.alfheim.infra.titmuss.zone:8006/
 # Self-signed until the private CA exists
 insecure: true
 
@@ -23,14 +23,14 @@ storages:
 
   images:
     type: nfs
-    server: mimir.alfheim.titmuss.zone
+    server: alf-pve-01.san.au1.sys.titmuss.zone
     export: /mnt/tank/infra/proxmox
     options: vers=4.2
     content: [import, iso, vztmpl]
 
   backups:
     type: nfs
-    server: mimir.alfheim.titmuss.zone
+    server: alf-pve-01.san.au1.sys.titmuss.zone
     export: /mnt/tank/backups/proxmox
     options: vers=4.2
     content: [backup]
@@ -88,5 +88,5 @@ tenants:
     vnets: [services]
 
   platform:
-    vnets: [k8s1, san]
+    vnets: [shared, shrdsan]
     mappings: [arc-a40]

@@ -26,7 +26,7 @@ metadata:
 spec:
   interval: 1h
   retryInterval: 1m
-  path: ./clusters/k8s-1
+  path: ./clusters/au1-shared
   prune: true
   sourceRef:
     kind: OCIRepository

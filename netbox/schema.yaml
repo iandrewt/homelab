@@ -260,7 +260,7 @@ custom_fields:
       - virtualization.cluster
     type: integer
     label: Number
-    description: Home-wide cluster number
+    description: Cilium cluster ID, unique within a mesh
   zone:
     object_types:
       - ipam.prefix

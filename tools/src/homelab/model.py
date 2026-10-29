@@ -21,13 +21,15 @@ RENDERED_SESSIONS = ("active", "planned")
 PRIMARY_TAG = "dns-primary"
 # A zone whose owner writes its records over RFC 2136, which octoDNS must leave alone
 RFC2136_TAG = "rfc2136"
+# A site's machines are named under <slug>.infra, beside its home network's <slug>.home
+SUBSTRATE_LABEL = "infra"
 
 
 def load(snapshot: netbox.Snapshot | None = None) -> dict:
     snap = netbox.fetch() if snapshot is None else snapshot
     zones = _zones(snap)
     return {
-        "sites": {raw["slug"]: _site(raw["slug"], snap, zones) for raw in snap.sites},
+        "sites": {raw["slug"]: _site(raw, snap, zones) for raw in snap.sites},
         "zones": zones,
         # Where a name the public view writes lives: the nameservers', the recursor's
         "public_zones": sorted(z["name"] for z in snap.zones if z["view"]["name"] != INTERNAL_VIEW),
@@ -50,7 +52,8 @@ def unzoned(model: dict) -> list[str]:
     return problems
 
 
-def _site(slug: str, snap: netbox.Snapshot, zones: dict) -> dict:
+def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
+    slug = raw["slug"]
     hosts = [
         h for h in [*snap.devices, *snap.virtual_machines] if _slug(h, "site") == slug
     ]
@@ -66,7 +69,9 @@ def _site(slug: str, snap: netbox.Snapshot, zones: dict) -> dict:
     addresses = [a for a in snap.addresses if str(_ip(a)) in owned or any(_ip(a) in n for n in nets)]
     return {
         "slug": slug,
-        "forward_zone": next((z for z in sorted(zones) if z.split(".")[0] == slug), None),
+        # A cloud region is a Site Group; a branch is in none
+        "region": (raw.get("group") or {}).get("slug"),
+        "forward_zone": next((z for z in sorted(zones) if z.split(".")[:2] == [slug, SUBSTRATE_LABEL]), None),
         "router_asn": next((n for n, o in speakers.items() if o["role"] == ROUTER_ROLE), None),
         "gua_prefix": _gua(slug, snap),
         "vlans": vlans,
