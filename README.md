@@ -118,7 +118,7 @@ aws sso login
 export OP_ACCOUNT=<name>               # the desktop app; a service account token is for CI
 
 tofu -chdir=tofu/platform/proxmox/admin/cluster init
-tofu -chdir=tofu/platform/proxmox/admin/cluster workspace select alfheim
+tofu -chdir=tofu/platform/proxmox/admin/cluster workspace select alf-pve-01
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan
 
 tofu -chdir=tofu/network/dns workspace select alfheim
