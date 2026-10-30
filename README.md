@@ -38,6 +38,7 @@ kubernetes/
   fleet/au1-shared/       au1-shared's ring: the one thing it syncs from Git
 unifi/generated/
   alfheim-frr.conf        BGP toward the speakers, written by `homelab generate`; never committed
+  <site>-ipv6.txt         the policies that send another site's IPv6 to IPv4, likewise
 ```
 
 The tofu is shaped for n of everything: a layer per kind of thing, a workspace and a data file
@@ -71,6 +72,7 @@ export NETBOX_API=https://netbox.example
 uv run homelab netbox plan              # what NetBox's schema lacks; `apply` adds it
 uv run homelab generate                 # rewrite unifi/generated/; --check reports drift instead
 uv run homelab network-config alfheim   # the network-config for a site's install media
+uv run homelab unifi apply alfheim vpn  # a step of the gateways' firewall; dry-run until --apply
 ```
 
 CI can't reach NetBox, so it checks none of this - run `generate --check` against a

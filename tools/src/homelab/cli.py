@@ -3,10 +3,10 @@
 import argparse
 import sys
 
-from . import bootstrap, dns, fleet, netbox, schema
+from . import bootstrap, dns, fleet, netbox, schema, unifi
 from .bootstrap.shell import BootstrapError
 from .model import load
-from .render import frr, seed
+from .render import firewall, frr, seed
 from .repo import Repo
 from .secrets import SecretError
 
@@ -19,9 +19,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     generate = subparsers.add_parser(
         "generate",
-        help="write the UDM Pro's FRR config from NetBox",
-        description="Rewrite unifi/generated/<site>-frr.conf for every site with a router "
-        "and something to route. Only files whose content changed are touched.",
+        help="write what the UniFi gateways are given by hand, from NetBox",
+        description="Rewrite unifi/generated/: <site>-frr.conf for every site with a router "
+        "and something to route, and <site>-ipv6.txt for every site with another to reach. "
+        "Only files whose content changed are touched.",
     )
     generate.add_argument(
         "--check",
@@ -45,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     dns.register(subparsers)
     fleet.register(subparsers)
     schema.register(subparsers)
+    unifi.register(subparsers)
 
     boot = subparsers.add_parser(
         "bootstrap", help="build install media", description="Build install media."
@@ -64,13 +66,17 @@ def _generate(args) -> int:
         print(f"FAIL: NetBox: {down}", file=sys.stderr)
         return 1
 
+    sites = model["sites"]
     rendered = {
         repo.unifi / f"{site['slug']}-frr.conf": frr.frr_config(site)
-        for site in model["sites"].values()
+        for site in sites.values()
         if site["router_asn"] and site["speakers"]
     }
+    for site in sites.values():
+        if (policies := firewall.cross_site_ipv6_text(site, sites)) is not None:
+            rendered[repo.unifi / f"{site['slug']}-ipv6.txt"] = policies
     changed = [p for p, body in sorted(rendered.items()) if not p.exists() or p.read_text() != body]
-    stale = sorted(set(repo.unifi.glob("*-frr.conf")) - set(rendered))
+    stale = sorted({*repo.unifi.glob("*-frr.conf"), *repo.unifi.glob("*-ipv6.txt")} - set(rendered))
 
     if args.check:
         for path in changed + stale:

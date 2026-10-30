@@ -69,13 +69,21 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
     nets = [_net(p) for p in _at(snap.prefixes, slug)]
     owned = {a for o in speakers.values() for a in o["addresses"]}
     addresses = [a for a in snap.addresses if str(_ip(a)) in owned or any(_ip(a) in n for n in nets)]
+    ranges = _ranges(slug, snap)
     return {
         "slug": slug,
         # A cloud region is a Site Group; a branch is in none
         "region": (raw.get("group") or {}).get("slug"),
         "forward_zone": next((z for z in sorted(zones) if z.split(".")[:2] == [slug, SUBSTRATE_LABEL]), None),
         "router_asn": next((n for n, o in speakers.items() if o["role"] == ROUTER_ROLE), None),
-        "gua_prefix": _gua(slug, snap),
+        # A console in Site Manager is found by its serial, its router's in NetBox
+        "router_serial": next((h["serial"] for h in hosts if _host(h) in routers and h.get("serial")), None),
+        "ranges": ranges,
+        "gua_prefix": next((r for r in ranges if ":" in r), None),
+        "internet_facing": sorted(
+            (p["prefix"] for p in _at(snap.prefixes, slug) if "internet" in (audience(p) or {}).get("zones", [])),
+            key=_sort_net,
+        ),
         "vlans": vlans,
         "peer_groups": _peer_groups(slug, snap),
         "policies": _policies(snap),
@@ -374,11 +382,12 @@ def _dns(hosts: list[dict], addresses: list[dict], vlans: dict, speakers: dict,
     }
 
 
-def _gua(slug: str, snap: netbox.Snapshot) -> str | None:
-    """The widest IPv6 container the site holds - what an ISP delegated it."""
+def _ranges(slug: str, snap: netbox.Snapshot) -> list[str]:
+    """The widest container the site holds in each family: all of its own addresses, and in
+    IPv6 what an ISP delegated it."""
     containers = [_net(p) for p in _at(snap.prefixes, slug) if p["status"]["value"] == "container"]
-    v6 = [n for n in containers if n.version == 6]
-    return str(min(v6, key=lambda n: n.prefixlen)) if v6 else None
+    return [str(min(nets, key=lambda n: n.prefixlen))
+            for version in (4, 6) if (nets := [n for n in containers if n.version == version])]
 
 
 def _at(objects: list[dict], slug: str) -> list[dict]:

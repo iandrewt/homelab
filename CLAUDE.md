@@ -16,7 +16,7 @@ repo's, in `netbox/schema.yaml`, which `homelab netbox apply` enforces; its *dat
 |---|---|
 | OpenTofu | the `netbox` provider, via `tofu/modules/netbox-site` |
 | Ansible | `netbox.netbox.nb_inventory` for hosts, `vars_plugins/netbox.py` for site facts |
-| the UDM | `unifi/generated/<site>-frr.conf`, the one generated file, pasted in by hand |
+| the UniFi gateways | `homelab unifi`, for their firewall, through Site Manager; `unifi/generated/<site>-frr.conf`, pasted in by hand, for BGP |
 
 - Only `admin/cluster` (VNets, subnets, firewall sources) and a team's workloads (a cluster's
   networks, pools and API address; the DNS fleet's VMs) need NetBox. `root`, `access` and
@@ -168,7 +168,9 @@ purpose**. A **speaker group** shares an ASN: a DNS fleet, a Kubernetes cluster,
 - **Between sites is Site Magic, UniFi's OSPF**, IPv4 alone. UniFi refuses our `router ospf`,
   so a hub's *Redistribute to SD-WAN* (`redistribute bgp`, E1) offers every BGP route, and **a
   tier is reach by firewall**: spokes learn a hub's site segments, and its zone policies drop
-  them. A spoke's gateway can speak BGP too (the Express 7 does).
+  them. A spoke's gateway can speak BGP too (the Express 7 does). Another site's IPv6 is
+  reached over the internet, so each site rejects the others' GUAs below an Allow for their
+  `internet` audience, and Happy Eyeballs takes IPv4; DNS is never rewritten for it.
 
 ## Kubernetes
 
@@ -317,11 +319,11 @@ types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
 ## Layout
 
 ```
-tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings
+tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
 ansible/      roles, playbooks, and an inventory read from NetBox
 tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
 kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
-unifi/        generated config for the UDM, which nothing here can apply directly
+unifi/        generated config for the UniFi gateways that no API takes
 octodns/      octoDNS's config
 netbox/       NetBox's schema
 docs/         public documentation, starting with what goes in NetBox
@@ -355,6 +357,7 @@ uv run homelab netbox plan        # what NetBox's schema lacks; `apply`, with th
 uv run homelab generate           # rewrite derived files; --check reports drift
 uv run homelab dns plan           # what octoDNS would change, and a checksum
 uv run homelab dns apply <sum>    # apply that plan, only if it still matches
+uv run homelab unifi apply <site> <step>   # a step of the firewall, dry-run until --apply
 uv run pytest
 
 uv run homelab bootstrap pi --device /dev/sdX --hostname ratatoskr --site alfheim \
