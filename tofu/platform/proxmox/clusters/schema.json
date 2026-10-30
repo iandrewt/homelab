@@ -13,6 +13,7 @@
     "ssh_username",
     "timezone",
     "mailto",
+    "release",
     "sdn",
     "storages",
     "guest_defaults",
@@ -47,6 +48,11 @@
     "mailto": {
       "description": "root's email address, set by the installer.",
       "type": "string"
+    },
+    "release": {
+      "description": "The Proxmox VE major release a new node installs, from its newest ISO.",
+      "type": "integer",
+      "minimum": 9
     },
     "sdn": {
       "description": "The SDN VLAN zone every VNet is in.",

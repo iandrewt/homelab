@@ -13,12 +13,16 @@ from .shell import BootstrapError, run
 BOOT_TAG = "proxmox-boot"
 
 
-def render(host: str) -> str:
-    found = facts(netbox.api(), host)
+def cluster_of(host: str) -> dict:
     clusters = [yaml.safe_load(p.read_text()) for p in Repo.discover().clusters.glob("*.yaml")]
     cluster = next((c for c in clusters if host in c["nodes"]), None)
     if cluster is None:
         raise BootstrapError(f"{host} is a node in no cluster file")
+    return cluster
+
+
+def render(host: str, cluster: dict) -> str:
+    found = facts(netbox.api(), host)
     vault = cluster["onepassword_vault"]
     password, ssh_key = secrets.resolve(
         f"op://{cluster['onepassword_break_glass_vault']}/Proxmox Root Login - {host}/password",

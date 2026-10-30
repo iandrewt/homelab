@@ -359,7 +359,7 @@ uv run pytest
 
 uv run homelab bootstrap pi --device /dev/sdX --hostname ratatoskr --site alfheim \
   --ssh-key-ref op://...
-uv run homelab bootstrap proxmox --host yggdrasil   # its answer inside the latest ISO
+uv run homelab bootstrap proxmox --host yggdrasil   # its answer inside its cell's newest ISO
 
 cd ansible && uv run ansible-playbook site.yml --limit <host>
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan   # workspace alf-pve-01

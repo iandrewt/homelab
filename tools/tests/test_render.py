@@ -1,3 +1,7 @@
+import shutil
+import subprocess
+
+import pytest
 import yaml
 from conftest import DNS_ONE, K8S_1, OTHER, SITE
 from homelab.model import load
@@ -82,3 +86,14 @@ def test_a_resolver_asks_its_gateway_never_the_vip(snapshot):
     assert resolver["nameservers"]["addresses"] == ["10.0.30.1", "2001:db8:1:1300::1"]
     assert resolver["dhcp4-overrides"] == {"use-domains": True, "use-dns": False}
     assert resolver["ra-overrides"] == {"use-dns": False}
+
+
+@pytest.mark.skipif(shutil.which("vtysh") is None, reason="needs FRR's vtysh")
+def test_frr_accepts_every_sites_config(snapshot, tmp_path):
+    """It's pasted into the UDM by hand, and nothing else parses it before then."""
+    for slug in (SITE, OTHER):
+        path = tmp_path / f"{slug}-frr.conf"
+        path.write_text(frr.frr_config(site_of(snapshot, slug)))
+        checked = subprocess.run(["vtysh", "--dryrun", "--inputfile", str(path)], capture_output=True, text=True,
+                                 check=False)
+        assert checked.returncode == 0, checked.stdout + checked.stderr

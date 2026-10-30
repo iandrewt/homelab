@@ -10,6 +10,7 @@ onepassword_break_glass_vault: Break-glass
 ssh_username: tofu
 timezone: Australia/Sydney
 mailto: pve@titmuss.house
+release: 9
 mac_prefix: "BC:24:11"
 sdn:
   bridge: vmbr0

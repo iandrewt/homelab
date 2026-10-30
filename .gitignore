@@ -52,6 +52,9 @@ age-*-key.txt
 __pycache__/
 *.pyc
 
+# A host's install media holds root's password hash
+*.iso
+
 # Editors / OS noise
 .DS_Store
 
