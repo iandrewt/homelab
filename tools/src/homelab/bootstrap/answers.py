@@ -26,19 +26,15 @@ def render(host: str) -> str:
     )
     root_hash = run("openssl", "passwd", "-6", "-stdin", input=password, capture=True).strip()
     site = load()["sites"][found["site"]]
-    ip = ipaddress.ip_interface(found["cidr"]).ip
+    return tomli_w.dumps(answer(found, cluster, site, root_hash, ssh_key))
+
+
+def answer(facts: dict, cluster: dict, site: dict, root_hash: str, ssh_key: str) -> dict:
+    ip = ipaddress.ip_interface(facts["cidr"]).ip
     gateway = next(
         v["gateway_ipv6"] for v in site["vlans"].values()
         if v["ipv6"] and ip in ipaddress.ip_network(v["ipv6"])
     )
-    return tomli_w.dumps(
-        answer(found, cluster, root_hash, ssh_key, gateway, site["anycast"]["ipv6"])
-    )
-
-
-def answer(
-    facts: dict, cluster: dict, root_hash: str, ssh_key: str, gateway: str, resolver: str
-) -> dict:
     return {
         "global": {
             "keyboard": "en-us",
@@ -53,7 +49,7 @@ def answer(
             "source": "from-answer",
             "cidr": facts["cidr"],
             "gateway": gateway,
-            "dns": resolver,
+            "dns": site["dns"]["recursor"]["ipv6"],
             "filter": {"ID_NET_NAME_MAC": "enx" + facts["mac"].replace(":", "").lower()},
         },
         # The boot disk holds only the OS; guests live on the node's ZFS pools

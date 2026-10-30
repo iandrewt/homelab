@@ -3,7 +3,7 @@
   ansible.builtin.uri:
     url: "{{ powerdns_resolver_primary_api_url }}/zones/{{ item.name }}./cryptokeys"
     headers:
-      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+      X-Api-Key: "{{ powerdns_resolver_primary_api_key }}"
     status_code: [200, 404]
   loop: "{{ powerdns_resolver_zones | rejectattr('dnssec_keys', 'eq', []) | list }}"
   loop_control:

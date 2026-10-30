@@ -21,6 +21,8 @@ RENDERED_SESSIONS = ("active", "planned")
 PRIMARY_TAG = "dns-primary"
 # A zone whose owner writes its records over RFC 2136, which octoDNS must leave alone
 RFC2136_TAG = "rfc2136"
+# A Service's parent, in the terms `_host` keys a host by
+HOST_TYPES = {"dcim.device": "device", "virtualization.virtualmachine": "vm"}
 # A site's machines are named under <slug>.infra, beside its home network's <slug>.home
 SUBSTRATE_LABEL = "infra"
 
@@ -301,19 +303,20 @@ def _services(hosts: list[dict], site_addresses: list[dict], snap: netbox.Snapsh
     """The Services of each host at the site, and of each FHRP group whose addresses are the
     site's, with the sources that may reach them: the Service's own audience, else that of the
     most specific prefix holding its address."""
-    names = {h["name"] for h in hosts}
+    # A host's name is unique only within its site, and a nested FHRP group carries none
+    names = {_host(h): h["name"] for h in hosts}
     mine = {a["address"] for a in site_addresses}
-    # A nested FHRP group carries no name
     groups = {g["id"]: g["name"] for g in snap.fhrp_groups}
     services: dict[str, dict] = {}
     for svc in snap.services:
-        anycast = svc.get("parent_object_type") == "ipam.fhrpgroup"
-        parent = groups.get(svc.get("parent_object_id")) if anycast else (svc.get("parent") or {}).get("name")
         addresses = [a["address"] for a in svc.get("ipaddresses") or []]
-        anycast = anycast and any(a in mine for a in addresses)
-        if parent not in names and not anycast:
+        kind, parent = svc.get("parent_object_type"), svc.get("parent_object_id")
+        if kind == "ipam.fhrpgroup":
+            host = groups.get(parent) if any(a in mine for a in addresses) else None
+        else:
+            host = names.get((HOST_TYPES.get(kind), parent))
+        if host is None:
             continue
-        host = parent
         wanted = audience(svc)
         if wanted is None and addresses:
             ip = ipaddress.ip_interface(addresses[0]).ip
@@ -331,9 +334,9 @@ def _services(hosts: list[dict], site_addresses: list[dict], snap: netbox.Snapsh
 
 def _dns(hosts: list[dict], addresses: list[dict], vlans: dict, speakers: dict,
          snap: netbox.Snapshot) -> dict:
-    """The site's fleet, if it has one; the recursor, which is global, so every site's -
-    a spoke with no fleet of its own included; and each server's own authoritative address,
-    never the recursor's, with the VLAN it's on."""
+    """The recursor, which is global, so every site's - a spoke with no fleet of its own
+    included; and each server's own authoritative address, never the recursor's, with the
+    VLAN it's on and the speaker group originating it."""
     pools = {
         purpose: [_net(p) for p in snap.prefixes if _slug(p, "role") == purpose]
         for purpose in (RECURSOR_PURPOSE, AUTHORITATIVE_PURPOSE)
@@ -343,10 +346,6 @@ def _dns(hosts: list[dict], addresses: list[dict], vlans: dict, speakers: dict,
         ip = ipaddress.ip_address(a) if isinstance(a, str) else _ip(a)
         return any(ip in n for n in pools[purpose] if n.version == ip.version)
 
-    # The fleet is whoever originates the site's authoritative addresses; every fleet the recursor
-    fleet = next((n for n, o in speakers.items() if any(inside(a, AUTHORITATIVE_PURPOSE) for a in o["addresses"])),
-                 None)
-
     recursor = {_ip(a).version: str(_ip(a)) for a in snap.addresses if inside(a, RECURSOR_PURPOSE)}
 
     servers = {}
@@ -355,19 +354,21 @@ def _dns(hosts: list[dict], addresses: list[dict], vlans: dict, speakers: dict,
             continue
         held = [a for a in addresses if _holder(a) == _host(host)]
         authoritative = {_ip(a).version: str(_ip(a)) for a in held if inside(a, AUTHORITATIVE_PURPOSE)}
+        # None until it's leased an address, as a resolver mid-rebuild hasn't
         vlan = next(
-            name
-            for a in held
-            for name, v in vlans.items()
-            for net in (v["ipv4"], v["ipv6"])
-            if net and _ip(a) in ipaddress.ip_network(net)
+            (name
+             for a in held
+             for name, v in vlans.items()
+             for net in (v["ipv4"], v["ipv6"])
+             if net and _ip(a) in ipaddress.ip_network(net)),
+            None,
         )
+        asn = next((n for n, o in speakers.items() if set(authoritative.values()) & set(o["addresses"])), None)
         servers[host["name"]] = {
-            "ipv4": authoritative.get(4), "ipv6": authoritative.get(6), "vlan": vlan,
+            "ipv4": authoritative.get(4), "ipv6": authoritative.get(6), "vlan": vlan, "asn": asn,
             "primary": PRIMARY_TAG in _tags(host),
         }
     return {
-        "asn": fleet,
         "recursor": {"ipv4": recursor.get(4), "ipv6": recursor.get(6)} if recursor else None,
         "servers": servers,
     }

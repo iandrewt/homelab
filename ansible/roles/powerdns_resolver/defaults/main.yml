@@ -13,6 +13,7 @@ powerdns_resolver_query_logging: false
 
 # The primary's API, which the control node reads the signed zones' DS records from
 powerdns_resolver_primary_api_url: ~
+powerdns_resolver_primary_api_key: ~
 
 # The other servers: the primary notifies them and lets them transfer; recursors forward to them
 powerdns_resolver_peer_addresses: []

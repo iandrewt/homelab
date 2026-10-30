@@ -1,6 +1,6 @@
 import dataclasses
 
-from conftest import DNS_ONE, DNS_TWO, OTHER, SITE, SPOKE, device, prefix, soa, vlan, zone
+from conftest import DNS_ONE, DNS_TWO, OTHER, SITE, SPOKE, address, asn, device, prefix, service, soa, vlan, zone
 from homelab import netbox
 from homelab.model import load, sources, unzoned
 
@@ -28,9 +28,40 @@ def test_a_global_address_belongs_to_every_site_whose_fleet_originates_it(snapsh
 
 def test_a_spoke_with_no_fleet_of_its_own_still_has_the_recursor(snapshot):
     """It's global: Site Magic carries it from whichever hub's fleet is nearer."""
-    dns = loads(snapshot)["sites"][SPOKE]["dns"]
-    assert dns["recursor"]["ipv4"] == "10.239.0.53"
-    assert dns["asn"] is None
+    assert loads(snapshot)["sites"][SPOKE]["dns"]["recursor"]["ipv4"] == "10.239.0.53"
+
+
+def test_each_server_speaks_as_the_group_originating_its_own_address(snapshot):
+    """A site may hold two fleets, so a server's ASN is never the site's."""
+    second = DNS_ONE + 1
+    servers = loads(
+        snapshot,
+        asns=[*snapshot.asns, asn(second, "dns")],
+        addresses=[*snapshot.addresses, address("10.0.40.2/28", holder="huginn", origins=[second])],
+        devices=[*snapshot.devices, device("huginn", "dns-resolver")],
+    )["sites"][SITE]["dns"]["servers"]
+    assert (servers["ratatoskr"]["asn"], servers["huginn"]["asn"]) == (DNS_ONE, second)
+
+
+def test_a_resolver_with_no_lease_yet_stops_nothing_else(snapshot):
+    """Its VLAN is where its lease is, and a rebuild records that only once leased. Every
+    consumer loads the whole model, Platform's Proxmox runs included."""
+    leased = ("dhcp", "slaac")
+    rebuilding = [a for a in snapshot.addresses if not (a["status"]["value"] in leased and _named(a, "ratatoskr"))]
+    assert loads(snapshot, addresses=rebuilding)["sites"][SITE]["dns"]["servers"]["ratatoskr"]["vlan"] is None
+
+
+def test_a_host_name_at_two_sites_is_two_hosts(snapshot):
+    """A device's name is unique only within its site, so a Service joins its host by ID."""
+    elsewhere = device("ratatoskr", "dns-resolver", OTHER, id=1)
+    sites = loads(snapshot, devices=[*snapshot.devices, elsewhere],
+                  services=[service("PowerDNS API", elsewhere, [8081])])["sites"]
+    assert "ratatoskr" not in sites[SITE]["services"]
+    assert "PowerDNS API" in sites[OTHER]["services"]["ratatoskr"]
+
+
+def _named(raw: dict, host: str) -> bool:
+    return ((raw.get("assigned_object") or {}).get("device") or {}).get("name") == host
 
 
 def test_a_sites_vlans_are_in_the_group_named_by_its_slug(snapshot):

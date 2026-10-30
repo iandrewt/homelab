@@ -14,3 +14,10 @@ def model(item: str | None = None) -> dict:
 def site_of(host: str, item: str | None = None) -> dict | None:
     """A host NetBox doesn't know is at no site."""
     return next((s for s in model(item)["sites"].values() if host in s["hosts"]), None)
+
+
+def dns_primary_site(item: str | None = None) -> dict | None:
+    return next(
+        (s for s in model(item)["sites"].values() if any(v["primary"] for v in s["dns"]["servers"].values())),
+        None,
+    )

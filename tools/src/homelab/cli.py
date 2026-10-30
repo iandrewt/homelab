@@ -110,9 +110,9 @@ def _network_config(args) -> int:
 
     resolver = None
     if args.resolver:
-        resolver = site["resolvers"].get(args.resolver)
+        resolver = site["dns"]["servers"].get(args.resolver)
         if resolver is None:
-            known = ", ".join(sorted(site["resolvers"])) or "none"
+            known = ", ".join(sorted(site["dns"]["servers"])) or "none"
             print(f"{args.resolver!r} is not a resolver at {args.site}. Known: {known}",
                   file=sys.stderr)
             return 1

@@ -11,7 +11,7 @@ dns_resolver_peers: >-
      | map(attribute='value') | list }}
 dns_resolver_vlan: "{{ netbox_site.vlans[dns_resolver.vlan] }}"
 
-frr_bgp_local_asn: "{{ netbox_site.dns.asn }}"
+frr_bgp_local_asn: "{{ dns_resolver.asn }}"
 frr_bgp_peer_asn: "{{ netbox_site.router_asn }}"
 frr_bgp_peer_address: "{{ dns_resolver_vlan.gateway_ipv4 }}"
 frr_bgp_gateways: "{{ [dns_resolver_vlan.gateway_ipv4, dns_resolver_vlan.gateway_ipv6] | select | list }}"
@@ -39,6 +39,7 @@ dns_resolver_api_sources: "{{ netbox_site.services[inventory_hostname]['PowerDNS
 powerdns_resolver_api_allow_from: "{{ dns_resolver_api_sources.ipv4 + dns_resolver_api_sources.ipv6 }}"
 
 powerdns_resolver_api_key: "{{ powerdns_api_key }}"
+powerdns_resolver_primary_api_key: "{{ powerdns_primary_api_key }}"
 powerdns_resolver_primary_api_url: >-
   {{ 'http://[%s]:8081/api/v1/servers/localhost' % dns_resolver_primary.ipv6
      if dns_resolver_primary.ipv6 else

@@ -102,15 +102,28 @@ def _id(name: str) -> int:
     return zlib.crc32(name.encode())
 
 
-def device(name, role, site_slug=SITE, tags=(), role_name=None, primary_ip6=None) -> dict:
+def device(name, role, site_slug=SITE, tags=(), role_name=None, primary_ip6=None, id=None) -> dict:
     return {
-        "id": _id(name),
+        "id": id or _id(name),
         "device_type": {"model": "test"},
         "name": name,
         "primary_ip6": primary_ip6 and {"address": primary_ip6},
         "role": {"slug": role, "name": role_name or role},
         "site": _site_ref(site_slug),
         "tags": [{"slug": t} for t in tags],
+    }
+
+
+def service(name, host, ports, *, addresses=()) -> dict:
+    return {
+        "name": name,
+        "protocol": {"value": "tcp"},
+        "ports": list(ports),
+        "parent_object_type": "dcim.device",
+        "parent_object_id": host["id"],
+        "parent": {"id": host["id"], "name": host["name"]},
+        "ipaddresses": [{"address": a} for a in addresses],
+        "custom_fields": {},
     }
 
 

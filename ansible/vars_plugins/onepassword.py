@@ -3,7 +3,8 @@
 Every task runs in a worker that Ansible detaches from the terminal, so a lookup made from
 a task asks for approval again each time. This resolves what `inventory/onepassword.yml`
 declares before any worker starts, on the one SDK client the NetBox plugin also uses.
-A reference may name `{host}` and `{site}`, the host's slug in NetBox.
+A reference may name `{host}`, `{site}`, the host's slug in NetBox, and `{primary_site}`, the
+zones' primary's.
 """
 
 import os
@@ -40,8 +41,10 @@ class VarsModule(BaseVarsPlugin):
                 continue
             try:
                 site = inventory.site_of(host.name, NETBOX_ITEM_REF)
+                primary = inventory.dns_primary_site(NETBOX_ITEM_REF)
                 references = {
-                    name: reference.format(host=host.name, site=site and site["slug"])
+                    name: reference.format(host=host.name, site=site and site["slug"],
+                                           primary_site=primary and primary["slug"])
                     for name, reference in wanted.items()
                 }
                 missing = sorted(set(references.values()) - _resolved.keys())
