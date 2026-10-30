@@ -36,6 +36,22 @@
   tags: [resolvers]
   hosts: dns_resolver
   become: true
+  # The others answer while one restarts
+  serial: 1
+  max_fail_percentage: 0
   roles:
     - frr_bgp
     - powerdns_resolver
+  post_tasks:
+    - name: Wait until the router has every route from this resolver back, before the next goes
+      ansible.builtin.command: vtysh -c 'show bgp neighbors json'
+      register: resolvers_bgp
+      changed_when: false
+      check_mode: false
+      retries: 30
+      delay: 5
+      until: >-
+        resolvers_bgp.stdout | from_json | dict2items | map(attribute='value')
+        | selectattr('bgpState', 'eq', 'Established') | map(attribute='addressFamilyInfo')
+        | map('dict2items') | flatten | map(attribute='value.sentPrefixCounter') | sum
+        == (frr_bgp_service_addresses + frr_bgp_anycast_addresses) | length

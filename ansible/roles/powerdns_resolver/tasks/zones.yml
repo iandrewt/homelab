@@ -1,4 +1,6 @@
 ---
+# A secondary transfers only a new serial, so a signed zone's moves with each weekly re-sign,
+# or the secondary serves the old signatures past their expiry.
 - name: Declare every zone, with its name servers and NetBox's SOA
   ansible.builtin.set_fact:
     powerdns_resolver_provision_zones: >-
@@ -6,6 +8,7 @@
            'name': item.name ~ '.',
            'kind': 'Master',
            'soa_edit_api': 'DEFAULT',
+           'soa_edit': 'INCEPTION-INCREMENT' if item.dnssec_keys else '',
            'nameservers': item.nameservers | map('regex_replace', '$', '.') | list,
            'rrsets': [{
              'name': item.name ~ '.',

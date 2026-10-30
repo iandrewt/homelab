@@ -29,14 +29,9 @@ powerdns_resolver_anycast_v6: ~
 # Checked against the client in dnsdist's proxy header, so anything dnsdist let in. The
 # recursor listens on loopback alone: who may ask the resolvers is dnsdist's ACL, not this.
 powerdns_resolver_allow_from: [0.0.0.0/0, "::/0"]
-powerdns_resolver_gua_prefix: ~
+
+# Who may ask, as CIDRs: dnsdist refuses everyone else
+powerdns_resolver_acl: []
 
 # [{name, nameservers, soa, soa_ttl}]
 powerdns_resolver_zones: []
-
-# {slug: {forward_zone, vlans: {name: {ipv4, ipv6}}}}
-powerdns_resolver_sites: {}
-
-# Site Magic carries IPv4 only, so a client at one site is never handed another site's
-# AAAA records. Set once the tunnel carries IPv6 too.
-powerdns_resolver_cross_site_ipv6: false

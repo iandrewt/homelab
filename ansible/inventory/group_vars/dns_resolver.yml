@@ -26,7 +26,11 @@ powerdns_resolver_anycast_v4: "{{ netbox_site.dns.recursor.ipv4 }}"
 powerdns_resolver_anycast_v6: "{{ netbox_site.dns.recursor.ipv6 }}"
 powerdns_resolver_service_v4: "{{ dns_resolver.ipv4 }}"
 powerdns_resolver_service_v6: "{{ dns_resolver.ipv6 }}"
-powerdns_resolver_gua_prefix: "{{ netbox_site.gua_prefix }}"
+powerdns_resolver_acl: >-
+  {{ netbox_site.services.recursor.values() | map(attribute='sources')
+     | map(attribute='ipv4') | flatten | unique | list
+   + netbox_site.services.recursor.values() | map(attribute='sources')
+     | map(attribute='ipv6') | flatten | unique | list }}
 
 powerdns_resolver_peer_addresses: >-
   {{ dns_resolver_peers | map(attribute='ipv4') | select | list
@@ -46,4 +50,3 @@ powerdns_resolver_primary_api_url: >-
      'http://%s:8081/api/v1/servers/localhost' % dns_resolver_primary.ipv4 }}
 
 powerdns_resolver_zones: "{{ netbox_zones }}"
-powerdns_resolver_sites: "{{ netbox_sites }}"

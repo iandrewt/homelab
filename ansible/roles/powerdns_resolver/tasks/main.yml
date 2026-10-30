@@ -38,6 +38,7 @@
       }}{% endfor %}
 
 - name: Compute the authoritative server's pdns_config
+  no_log: true
   ansible.builtin.set_fact:
     powerdns_resolver_pdns_config: >-
       {{
@@ -80,6 +81,9 @@
 - name: Configure the authoritative server
   ansible.builtin.include_role:
     name: PowerDNS.pdns
+    # pdns.conf holds the API key
+    apply:
+      diff: false
   vars:
     pdns_config: "{{ powerdns_resolver_pdns_config }}"
     pdns_api_url: "http://[::1]:8081/api/v1/servers/localhost"
@@ -90,6 +94,7 @@
     pdns_lmdb_databases_locations:
       - /var/lib/powerdns/pdns.lmdb
     pdns_provision: true
+    pdns_provision_update_existing: true
     pdns_provision_zones: "{{ (powerdns_resolver_provision_zones | default([])) if powerdns_resolver_role == 'primary' else [] }}"
     pdns_provision_pdnsutils: "{{ powerdns_resolver_secondary_zone_commands | default([]) }}"
     pdns_provision_cryptokeys: "{{ (powerdns_resolver_provision_cryptokeys | default([])) if powerdns_resolver_role == 'primary' else [] }}"
@@ -169,39 +174,14 @@
       {% for local in powerdns_resolver_dnsdist_locals %}
       {{ 'setLocal' if loop.first else 'addLocal' }}("{{ local }}", {reusePort=true})
       {% endfor %}
+      setACL({ {{- powerdns_resolver_acl | map('to_json') | join(', ') -}} })
       {% if powerdns_resolver_query_logging | bool %}
       -- First, so no other rule's answer goes unlogged
       addAction(AllRule(), LogAction("", false, false, false, false))
       addResponseAction(AllRule(), LogResponseAction("", false, false, false))
       {% endif %}
-      {% if not powerdns_resolver_cross_site_ipv6 %}
-      {%   for owner in powerdns_resolver_sites.values() if owner.forward_zone %}
-      {%     set others = powerdns_resolver_sites.values() | rejectattr('slug', 'eq', owner.slug)
-                          | map(attribute='vlans') | map('dict2items') | flatten | map(attribute='value') | list %}
-      {#     A VLAN-only network has no IPv4, and some none of IPv6 #}
-      {%     set clients = (others | map(attribute='ipv4') | select | list) + (others | map(attribute='ipv6') | select | list) %}
-      {%     set zone = (powerdns_resolver_zones | selectattr('name', 'eq', owner.forward_zone) | first) %}
-      {%     if clients %}
-      -- {{ owner.slug }}'s IPv6 addresses aren't reachable from another site
-      do
-        local clients = newNMG()
-      {%       for net in clients %}
-        clients:addMask("{{ net }}")
-      {%       endfor %}
-        local zone = newSuffixMatchNode()
-        zone:add("{{ owner.forward_zone }}.")
-        addAction(
-          AndRule({QTypeRule(DNSQType.AAAA), SuffixMatchNodeRule(zone), NetmaskGroupRule(clients)}),
-          NegativeAndSOAAction(false, "{{ owner.forward_zone }}.", 300, "{{ zone.nameservers | first }}.",
-                               "hostmaster.{{ owner.forward_zone }}.", 1, 3600, 600, 86400, 300)
-        )
-      end
-      {%     endif %}
-      {%   endfor %}
-      {% endif %}
     dnsdist_servers:
       - '{address="[::1]:53", useProxyProtocol=true, healthCheckMode="lazy", lazyHealthCheckMode="TimeoutOnly"}'
     dnsdist_controlsocket: "::1"
-    # addACL appends, so dnsdist's built-in private ranges still apply - this only adds
-    # the site's public prefix, which those defaults can't know about.
-    dnsdist_acls: "{{ [powerdns_resolver_gua_prefix] if powerdns_resolver_gua_prefix else [] }}"
+    # addACL appends to dnsdist's defaults, every private range among them; setACL replaces them
+    dnsdist_acls: []
