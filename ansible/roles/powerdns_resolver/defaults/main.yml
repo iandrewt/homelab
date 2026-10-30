@@ -35,3 +35,7 @@ powerdns_resolver_acl: []
 
 # [{name, nameservers, soa, soa_ttl}]
 powerdns_resolver_zones: []
+
+# {zone: [{keytype, privatekey, active, published}]}, for a rebuilt primary: `homelab dns keys
+# restore` runs the play with them in its environment
+powerdns_resolver_restored_keys: "{{ lookup('env', 'POWERDNS_RESOLVER_RESTORED_KEYS') | default('{}', true) | from_json }}"

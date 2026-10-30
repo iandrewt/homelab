@@ -81,9 +81,10 @@
 - name: Configure the authoritative server
   ansible.builtin.include_role:
     name: PowerDNS.pdns
-    # pdns.conf holds the API key
+    # pdns.conf holds the API key, and a restore's keys are private
     apply:
       diff: false
+      no_log: "{{ powerdns_resolver_restored_keys | length > 0 }}"
   vars:
     pdns_config: "{{ powerdns_resolver_pdns_config }}"
     pdns_api_url: "http://[::1]:8081/api/v1/servers/localhost"

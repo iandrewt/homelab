@@ -22,12 +22,15 @@
     label: "{{ item.name }}"
 
 # The PowerDNS role creates a zone's keys only while it has none, so a rollover is the
-# operator's, not a converge's.
+# operator's, not a converge's, and a restored key is imported only into a new zone.
 - name: Declare each signed zone's keys
   ansible.builtin.set_fact:
     powerdns_resolver_provision_cryptokeys: >-
       {{ (powerdns_resolver_provision_cryptokeys | default([]))
-         + item.dnssec_keys | map('combine', {'zone': item.name ~ '.', 'active': true}) | list }}
+         + (powerdns_resolver_restored_keys[item.name] | map('combine', {'zone': item.name ~ '.'}) | list
+            if item.name in powerdns_resolver_restored_keys else
+            item.dnssec_keys | map('combine', {'zone': item.name ~ '.', 'active': true}) | list) }}
   loop: "{{ powerdns_resolver_zones }}"
   loop_control:
     label: "{{ item.name }}"
+  no_log: "{{ powerdns_resolver_restored_keys | length > 0 }}"

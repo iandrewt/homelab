@@ -120,7 +120,8 @@ computes; what a prefix must satisfy is NetBox's own containment. The design is 
   Route53 (`titmuss.au`), where the ownership processor leaves the platforms' names alone.
 - **A zone is signed while its DNSSEC policy is active.** PowerDNS honours only the policy's key
   templates, with NSEC; leave NSEC3, CDS/CDNSKEY and every timing unset. Keys are made once and
-  rolled by hand. Every resolver trusts the DS the control node reads from the primary each run,
+  rolled by hand; `homelab dns keys backup` copies them to `Break-glass`, and a rebuilt primary
+  imports them (`homelab dns keys restore`), so every DS holds. Every resolver trusts the DS the control node reads from the primary each run,
   and gives an unsigned internal zone a negative anchor. For a client validating itself, `infra`,
   `sys`, `home` and `int` are secure delegations from Cloudflare's `titmuss.zone` to
   `hugin.titmuss.zone` and `ratatoskr.titmuss.zone`, and each delegates its children the same

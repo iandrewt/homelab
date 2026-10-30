@@ -22,6 +22,10 @@ from .repo import Repo
 POWERDNS = "octodns_powerdns.PowerDnsProvider"
 DELEGATIONS = "homelab.dns_sources.PowerDnsDelegations"
 CLOUDFLARE_TOKEN_REF = "op://Network/Cloudflare API Token - octoDNS/credential"
+# The signing keys exist only on the primary, so they're kept where only tools run by hand read
+KEY_VAULT = "Break-glass"
+KEY_ITEM = "DNSSEC Key - "
+RESTORED_KEYS = "POWERDNS_RESOLVER_RESTORED_KEYS"
 
 
 class DnsError(Exception):
@@ -46,6 +50,21 @@ def register(subparsers) -> None:
         "--force", action="store_true", help="allow changes past octoDNS's safety threshold"
     )
     apply.set_defaults(run=_apply)
+
+    keys = actions.add_parser("keys", help="the signing keys, to 1Password and back")
+    steps = keys.add_subparsers(dest="step", required=True, title="steps")
+    steps.add_parser(
+        "backup", help=f"write each signed zone's keys from the primary to {KEY_VAULT}",
+        description="One item per zone, a section per key. Run it after a zone is signed or a key rolled.",
+    ).set_defaults(run=_backup)
+    restore = steps.add_parser(
+        "restore", help=f"run the resolvers play on the primary with the keys in {KEY_VAULT}",
+        description="For a rebuilt primary. A zone created in that run imports its saved keys rather "
+        "than making new ones, so its DS still holds; a zone that has keys keeps them. The keys "
+        "reach the play in its environment, never a file or the terminal.",
+    )
+    restore.add_argument("playbook_args", nargs="*", help="for ansible-playbook, after `--`")
+    restore.set_defaults(run=_restore)
 
 
 def _plan(args) -> int:
@@ -174,3 +193,81 @@ def _uncreated(config: dict, env: dict[str, str], zones: set[str]) -> list[str]:
             continue
         problems += [f"{site}: {zone} doesn't exist yet" for zone in sorted(zones - present)]
     return problems
+
+
+def _backup(args) -> int:
+    try:
+        api, key = _primary_api(load())
+        written = set()
+        for zone in sorted(_api(api, key, "/zones"), key=lambda z: z["name"]):
+            if not zone.get("dnssec"):
+                continue
+            name = zone["name"].rstrip(".")
+            fields = {}
+            for listed in _api(api, key, f"/zones/{zone['name']}/cryptokeys"):
+                k = _api(api, key, f"/zones/{zone['name']}/cryptokeys/{listed['id']}")
+                tag = k["ds"][0].split()[0] if k.get("ds") else str(k["id"])
+                section = f"{k['keytype']} {tag}"
+                fields |= {
+                    (section, "private key"): k["privatekey"], (section, "keytype"): k["keytype"],
+                    (section, "active"): str(k["active"]).lower(),
+                    (section, "published"): str(k.get("published", True)).lower(),
+                }
+            title = KEY_ITEM + name
+            print(f"{secrets.write_item(KEY_VAULT, title, fields, concealed={'private key'}, tags=['homelab/dnssec'])}: {name}")
+            written.add(title)
+        for title in sorted(set(secrets.read_items(KEY_VAULT, KEY_ITEM)) - written):
+            print(f"STALE: {title}: the primary signs no such zone", file=sys.stderr)
+    except (netbox.Unreachable, secrets.SecretError, DnsError) as bad:
+        print(f"FAIL: {bad}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _restore(args) -> int:
+    try:
+        _, primary, _ = _primary(load())
+        items = secrets.read_items(KEY_VAULT, KEY_ITEM)
+    except (netbox.Unreachable, secrets.SecretError, DnsError) as bad:
+        print(f"FAIL: {bad}", file=sys.stderr)
+        return 1
+    restored = {}
+    for title, fields in sorted(items.items()):
+        restored[title.removeprefix(KEY_ITEM)] = [
+            {"keytype": fields[(s, "keytype")], "privatekey": fields[(s, "private key")],
+             "active": fields[(s, "active")] == "true", "published": fields[(s, "published")] == "true"}
+            for s in sorted({s for s, _ in fields})
+        ]
+    playbook = Path(sys.executable).with_name("ansible-playbook")
+    command = [str(playbook), "site.yml", "--limit", primary, "--tags", "resolvers", *args.playbook_args]
+    env = {**os.environ, RESTORED_KEYS: json.dumps(restored)}
+    return subprocess.run(command, cwd=Repo.discover().root / "ansible", env=env, check=False).returncode
+
+
+def _primary(model: dict) -> tuple[str, str, dict]:
+    """The one primary: its site, its name and its server."""
+    found = next(
+        ((slug, name, server) for slug, site in sorted(model["sites"].items())
+         for name, server in site["dns"]["servers"].items() if server["primary"]),
+        None,
+    )
+    if found is None:
+        raise DnsError(f"no server is tagged {PRIMARY_TAG}")
+    return found
+
+
+def _primary_api(model: dict) -> tuple[str, str]:
+    """The one primary's API, and its key."""
+    slug, _, primary = _primary(model)
+    host = primary["ipv4"] or f"[{primary['ipv6']}]"
+    key = secrets.resolve_one(f"op://Network/PowerDNS API Key - {slug}/credential")
+    return f"http://{host}:8081/api/v1/servers/localhost", key
+
+
+def _api(base: str, key: str, path: str):
+    request = urllib.request.Request(base + path, headers={"X-API-Key": key})
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return json.load(response)
+    except (urllib.error.URLError, TimeoutError) as down:
+        raise DnsError(f"{base}{path}: {down}") from down
