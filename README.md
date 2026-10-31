@@ -1,6 +1,6 @@
 # homelab
 
-Infrastructure-as-code for my home network and home lab (site `alfheim`): OpenTofu builds the Proxmox cluster and its guests, Ansible configures the hosts, and NetBox is the source of truth for every address either of them uses. [`docs/netbox.md`](docs/netbox.md) says what to put in yours.
+Infrastructure-as-code for one home network and its lab (site `alfheim`): OpenTofu builds the Proxmox cluster and its guests, Ansible configures the hosts, and NetBox is the source of truth for every address either of them uses. [`docs/netbox.md`](docs/netbox.md) says what to put in yours.
 
 ## Layout
 

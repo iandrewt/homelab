@@ -41,7 +41,7 @@ rirs:
 roles:
   people:
     name: People
-    description: Our own devices
+    description: Personal devices
   work:
     name: Work
     description: The employer's laptop
