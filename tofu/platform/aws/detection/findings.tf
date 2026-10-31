@@ -4,7 +4,13 @@ locals {
       pattern = {
         source        = ["aws.guardduty"]
         "detail-type" = ["GuardDuty Finding"]
-        detail        = { severity = [{ numeric = [">=", 4] }] }
+        detail = {
+          # Root use is Low, and the break-glass path
+          "$or" = [
+            { severity = [{ numeric = [">=", 4] }] },
+            { type = [{ prefix = "Policy:IAMUser/RootCredentialUsage" }] },
+          ]
+        }
       }
       paths = {
         severity = "$.detail.severity"
@@ -54,6 +60,13 @@ resource "aws_sns_topic_subscription" "findings" {
   endpoint  = data.aws_organizations_organization.this.master_account_email
 }
 
+check "findings_confirmed" {
+  assert {
+    condition     = !anytrue([for s in aws_sns_topic_subscription.findings : s.pending_confirmation])
+    error_message = "Unconfirmed: findings in ${join(", ", [for region, s in aws_sns_topic_subscription.findings : region if s.pending_confirmation])}. Confirm its email."
+  }
+}
+
 resource "aws_cloudwatch_event_rule" "findings" {
   for_each = local.region_alerts
 
@@ -83,17 +96,29 @@ resource "aws_sns_topic_policy" "findings" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "EventBridgePublishes"
-      Effect    = "Allow"
-      Principal = { Service = "events.amazonaws.com" }
-      Action    = "sns:Publish"
-      Resource  = aws_sns_topic.findings[each.key].arn
-      Condition = {
-        ArnEquals = {
-          "aws:SourceArn" = [for key, rule in aws_cloudwatch_event_rule.findings : rule.arn if local.region_alerts[key].region == each.key]
+    Statement = concat(
+      [{
+        Sid       = "EventBridgePublishes"
+        Effect    = "Allow"
+        Principal = { Service = "events.amazonaws.com" }
+        Action    = "sns:Publish"
+        Resource  = aws_sns_topic.findings[each.key].arn
+        Condition = {
+          ArnEquals = {
+            "aws:SourceArn" = [for key, rule in aws_cloudwatch_event_rule.findings : rule.arn if local.region_alerts[key].region == each.key]
+          }
         }
-      }
-    }]
+      }],
+      each.key == data.aws_region.current.region ? [{
+        Sid       = "AlarmsPublish"
+        Effect    = "Allow"
+        Principal = { Service = "cloudwatch.amazonaws.com" }
+        Action    = "sns:Publish"
+        Resource  = aws_sns_topic.findings[each.key].arn
+        Condition = {
+          ArnEquals = { "aws:SourceArn" = [for alarm in aws_cloudwatch_metric_alarm.guardrails : alarm.arn] }
+        }
+      }] : [],
+    )
   })
 }

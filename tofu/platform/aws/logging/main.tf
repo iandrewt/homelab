@@ -162,6 +162,44 @@ resource "aws_s3_bucket_policy" "trail" {
   })
 }
 
+# What detection's alarms filter, every account's and region's in one place. The bucket is the
+# archive; this keeps a fortnight for looking into an alarm.
+resource "aws_cloudwatch_log_group" "trail" {
+  provider = aws.security
+
+  name              = "/aws/cloudtrail/${local.trail_name}"
+  retention_in_days = 14
+}
+
+resource "aws_iam_role" "trail_logs" {
+  provider = aws.security
+
+  name = "cloudtrail-logs"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "cloudtrail.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+      Condition = { StringEquals = { "aws:SourceArn" = local.trail_arn } }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "trail_logs" {
+  provider = aws.security
+
+  role = aws_iam_role.trail_logs.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["logs:CreateLogStream", "logs:PutLogEvents"]
+      Resource = "${aws_cloudwatch_log_group.trail.arn}:log-stream:*"
+    }]
+  })
+}
+
 resource "aws_cloudtrail" "organisation" {
   provider = aws.security
 
@@ -173,5 +211,9 @@ resource "aws_cloudtrail" "organisation" {
   include_global_service_events = true
   enable_log_file_validation    = true
 
-  depends_on = [aws_s3_bucket_policy.trail, aws_s3_bucket_object_lock_configuration.trail]
+  # A delegated administrator's trail delivers to its own account's group and role
+  cloud_watch_logs_group_arn = "${aws_cloudwatch_log_group.trail.arn}:*"
+  cloud_watch_logs_role_arn  = aws_iam_role.trail_logs.arn
+
+  depends_on = [aws_s3_bucket_policy.trail, aws_s3_bucket_object_lock_configuration.trail, aws_iam_role_policy.trail_logs]
 }
