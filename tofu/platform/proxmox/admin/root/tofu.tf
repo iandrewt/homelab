@@ -2,10 +2,6 @@ terraform {
   required_version = "~> 1.13"
 
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 6.66"
-    }
     proxmox = {
       source  = "bpg/proxmox"
       version = "~> 0.114"
@@ -52,16 +48,6 @@ terraform {
 
 locals {
   cluster = yamldecode(file("${path.module}/../../clusters/${terraform.workspace}.yaml"))
-}
-
-# TODO: drop once an apply has destroyed the ACME user
-provider "aws" {
-  region  = "ap-southeast-2"
-  profile = "homelab-network"
-
-  default_tags {
-    tags = { managed-by = "opentofu", layer = "platform/proxmox/admin/root", cluster = terraform.workspace }
-  }
 }
 
 provider "onepassword" {}

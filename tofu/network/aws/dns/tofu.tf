@@ -6,10 +6,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.66"
     }
-    cloudflare = {
-      source  = "cloudflare/cloudflare"
-      version = "~> 5.26"
-    }
     onepassword = {
       source  = "1Password/onepassword"
       version = "~> 3.3"
@@ -66,16 +62,6 @@ provider "onepassword" {}
 
 data "onepassword_vault" "network" {
   name = "Network"
-}
-
-ephemeral "onepassword_item" "cloudflare" {
-  vault = data.onepassword_vault.network.uuid
-  title = "Cloudflare API Token - Tofu"
-}
-
-# TODO: drop Cloudflare once an apply has destroyed the public copy's records
-provider "cloudflare" {
-  api_token = ephemeral.onepassword_item.cloudflare.credential
 }
 
 ephemeral "onepassword_item" "netbox" {
