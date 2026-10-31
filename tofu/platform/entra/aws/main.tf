@@ -1,6 +1,6 @@
 # The gallery app. Its SAML certificate and SCIM credentials are set by hand.
 data "azuread_service_principal" "aws" {
-  display_name = "AWS IAM Identity Center"
+  client_id = "63ae04d6-e810-4d36-90d1-45d95b2b8e77"
 }
 
 module "groups" {
@@ -69,8 +69,36 @@ resource "msgraph_update_resource" "aws_unmarked" {
 }
 
 data "msgraph_resource" "aws_jobs" {
-  url                    = "servicePrincipals/${local.aws_sp}/synchronization/jobs"
-  response_export_values = { ids = "value[].id" }
+  url = "servicePrincipals/${local.aws_sp}/synchronization/jobs"
+  response_export_values = {
+    ids    = "value[].id"
+    codes  = "value[].status.code"
+    states = "value[].status.lastExecution.state"
+  }
+}
+
+# The SCIM token's expiry is visible nowhere, so this is how it shows
+check "aws_provisioning" {
+  assert {
+    condition = alltrue([
+      for i, code in data.msgraph_resource.aws_jobs.output.codes :
+      code == "Active" && data.msgraph_resource.aws_jobs.output.states[i] == "Succeeded"
+    ])
+    error_message = "AWS IAM Identity Center's provisioning is ${join(", ", data.msgraph_resource.aws_jobs.output.codes)}: if its token has expired, make a new one in Identity Center and save it in Entra."
+  }
+}
+
+check "aws_signing_certificate" {
+  data "msgraph_resource" "aws_signing" {
+    url                    = "servicePrincipals/${local.aws_sp}"
+    query_parameters       = { "$select" = ["keyCredentials"] }
+    response_export_values = { ends = "keyCredentials[?usage == 'Verify'].endDateTime" }
+  }
+
+  assert {
+    condition     = alltrue([for end in data.msgraph_resource.aws_signing.output.ends : timecmp(end, timeadd(plantimestamp(), "1440h")) > 0])
+    error_message = "AWS IAM Identity Center's SAML certificate expires within 60 days: make a new one in Entra and upload it to Identity Center."
+  }
 }
 
 data "msgraph_resource" "aws_schema" {

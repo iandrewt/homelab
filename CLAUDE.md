@@ -320,6 +320,9 @@ groups it grants. Apps live there (`modules/entra-app`), so a rebuild keeps its 
 each is consented for everyone, so no user may consent to anything. App roles are for
 permissions an app defines itself, never team membership.
 
+**Tenant policies are set by hand**: the Azure CLI can't be granted `Policy.*` scopes, so
+`directory` checks what it can read of them.
+
 AWS is ABAC: a permission set says what an entity can do, never who it is. `entra/aws` writes
 the `team-<team>` SAML claims and SCIM's scope; membership is written onto users and groups as
 the `aws` directory extension, which the scoping filters read, always before the scope is saved
