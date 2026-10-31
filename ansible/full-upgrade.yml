@@ -1,7 +1,9 @@
 ---
 - name: Deliberate apt full-upgrade pass
-  hosts: debian
+  hosts: all
   become: true
+  # An upgrade restarts what a host serves, and a resolver's peer answers meanwhile
+  serial: 1
   tasks:
     - name: Update apt cache
       ansible.builtin.apt:

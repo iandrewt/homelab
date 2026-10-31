@@ -1,6 +1,6 @@
 ---
 - name: Report hardware facts for host_vars
-  hosts: debian
+  hosts: all
   become: true
   tasks:
     - name: Disks

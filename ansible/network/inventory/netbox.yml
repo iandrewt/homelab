@@ -3,18 +3,15 @@ validate_certs: true
 
 token: "{{ lookup('secret', 'op://Network/NetBox API Token - Ansible/credential') }}"
 
+# What NetBox allocates to Network, as its tenant
 query_filters:
   - status: active
   - status: staged
   - tag: ansible-managed
+  - tenant: network
 
 groups:
-  hypervisor: "role is defined and role.slug == 'hypervisor'"
   dns_resolver: "role is defined and role.slug == 'dns-resolver'"
-  debian: >-
-    platform is defined and platform.slug in
-    ['debian-13-trixie', 'proxmox-ve-9-2', 'raspberry-pi-os-13']
-  raspberry_pi_os: "platform is defined and platform.slug.startswith('raspberry-pi-os-')"
 
 # By primary address: the hosts that serve DNS can't be reached by a name they serve
 ansible_host_dns_name: false

@@ -1,0 +1,27 @@
+---
+# Platform's base OS, which every team's tree applies to its own hosts
+- name: Raspberry Pi OS boot configuration
+  tags: [pi]
+  hosts: raspberry_pi_os
+  become: true
+  roles:
+    - raspberry_pi_os
+
+- name: CIS Debian 13 baseline
+  tags: [cis]
+  hosts: all
+  become: true
+  pre_tasks:
+    - name: Leave CIS alone unless this run selects it
+      ansible.builtin.meta: end_play
+      when: "'all' not in ansible_run_tags and 'cis' not in ansible_run_tags"
+      tags: always
+  roles:
+    - DEBIAN13-CIS
+
+- name: Debian host
+  tags: [debian]
+  hosts: all
+  become: true
+  roles:
+    - debian_host

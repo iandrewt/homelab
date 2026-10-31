@@ -274,7 +274,7 @@ def _restore(args) -> int:
     playbook = Path(sys.executable).with_name("ansible-playbook")
     command = [str(playbook), "site.yml", "--limit", primary, "--tags", "resolvers", *args.playbook_args]
     env = {**os.environ, RESTORED_KEYS: json.dumps(restored)}
-    return subprocess.run(command, cwd=Repo.discover().root / "ansible", env=env, check=False).returncode
+    return subprocess.run(command, cwd=Repo.discover().root / "ansible" / "network", env=env, check=False).returncode
 
 
 def _primary(model: dict) -> tuple[str, str, dict]:

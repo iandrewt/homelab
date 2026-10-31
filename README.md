@@ -6,7 +6,7 @@ Infrastructure-as-code for my home network and home lab (site `alfheim`): OpenTo
 
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS
-ansible/      roles, playbooks, and an inventory read from NetBox
+ansible/      a tree per team, each with an inventory read from NetBox, and the roles they share
 tofu/         a directory per team that owns state, a layer per directory, and modules
 kubernetes/   what Flux reconciles, a directory per Talos cluster
 unifi/        generated config for the UDM Pro, which nothing here can apply directly
@@ -86,21 +86,24 @@ reachable instance to find FRR drift.
 
 ### Ansible
 
-There is no inventory file. [`ansible/inventory/netbox.yml`](ansible/inventory/netbox.yml)
-builds it from NetBox: active or staged hosts tagged `ansible-managed`, grouped by device
-role and platform into the groups `site.yml` plays against. What each host needs to know
-about its site comes from [`ansible/vars_plugins/netbox.py`](ansible/vars_plugins/netbox.py),
-which loads the same model `homelab generate` renders from - so Ansible runs through `uv`.
-Its secrets are declared in [`ansible/inventory/onepassword.yml`](ansible/inventory/onepassword.yml)
-and resolved through the 1Password SDK before any task runs, so a run asks the desktop app
-once (`OP_ACCOUNT=<name>`):
+Each team runs its own hosts from its own tree, as its own NetBox user and from its own vault:
+[`ansible/network/`](ansible/network) the hosts NetBox gives Network as tenant, and
+[`ansible/platform/`](ansible/platform) what Platform owns and gave no one. There is no
+inventory file: a tree's `inventory/netbox.yml` builds it from NetBox, active or staged hosts
+tagged `ansible-managed`, grouped by device role into the groups its `site.yml` plays against.
+Both apply Platform's base OS, [`ansible/baseline.yml`](ansible/baseline.yml) and its settings
+in [`ansible/baseline/`](ansible/baseline). What each host needs to know about its site comes
+from [`ansible/vars_plugins/netbox.py`](ansible/vars_plugins/netbox.py), which loads the same
+model `homelab generate` renders from - so Ansible runs through `uv`. A tree's secrets are
+declared in its `inventory/onepassword.yml` and resolved through the 1Password SDK before any
+task runs, so a run asks the desktop app once (`OP_ACCOUNT=<name>`):
 
 ```
 uv run ansible-galaxy collection install -r ansible/requirements.yml
-cd ansible && uv run ansible-playbook site.yml --limit <hostname>
-cd ansible && uv run ansible-playbook site.yml --limit <hostname> --skip-tags cis   # routine runs
-cd ansible && uv run ansible-playbook site.yml --limit <hostname> --tags resolvers  # one play
-cd ansible && uv run ansible-playbook full-upgrade.yml
+cd ansible/network && uv run ansible-playbook site.yml --limit <hostname>
+cd ansible/network && uv run ansible-playbook site.yml --limit <hostname> --skip-tags cis   # routine runs
+cd ansible/network && uv run ansible-playbook site.yml --limit <hostname> --tags resolvers  # one play
+cd ansible/platform && uv run ansible-playbook ../full-upgrade.yml
 ```
 
 ### OpenTofu

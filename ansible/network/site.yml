@@ -1,41 +1,10 @@
 ---
-- name: Raspberry Pi OS boot configuration
-  tags: [pi]
-  hosts: raspberry_pi_os
-  become: true
-  roles:
-    - raspberry_pi_os
+- name: Base OS
+  ansible.builtin.import_playbook: ../baseline.yml
 
-- name: Proxmox node
-  tags: [proxmox]
-  hosts: hypervisor
-  become: true
-  roles:
-    - proxmox_node
-
-- name: CIS Debian 13 baseline
-  tags: [cis]
-  hosts: debian
-  become: true
-  pre_tasks:
-    - name: Leave CIS alone unless this run selects it
-      ansible.builtin.meta: end_play
-      when: "'all' not in ansible_run_tags and 'cis' not in ansible_run_tags"
-      tags: always
-  roles:
-    - DEBIAN13-CIS
-
-- name: Debian host
-  tags: [debian]
-  hosts: debian
-  become: true
-  roles:
-    - debian_host
-
-# A Proxmox node's firewall is tofu's
 - name: Host firewall
   tags: [firewall]
-  hosts: debian:!hypervisor
+  hosts: all
   become: true
   # A ruleset that cuts a host off cuts off one
   serial: 1

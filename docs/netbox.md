@@ -27,7 +27,8 @@ which one changed what, and its token can do only what its groups can:
 | User | Groups | Its token | In 1Password, as |
 |---|---|---|---|
 | `homelab` | `readers` | read-only | `NetBox API Token - Homelab`, in Network |
-| `ansible` | `readers` | read-only | `NetBox API Token - Ansible`, in Network |
+| `ansible-network` | `readers` | read-only | `NetBox API Token - Ansible`, in Network |
+| `ansible-platform` | `readers` | read-only | `NetBox API Token - Ansible`, in Platform |
 | `tofu-network` | `readers` | read-only | `NetBox API Token - Tofu`, in Network |
 | `tofu-platform` | `readers` | read-only | `NetBox API Token - Tofu`, in Platform |
 | `schema` | `readers`, `schema` | write | `NetBox API Token - Schema`, in Network |

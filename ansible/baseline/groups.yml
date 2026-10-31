@@ -1,0 +1,5 @@
+# After a tree's own inventory: the groups Platform's base OS varies by
+plugin: ansible.builtin.constructed
+strict: true
+groups:
+  raspberry_pi_os: "platforms | default([]) | select('match', 'raspberry-pi-os-') | list | length > 0"

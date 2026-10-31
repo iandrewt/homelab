@@ -1,0 +1,10 @@
+---
+- name: Proxmox node
+  tags: [proxmox]
+  hosts: hypervisor
+  become: true
+  roles:
+    - proxmox_node
+
+- name: Base OS
+  ansible.builtin.import_playbook: ../baseline.yml

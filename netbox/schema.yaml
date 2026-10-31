@@ -456,7 +456,10 @@ users:
   homelab:
     groups:
       - readers
-  ansible:
+  ansible-network:
+    groups:
+      - readers
+  ansible-platform:
     groups:
       - readers
   tofu-network:

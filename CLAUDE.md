@@ -15,7 +15,7 @@ repo's, in `netbox/schema.yaml`, which `homelab netbox apply` enforces; its *dat
 | Layer | Reads it through |
 |---|---|
 | OpenTofu | the `netbox` provider, via `tofu/modules/netbox-site` |
-| Ansible | `netbox.netbox.nb_inventory` for hosts, `vars_plugins/netbox.py` for site facts |
+| Ansible | `netbox.netbox.nb_inventory` for a team's hosts, `vars_plugins/netbox.py` for site facts |
 | the UniFi gateways | `homelab unifi`, for their firewall, through Site Manager; `unifi/generated/<router>-frr.conf`, pasted in by hand, for BGP |
 
 - Only `admin/cluster` (VNets, subnets, firewall sources) and a team's workloads (a cluster's
@@ -31,8 +31,8 @@ repo's, in `netbox/schema.yaml`, which `homelab netbox apply` enforces; its *dat
 - **A site is its slug** everywhere in the repo; its NetBox name is where it is, never committed.
 - Each consumer is a NetBox user of its own (`schema.yaml`'s `users`, applied with `--identity`
   and an admin's token), with a read-only token in an API Credential: `NetBox API Token -
-  Homelab` (the CLI; `NETBOX_ITEM_REF` overrides it) and `- Ansible` in `Network`, `- Tofu` in
-  both `Platform` and `Network`. The token is `credential` and the URL `hostname`, since
+  Homelab` (the CLI; `NETBOX_ITEM_REF` overrides it), and `- Ansible` and `- Tofu` in both
+  `Platform` and `Network`. The token is `credential` and the URL `hostname`, since
   OpenTofu's ephemeral item reads no custom fields. `nb_inventory` alone also needs `NETBOX_API`.
 - Site facts reach Ansible as `netbox_site` (plus `netbox_sites`, `netbox_zones`): the model's
   own dicts, from one `model.load()` per run. So Ansible runs under `uv run`.
@@ -341,7 +341,7 @@ types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
 
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
-ansible/      roles, playbooks, and an inventory read from NetBox
+ansible/      a tree per team (network/, platform/), and the roles, plugins and baseline they share
 tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
 kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
 unifi/        generated config for the UniFi gateways that no API takes
@@ -388,7 +388,7 @@ uv run homelab bootstrap pi --device /dev/sdX --hostname ratatoskr --site alfhei
   --ssh-key-ref op://...
 uv run homelab bootstrap proxmox --host yggdrasil   # its answer inside its cell's newest ISO
 
-cd ansible && uv run ansible-playbook site.yml --limit <host>
+cd ansible/network && uv run ansible-playbook site.yml --limit <host>   # or ansible/platform
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan   # workspace alf-pve-01
 tofu -chdir=tofu/platform/kubernetes plan             # workspace au1-shared
 uv run homelab fleet resolve au1-shared               # the artifact its ring runs
@@ -399,7 +399,7 @@ uv run homelab fleet resolve au1-shared               # the artifact its ring ru
 1Password is read through its SDK, never by shelling out to `op`: OpenTofu through the
 1Password provider, everything else through `homelab.secrets`. Locally that's the desktop app
 (`OP_ACCOUNT`), one approval per process; `OP_SERVICE_ACCOUNT_TOKEN` is for CI. Ansible's
-secrets are declared in `ansible/inventory/onepassword.yml` and resolved by
+secrets are declared in each tree's `inventory/onepassword.yml` and resolved by
 `vars_plugins/onepassword.py` in Ansible's own process, since a task's worker would ask again;
 `lookup('secret', ...)` is for the inventory alone.
 
