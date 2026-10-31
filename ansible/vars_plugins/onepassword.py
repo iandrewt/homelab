@@ -4,9 +4,11 @@ Every task runs in a worker that Ansible detaches from the terminal, so a lookup
 a task asks for approval again each time. This resolves what an inventory's `onepassword.yml`
 declares before any worker starts, on the one SDK client the NetBox plugin also uses.
 A reference may name `{host}`, `{site}`, the host's slug in NetBox, and `{primary_site}`, the
-zones' primary's.
+zones' primary's. It also writes the public half of the tree's SSH key where every host's ssh
+looks for it, which with `IdentitiesOnly` is the one key the agent is asked for.
 """
 
+import re
 from pathlib import Path
 
 import yaml
@@ -26,7 +28,15 @@ options:
     env:
       - name: NETBOX_ITEM_REF
     required: true
+  ssh_key:
+    description: The SSH Key item this tree's hosts trust.
+    ini:
+      - section: homelab
+        key: ssh_key
+    required: true
 """
+
+KEYS = Path(__file__).parent.parent / ".ansible"
 
 _resolved: dict[str, str] = {}
 
@@ -38,13 +48,19 @@ class VarsModule(BaseVarsPlugin):
         super().get_vars(loader, path, entities)
         from homelab import inventory, netbox, secrets
 
+        hosts = [e for e in entities if isinstance(e, Host)]
+        if not hosts:
+            return {}
+        try:
+            data = {"ansible_ssh_private_key_file": _public_key(self.get_option("ssh_key"))}
+        except secrets.SecretError as bad:
+            raise AnsibleError(str(bad)) from None
         declared = Path(path) / "onepassword.yml"
         if not declared.is_file():
-            return {}
+            return data
         declared = yaml.safe_load(declared.read_text()) or {}
         item = self.get_option("netbox_item")
-        data = {}
-        for host in (e for e in entities if isinstance(e, Host)):
+        for host in hosts:
             groups = {g.name for g in host.get_groups()}
             wanted = {
                 name: reference
@@ -68,3 +84,16 @@ class VarsModule(BaseVarsPlugin):
                 raise AnsibleError(f"{host.name}: {bad}") from None
             data.update({name: _resolved[ref] for name, ref in references.items()})
         return data
+
+
+def _public_key(item: str) -> str:
+    """Where the item's public key is, written there the first time it's asked for."""
+    from homelab import secrets
+
+    reference = f"{item.rstrip('/')}/public key"
+    path = KEYS / f"{re.sub(r'[^A-Za-z0-9]+', '-', item.removeprefix('op://')).strip('-')}.pub"
+    if reference not in _resolved:
+        (_resolved[reference],) = secrets.resolve(reference)
+        KEYS.mkdir(exist_ok=True)
+        path.write_text(_resolved[reference].strip() + "\n")
+    return str(path)

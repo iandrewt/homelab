@@ -413,7 +413,8 @@ secrets are declared in each tree's `inventory/onepassword.yml` and resolved by
 - Items tofu writes are tagged `homelab/managed-by-tofu`, Password items with a `token` section
   until the provider can write an API Credential.
 - A team signs in to its hosts with `SSH Key - <team>`: Platform's for root on Proxmox nodes,
-  Network's for its guests and ratatoskr. No key is ever in the repo, only its item's reference.
+  Network's for its guests and ratatoskr; a team's Ansible tree offers ssh that key alone
+  (`ssh_key`, with `IdentitiesOnly`). No key is ever in the repo, only its item's reference.
 
 ## Conventions
 
