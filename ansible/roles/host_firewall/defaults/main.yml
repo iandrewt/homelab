@@ -1,0 +1,12 @@
+---
+# NetBox's Services on this host, as `dict2items` of the model's: each {protocol, ports,
+# addresses, sources}. A Service with no audience admits no one.
+host_firewall_services: []
+
+# What this host can't do without, each {protocol, port, address?}: the role refuses a ruleset
+# that admits none of them from anywhere, rather than cut the host off
+host_firewall_needed:
+  - { protocol: tcp, port: 22 }
+
+# How long a ruleset that cut off Ansible stays, before it's flushed
+host_firewall_rollback_seconds: 90

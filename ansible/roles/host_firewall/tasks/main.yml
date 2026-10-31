@@ -1,0 +1,67 @@
+---
+- name: Assert a Service admits each port this host can't do without
+  ansible.builtin.assert:
+    that:
+      - candidates | length > 0
+      - >-
+        item.address is not defined
+        or candidates | selectattr('addresses', 'eq', []) | list | length > 0
+        or candidates | selectattr('addresses', 'contains', item.address) | list | length > 0
+    fail_msg: >-
+      No Service in NetBox admits {{ item.protocol }} {{ item.port }}{{ ' to ' ~ item.address if item.address is defined }}
+      on {{ inventory_hostname }}, so its firewall would refuse it. Give the host one, with an audience.
+    quiet: true
+  vars:
+    candidates: >-
+      {{ host_firewall_services | map(attribute='value') | selectattr('sources')
+         | selectattr('protocol', 'eq', item.protocol) | selectattr('ports', 'contains', item.port) | list }}
+  loop: "{{ host_firewall_needed }}"
+  when: item.address | default('') is not none
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+
+- name: Write the ruleset
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: nft -c -f %s
+  register: host_firewall_ruleset
+
+# Now, in order, and before anything else: not a handler at the play's end
+- name: Load it, flushed again unless Ansible can still connect afterwards  # noqa: no-handler
+  when: host_firewall_ruleset is changed
+  block:
+    - name: Flush the ruleset in a while, unless this is called off
+      ansible.builtin.command:
+        argv: [systemd-run, "--on-active={{ host_firewall_rollback_seconds }}", --unit=host-firewall-rollback,
+               /usr/sbin/nft, flush, ruleset]
+      changed_when: true
+
+    - name: Load the ruleset
+      ansible.builtin.systemd_service:
+        name: nftables
+        state: reloaded
+
+    - name: Drop the connection that conntrack already admits
+      ansible.builtin.meta: reset_connection
+
+    - name: Connect again, through the ruleset
+      ansible.builtin.wait_for_connection:
+        timeout: 30
+
+    - name: Call off the flush
+      ansible.builtin.systemd_service:
+        name: host-firewall-rollback.timer
+        state: stopped
+
+- name: Load it at boot
+  ansible.builtin.systemd_service:
+    name: nftables
+    enabled: true
+    state: started

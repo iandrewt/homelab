@@ -64,6 +64,7 @@ where NetBox has nothing, and points at a built-in object rather than a choice:
 | a source narrower than a zone | a trust tag (`connector`, `breakglass`, `proxmox-api`, `nas-api`, `bmc-control`, `storage-client`) on a sub-pool, a VLAN, or a device or VM (covering its primary addresses): a rule names the tag, never an address |
 | a BMC | its device's `oob_ip`, named `idrac-<service tag>` |
 | a host's SSH host key | Device or VM, custom field `ssh_host_key`: made on the host, recorded by `homelab pin ssh` once checked. Ansible connects by primary address and takes no other key |
+| what a host admits | its Services, which `host_firewall` makes its nftables from; nothing else comes in |
 | a Service's certificate | Service, custom field `certificate`: made on the host, recorded by `homelab pin` from a fingerprint read over SSH. Its clients trust nothing else |
 | a resolver | Device or VM, role `dns-resolver`, holding its authoritative address per family, named `<host>.titmuss.zone` as its NS records name it; a VM's size, cluster, host and VLAN are what `network/dns` builds |
 | the recursor | FHRP group `recursor`, the global `dns-recursor` pool's address, `dns.titmuss.zone`, originated by every fleet |
@@ -273,6 +274,10 @@ Every host is **netplan → systemd-networkd, with systemd-resolved**, and every
 is in netplan. Roles write netplan and assume networkd; an OS's quirks belong to its bootstrap
 or its own role. Proxmox is the exception: ifupdown2, which `proxmox_node` writes from the
 node's NetBox interfaces, with a static `resolv.conf`.
+
+**A host admits what its NetBox Services do**, through nftables (`host_firewall`, one host at a
+time, flushed again unless Ansible can still connect); UniFi can't see traffic within a VLAN.
+A Proxmox node's firewall is tofu's.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,

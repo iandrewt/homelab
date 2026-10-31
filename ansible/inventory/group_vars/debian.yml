@@ -2,7 +2,9 @@
 deb13cis_level_1: true
 deb13cis_level_2: true
 
-deb13cis_section4: false  # disable ufw controls
+deb13cis_section4: false  # the host_firewall role's, from NetBox
+
+host_firewall_services: "{{ netbox_site.services[inventory_hostname] | default({}) | dict2items }}"
 
 # leaving controls for /tmp (1.1.2.1.x) and /dev/shm (1.1.2.2.x) enabled
 deb13cis_rule_1_1_2_3_1: false  # /home separate partition

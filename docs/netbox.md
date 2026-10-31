@@ -157,7 +157,9 @@ its NetBox name is where it is, which the repo never needs.
 **Services**
 
 - A Service per port a firewall should know of, made from a template, on its host - or on its
-  FHRP group, for anycast - with an audience where the port needs other than its prefix's.
+  FHRP group, for anycast - with an audience where the port needs other than its prefix's. An
+  Ansible host's own firewall admits exactly these, so each port it serves needs one: SSH, and
+  on a resolver DNS on its authoritative addresses as well as the recursor's.
 - The primary's `PowerDNS API` Service, on its authoritative addresses, which HAProxy serves.
 
 **Pins**

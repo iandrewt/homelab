@@ -32,6 +32,17 @@
   roles:
     - debian_host
 
+# A Proxmox node's firewall is tofu's
+- name: Host firewall
+  tags: [firewall]
+  hosts: debian:!hypervisor
+  become: true
+  # A ruleset that cuts a host off cuts off one
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - host_firewall
+
 - name: DNS resolvers
   tags: [resolvers]
   hosts: dns_resolver
