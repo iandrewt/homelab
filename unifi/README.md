@@ -24,13 +24,18 @@ appliances are on keep *Internet Access* ticked, and a policy toward External ke
 offline instead: unticked, UniFi counts every IPv6 destination outside its own networks as the
 internet, replies to a VPN client or a routed service included.
 
-## `generated/<site>-frr.conf`
+## `generated/<router>-frr.conf`
 
-BGP toward every speaker at the site, from NetBox: a peer group per listen range in the BGP
-plugin, accepting only the speaker groups with a session on it, and only what each one
-originates. It names no speaker, so adding or replacing one needs no change here.
+BGP toward every speaker a router has a session with, from NetBox: a peer group per listen
+range in the BGP plugin, accepting only the speaker groups with a session on it, and only what
+each one originates. It names no speaker, so adding or replacing one needs no change here.
 
-It isn't committed: its listen ranges and prefix lists are the site's own public prefix.
+A peer group whose `tcp_md5` is set in NetBox has a TCP-MD5 password, `BGP Password - <site>
+<group>` in Network, letters and digits. Linux keys a whole listen range, so every speaker on it
+must be able to sign: a Raspberry Pi's kernel can't, so Services has none.
+
+It isn't committed: its listen ranges and prefix lists are the site's own public prefix, and it
+holds the passwords.
 
 ```
 uv run homelab generate           # write it after changing NetBox

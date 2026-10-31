@@ -1,4 +1,4 @@
-"""The UDM Pro's FRR config, which it has no API for, so it is pasted in by hand."""
+"""A UniFi gateway's FRR config, which it has no API for, so it is pasted in by hand."""
 
 import ipaddress
 
@@ -8,15 +8,12 @@ HEADER = (
 )
 
 
-def frr_config(site: dict) -> str:
-    # An identifier, not an address to reach - but one the router demonstrably holds
-    router_id = min(
-        (v for v in site["vlans"].values() if v["gateway_ipv4"]), key=lambda v: v["vid"]
-    )["gateway_ipv4"]
+def frr_config(site: dict, router: str, passwords: dict[str, str]) -> str:
+    """One router's, with the passwords of its peer groups that have one, by name."""
     lines = [
         HEADER,
         f"router bgp {site['router_asn']}",
-        f" bgp router-id {router_id}",
+        f" bgp router-id {site['routers'][router]['router_id']}",
         " bgp log-neighbor-changes",
         " bgp ebgp-requires-policy",
         " no bgp default ipv4-unicast",
@@ -26,9 +23,14 @@ def frr_config(site: dict) -> str:
     # there; one that can't (Talos's GoBGP) sends IPv6 on an IPv6 session of its own, since
     # this kernel installs no IPv6 route via an IPv4 next hop. Groups share a range under their
     # own ASNs, so every peer group is `remote-as external`.
-    groups = site["peer_groups"]
+    groups = site["routers"][router]["peer_groups"]
     for g in groups:
-        lines += [" !", f" neighbor {g['name']} peer-group", f" neighbor {g['name']} remote-as external"]
+        lines += [
+            " !",
+            f" neighbor {g['name']} peer-group",
+            f" neighbor {g['name']} remote-as external",
+            *([f" neighbor {g['name']} password {passwords[g['name']]}"] if g["tcp_md5"] else []),
+        ]
         keepalive, holdtime = g["timers"]
         if keepalive:
             lines.append(f" neighbor {g['name']} timers {keepalive} {holdtime}")
@@ -42,7 +44,7 @@ def frr_config(site: dict) -> str:
             lines += [
                 f"  neighbor {g['name']} activate",
                 f"  neighbor {g['name']} soft-reconfiguration inbound",
-                f"  neighbor {g['name']} maximum-prefix {g['max_prefixes']}",
+                *([f"  neighbor {g['name']} maximum-prefix {g['max_prefixes']}"] if g["max_prefixes"] else []),
                 f"  neighbor {g['name']} route-map FROM-{g['name']} in",
                 *(f"  neighbor {g['name']} route-map {policy} out" for policy in g["export"]),
             ]

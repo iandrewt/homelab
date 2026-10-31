@@ -59,7 +59,7 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
     hosts = [
         h for h in [*snap.devices, *snap.virtual_machines] if _slug(h, "site") == slug
     ]
-    routers = {_host(h) for h in hosts if (h.get("role") or {}).get("name") == ROUTER_DEVICE_ROLE}
+    routers = {_host(h): h for h in hosts if (h.get("role") or {}).get("name") == ROUTER_DEVICE_ROLE}
     gateways = [_ip(a) for a in snap.addresses if _holder(a) in routers]
     vlans = _vlans(slug, snap, gateways)
     speakers = _speakers(slug, snap)
@@ -70,6 +70,7 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
     owned = {a for o in speakers.values() for a in o["addresses"]}
     addresses = [a for a in snap.addresses if str(_ip(a)) in owned or any(_ip(a) in n for n in nets)]
     ranges = _ranges(slug, snap)
+    peer_groups = _peer_groups(slug, snap)
     return {
         "slug": slug,
         # A cloud region is a Site Group; a branch is in none
@@ -77,7 +78,14 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
         "forward_zone": next((z for z in sorted(zones) if z.split(".")[:2] == [slug, SUBSTRATE_LABEL]), None),
         "router_asn": next((n for n, o in speakers.items() if o["role"] == ROUTER_ROLE), None),
         # A console in Site Manager is found by its serial, its router's in NetBox
-        "router_serial": next((h["serial"] for h in hosts if _host(h) in routers and h.get("serial")), None),
+        "router_serial": next((h["serial"] for h in routers.values() if h.get("serial")), None),
+        "routers": {
+            h["name"]: {
+                "router_id": _router_id(h, snap, vlans),
+                "peer_groups": [g for g in peer_groups if g["router"] == h["name"]],
+            }
+            for h in routers.values()
+        },
         "ranges": ranges,
         "gua_prefix": next((r for r in ranges if ":" in r), None),
         "internet_facing": sorted(
@@ -85,7 +93,6 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
             key=_sort_net,
         ),
         "vlans": vlans,
-        "peer_groups": _peer_groups(slug, snap),
         "policies": _policies(snap),
         "segments": _segments(slug, snap),
         "speakers": {n: o for n, o in speakers.items() if o["role"] != ROUTER_ROLE},
@@ -163,37 +170,52 @@ def _vlans(slug: str, snap: netbox.Snapshot, gateways: list) -> dict:
     return vlans
 
 
+def _router_id(router: dict, snap: netbox.Snapshot, vlans: dict) -> str | None:
+    """An identifier, not an address to reach - but one the router demonstrably holds: its
+    gateway on the lowest VLAN."""
+    held = {str(_ip(a)) for a in snap.addresses if _holder(a) == _host(router)}
+    return min(((v["vid"], v["gateway_ipv4"]) for v in vlans.values() if v["gateway_ipv4"] in held),
+               default=(None, None))[1]
+
+
 def _peer_groups(slug: str, snap: netbox.Snapshot) -> list[dict]:
-    """The router's dynamic peering, by peer group: each session is one speaker group allowed
+    """Each router's dynamic peering, by peer group: each session is one speaker group allowed
     to peer from one listen range, at the router's address there. A group's ranges are one
     family; an IPv4 one carries both families, an IPv6 one IPv6 alone."""
     groups = {g["name"]: g for g in snap.bgp_peer_groups}
-    found: dict[str, dict] = {}
+    found: dict[tuple[str, str], dict] = {}
     for session in snap.bgp_sessions:
         if _slug(session, "site") != slug or _choice(session["status"]) not in RENDERED_SESSIONS:
             continue
-        name = session["peer_group"]["name"]
+        name, router = session["peer_group"]["name"], session["device"]["name"]
         group = groups[name]
         attributes = group.get("extra_attributes") or {}
-        entry = found.setdefault(name, {
+        entry = found.setdefault((router, name), {
             "name": name,
+            "router": router,
             "ranges": set(),
             "speakers": set(),
-            "max_prefixes": 0,
+            "max_prefixes": set(),
             "timers": (attributes.get("keepalive"), attributes.get("holdtime")),
+            "tcp_md5": bool(attributes.get("tcp_md5")),
             "export": [p["name"] for p in group.get("export_policies") or []],
         })
         entry["ranges"].add(session["remote_prefix"]["prefix"])
         entry["speakers"].add(session["remote_as"]["asn"])
-        entry["max_prefixes"] = max(entry["max_prefixes"], session.get("max_prefixes") or 0)
+        entry["max_prefixes"].add(session.get("max_prefixes"))
     peer_groups = []
-    for entry in sorted(found.values(), key=lambda g: g["name"]):
+    for entry in sorted(found.values(), key=lambda g: (g["router"], g["name"])):
         versions = {ipaddress.ip_network(r).version for r in entry["ranges"]}
         if len(versions) != 1:
             raise ValueError(f"peer group {entry['name']} listens on both families")
+        # A dynamic neighbour takes its group's limit, so a session can't have one of its own
+        if len(entry["max_prefixes"]) != 1:
+            raise ValueError(f"peer group {entry['name']} at {entry['router']} has sessions limited to "
+                             f"{sorted(entry['max_prefixes'], key=str)} prefixes; FRR has one limit per group")
         peer_groups.append(entry | {
             "ranges": sorted(entry["ranges"], key=_sort_net),
             "speakers": sorted(entry["speakers"]),
+            "max_prefixes": entry["max_prefixes"].pop(),
             "families": ("ipv4", "ipv6") if versions == {4} else ("ipv6",),
         })
     return peer_groups
@@ -351,7 +373,7 @@ def _dns(hosts: list[dict], addresses: list[dict], vlans: dict, speakers: dict,
          snap: netbox.Snapshot) -> dict:
     """The recursor, which is global, so every site's - a spoke with no fleet of its own
     included; and each server's own authoritative address, never the recursor's, with the
-    VLAN it's on and the speaker group originating it."""
+    VLAN it's on, and the speaker group originating it."""
     pools = {
         purpose: [_net(p) for p in snap.prefixes if _slug(p, "role") == purpose]
         for purpose in (RECURSOR_PURPOSE, AUTHORITATIVE_PURPOSE)

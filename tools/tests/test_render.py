@@ -12,12 +12,21 @@ def site_of(snapshot, slug=SITE):
     return load(snapshot)["sites"][slug]
 
 
+ROUTERS = {SITE: "udm", OTHER: "udm-two"}
+
+
+def render(snapshot, slug=SITE) -> str:
+    site = site_of(snapshot, slug)
+    router = ROUTERS[slug]
+    return frr.frr_config(site, router, {g["name"]: "secret" for g in site["routers"][router]["peer_groups"]})
+
+
 def test_a_speaker_may_announce_only_what_it_originates_and_only_from_its_own_as(snapshot):
     """Every listen range is `remote-as external`, so acceptance is bound to the route:
     inside a speaker group's blocks or assigned addresses, and heard from its AS - with
     Cilium's node-internal ASNs behind it, which is why the match is the first AS, not
     the origin."""
-    config = frr.frr_config(site_of(snapshot))
+    config = render(snapshot)
     assert f"ip prefix-list SPEAKER-{K8S_1}-V4 seq 5 permit 10.0.128.0/21 le 32" in config
     assert "permit 10.0.16.128/32" in config
     assert f"bgp as-path access-list SPEAKER-{K8S_1} permit ^{K8S_1}_" in config
@@ -28,7 +37,7 @@ def test_a_speaker_may_announce_only_what_it_originates_and_only_from_its_own_as
 def test_every_clusters_nodes_share_one_listen_range(snapshot):
     """A summary prefix carries the tag, so a new cluster's node network needs nothing on the
     router: the group is named for the summary's role, having no VLAN of its own."""
-    config = frr.frr_config(site_of(snapshot))
+    config = render(snapshot)
     assert " bgp listen range 10.0.8.0/24 peer-group KUBERNETES-NODES" in config
     assert "10.0.8.0/27" not in config
 
@@ -36,7 +45,7 @@ def test_every_clusters_nodes_share_one_listen_range(snapshot):
 def test_each_site_accepts_the_recursor_from_its_own_fleet(snapshot):
     """One anycast address, n fleets: each router takes it from the fleet at its site."""
     for slug in (SITE, OTHER):
-        config = frr.frr_config(site_of(snapshot, slug))
+        config = render(snapshot, slug)
         assert "permit 10.239.0.53/32" in config
 
 
@@ -45,7 +54,7 @@ def test_ipv6_reaches_the_router_with_a_next_hop_it_can_install(snapshot):
     UDM's kernel rejects. So a cluster has an IPv6 session that carries IPv6 alone, and a
     mapped next hop is denied before any speaker's permit - from either session.
     """
-    config = frr.frr_config(site_of(snapshot))
+    config = render(snapshot)
     ipv4 = config.split(" address-family ipv4 unicast")[1].split(" exit-address-family")[0]
     ipv6 = config.split(" address-family ipv6 unicast")[1].split(" exit-address-family")[0]
 
@@ -59,7 +68,7 @@ def test_ipv6_reaches_the_router_with_a_next_hop_it_can_install(snapshot):
 def test_a_range_accepts_only_the_speaker_groups_with_a_session_on_it(snapshot):
     """A dynamic peer's ASN is its own word, so a node claiming the DNS fleet's ASN from the
     node network still can't originate the recursor."""
-    config = frr.frr_config(site_of(snapshot))
+    config = render(snapshot)
     kubernetes = config.split("route-map FROM-KUBERNETES-NODES ")[1:]
     assert kubernetes and all(f"SPEAKER-{DNS_ONE}" not in part.split("!")[0] for part in kubernetes)
     assert f"route-map FROM-SERVICES permit 10\n match ip address prefix-list SPEAKER-{DNS_ONE}-V4" in config
@@ -93,7 +102,7 @@ def test_frr_accepts_every_sites_config(snapshot, tmp_path):
     """It's pasted into the UDM by hand, and nothing else parses it before then."""
     for slug in (SITE, OTHER):
         path = tmp_path / f"{slug}-frr.conf"
-        path.write_text(frr.frr_config(site_of(snapshot, slug)))
+        path.write_text(render(snapshot, slug))
         checked = subprocess.run(["vtysh", "--dryrun", "--inputfile", str(path)], capture_output=True, text=True,
                                  check=False)
         assert checked.returncode == 0, checked.stdout + checked.stderr

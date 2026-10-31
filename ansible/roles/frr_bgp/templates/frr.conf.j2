@@ -32,6 +32,9 @@ router bgp {{ frr_bgp_local_asn }}
  bgp network import-check
  no bgp default ipv4-unicast
  neighbor {{ frr_bgp_peer_address }} remote-as {{ frr_bgp_peer_asn }}
+{% if frr_bgp_password is not none %}
+ neighbor {{ frr_bgp_peer_address }} password {{ frr_bgp_password }}
+{% endif %}
 {% if ':' in frr_bgp_peer_address %}
  neighbor {{ frr_bgp_peer_address }} capability extended-nexthop
 {% endif %}

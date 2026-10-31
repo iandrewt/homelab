@@ -3,6 +3,7 @@
 frr_bgp_local_asn: ~
 frr_bgp_peer_asn: ~
 frr_bgp_peer_address: ~  # the router's address on this VLAN
+frr_bgp_password: ~  # TCP-MD5, when the router's peer group has one
 # The router's addresses on this VLAN, which replies from routed addresses leave through
 frr_bgp_gateways: []
 

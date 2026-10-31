@@ -37,7 +37,7 @@ kubernetes/
   clusters/au1-shared/    its FluxInstance, and the components it takes from fleet/catalog.yaml
   fleet/au1-shared/       au1-shared's ring: the one thing it syncs from Git
 unifi/generated/
-  alfheim-frr.conf        BGP toward the speakers, written by `homelab generate`; never committed
+  <router>-frr.conf       BGP toward the speakers, written by `homelab generate`; never committed
   <site>-ipv6.txt         the policies that send another site's IPv6 to IPv4, likewise
 ```
 

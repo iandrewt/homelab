@@ -3,12 +3,15 @@
 import argparse
 import sys
 
-from . import bootstrap, dns, fleet, netbox, schema, unifi
+from . import bootstrap, dns, fleet, netbox, schema, secrets, unifi
 from .bootstrap.shell import BootstrapError
 from .model import load
 from .render import firewall, frr, seed
 from .repo import Repo
 from .secrets import SecretError
+
+# A peer group's TCP-MD5 key at a site, when NetBox gives it one
+BGP_PASSWORD_REF = "op://Network/BGP Password - {site} {peer_group}/password"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -20,8 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
     generate = subparsers.add_parser(
         "generate",
         help="write what the UniFi gateways are given by hand, from NetBox",
-        description="Rewrite unifi/generated/: <site>-frr.conf for every site with a router "
-        "and something to route, and <site>-ipv6.txt for every site with another to reach. "
+        description="Rewrite unifi/generated/: <router>-frr.conf for every router with a "
+        "speaker to peer with, and <site>-ipv6.txt for every site with another to reach. "
         "Only files whose content changed are touched.",
     )
     generate.add_argument(
@@ -67,10 +70,19 @@ def _generate(args) -> int:
         return 1
 
     sites = model["sites"]
+    routing = [
+        (site, name, router) for site in sites.values() for name, router in sorted(site["routers"].items())
+        if site["router_asn"] and router["peer_groups"]
+    ]
+    refs = sorted({BGP_PASSWORD_REF.format(site=site["slug"], peer_group=g["name"])
+                   for site, _, router in routing for g in router["peer_groups"] if g["tcp_md5"]})
+    passwords = dict(zip(refs, secrets.resolve(*refs))) if refs else {}
     rendered = {
-        repo.unifi / f"{site['slug']}-frr.conf": frr.frr_config(site)
-        for site in sites.values()
-        if site["router_asn"] and site["speakers"]
+        repo.unifi / f"{name}-frr.conf": frr.frr_config(site, name, {
+            g["name"]: passwords[BGP_PASSWORD_REF.format(site=site["slug"], peer_group=g["name"])]
+            for g in router["peer_groups"] if g["tcp_md5"]
+        })
+        for site, name, router in routing
     }
     for site in sites.values():
         if (policies := firewall.cross_site_ipv6_text(site, sites)) is not None:

@@ -1,4 +1,20 @@
 ---
+# Without it bgpd drops the password, connects unsigned, and the router refuses it in silence
+- name: Read whether the kernel signs TCP
+  ansible.builtin.command: grep -qx CONFIG_TCP_MD5SIG=y /boot/config-{{ ansible_facts.kernel }}
+  register: frr_bgp_tcp_md5
+  changed_when: false
+  failed_when: false
+  when: frr_bgp_password is not none
+
+- name: Assert it does, for a password
+  ansible.builtin.assert:
+    that: frr_bgp_tcp_md5.rc == 0
+    fail_msg: >-
+      {{ inventory_hostname }}'s kernel ({{ ansible_facts.kernel }}) has no CONFIG_TCP_MD5SIG, so it
+      can't sign its BGP session: its router's peer group can't have a password.
+  when: frr_bgp_password is not none
+
 - name: Install FRR
   ansible.builtin.apt:
     name: frr
@@ -19,6 +35,8 @@
     group: frr
     mode: "0640"
     validate: vtysh -C -f %s
+  # It holds the session's password
+  diff: false
   notify: Restart frr
 
 - name: Ensure frr is running

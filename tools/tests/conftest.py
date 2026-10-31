@@ -73,14 +73,15 @@ def asn(number, role, site_slug=SITE, *, name="", cluster=None) -> dict:
             "description": name, "custom_fields": {"cluster": cluster and {"name": cluster}}}
 
 
-def peer_group(name) -> dict:
-    return {"name": name, "extra_attributes": {"keepalive": 3, "holdtime": 9},
+def peer_group(name, tcp_md5=False) -> dict:
+    return {"name": name, "extra_attributes": {"keepalive": 3, "holdtime": 9, "tcp_md5": tcp_md5},
             "export_policies": [{"name": "NOTHING"}]}
 
 
-def session(asn, group, remote_prefix, *, site_slug=SITE, status="active") -> dict:
-    return {"site": _site_ref(site_slug), "status": {"value": status}, "peer_group": {"name": group},
-            "remote_prefix": {"prefix": remote_prefix}, "remote_as": {"asn": asn}, "max_prefixes": 1000}
+def session(asn, group, remote_prefix, *, site_slug=SITE, router="udm", status="active", max_prefixes=1000) -> dict:
+    return {"site": _site_ref(site_slug), "device": {"name": router}, "status": {"value": status},
+            "peer_group": {"name": group}, "remote_prefix": {"prefix": remote_prefix}, "remote_as": {"asn": asn},
+            "max_prefixes": max_prefixes}
 
 
 def zone(name, view="_default_", tags=()) -> dict:
@@ -210,12 +211,13 @@ def snapshot() -> netbox.Snapshot:
             asn(K8S_1, "kubernetes", name="k8s-1", cluster="k8s-1"),
             asn(ROUTER_TWO, "router", OTHER), asn(DNS_TWO, "dns", OTHER),
         ],
-        bgp_peer_groups=[peer_group("SERVICES"), peer_group("KUBERNETES-NODES"), peer_group("KUBERNETES-NODES-V6")],
+        bgp_peer_groups=[peer_group("SERVICES"), peer_group("KUBERNETES-NODES", tcp_md5=True), peer_group("KUBERNETES-NODES-V6")],
         bgp_sessions=[
             session(DNS_ONE, "SERVICES", "10.0.30.0/24"),
             session(K8S_1, "KUBERNETES-NODES", "10.0.8.0/24"),
             session(K8S_1, "KUBERNETES-NODES-V6", "2001:db8:1:1080::/60"),
-            session(DNS_TWO, "SERVICES", "10.1.30.0/24", site_slug=OTHER),
+            # A limit is optional
+            session(DNS_TWO, "SERVICES", "10.1.30.0/24", site_slug=OTHER, router="udm-two", max_prefixes=None),
         ],
         routing_policy_rules=[{"routing_policy": {"name": "NOTHING"}, "index": 10, "action": "deny"}],
         zones=[zone("one.test"), zone("10.in-addr.arpa"), zone("8.b.d.0.1.0.0.2.ip6.arpa")],

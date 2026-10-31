@@ -407,6 +407,8 @@ routing_policies:
   NOTHING:
     rules:
       10: deny
+# `tcp_md5`: a password on the group's listen ranges, which every speaker on them must be able
+# to sign with - a Raspberry Pi's kernel can't
 peer_groups:
   SERVICES:
     export_policies:
@@ -414,18 +416,21 @@ peer_groups:
     extra_attributes:
       keepalive: 3
       holdtime: 9
+      tcp_md5: false
   KUBERNETES-NODES:
     export_policies:
       - NOTHING
     extra_attributes:
       keepalive: 3
       holdtime: 9
+      tcp_md5: false
   KUBERNETES-NODES-V6:
     export_policies:
       - NOTHING
     extra_attributes:
       keepalive: 3
       holdtime: 9
+      tcp_md5: false
 # Who may do what, applied only with `apply --identity` and an admin's token, since whoever can
 # grant a permission can grant themselves any. A user per consumer, so the changelog says
 # which; its token, made by hand and kept in 1Password, can do only what its groups can

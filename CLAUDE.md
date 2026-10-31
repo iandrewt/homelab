@@ -16,7 +16,7 @@ repo's, in `netbox/schema.yaml`, which `homelab netbox apply` enforces; its *dat
 |---|---|
 | OpenTofu | the `netbox` provider, via `tofu/modules/netbox-site` |
 | Ansible | `netbox.netbox.nb_inventory` for hosts, `vars_plugins/netbox.py` for site facts |
-| the UniFi gateways | `homelab unifi`, for their firewall, through Site Manager; `unifi/generated/<site>-frr.conf`, pasted in by hand, for BGP |
+| the UniFi gateways | `homelab unifi`, for their firewall, through Site Manager; `unifi/generated/<router>-frr.conf`, pasted in by hand, for BGP |
 
 - Only `admin/cluster` (VNets, subnets, firewall sources) and a team's workloads (a cluster's
   networks, pools and API address; the DNS fleet's VMs) need NetBox. `root`, `access` and
@@ -145,7 +145,9 @@ purpose**. A **speaker group** shares an ASN: a DNS fleet, a Kubernetes cluster,
   range`): Services, and one summary of every cluster's node network. A new speaker or cluster
   needs only a session for its ASN.
 - **Acceptance is bound to the route, not the peer**: a peer group per listen range, `remote-as
-  external`. A route is accepted only from a group with a session on that range, inside
+  external`. A group whose `tcp_md5` is set has a password per site (`BGP Password - <site>
+  <group>`, in Network), which every speaker on its ranges must sign with: a Raspberry Pi's
+  kernel can't, so Services has none. A route is accepted only from a group with a session on that range, inside
   something it originates, *and* with it first in its AS path (`^<asn>_`) - so a node claiming
   the DNS fleet's ASN still can't originate the recursor, and a route Talos carries on from
   Cilium still names the cluster first. All generated from NetBox. No communities.
