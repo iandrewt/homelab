@@ -137,7 +137,16 @@ resource "aws_organizations_policy" "guardrails" {
           "identitystore:Delete*",
           "identitystore:Update*",
           "sso-directory:CreateBearerToken",
+          "sso:CreateInstanceAccessControlAttributeConfiguration",
+          "sso:DeleteInstanceAccessControlAttributeConfiguration",
+          "sso:UpdateInstanceAccessControlAttributeConfiguration",
         ]
+        Resource = "*"
+      },
+      {
+        Sid      = "NoLongLivedCredentials"
+        Effect   = "Deny"
+        Action   = ["iam:CreateAccessKey", "iam:CreateLoginProfile", "iam:CreateUser"]
         Resource = "*"
       },
       {
