@@ -18,7 +18,7 @@ terraform {
 
   # A workspace per site
   backend "s3" {
-    bucket               = "tofu-state-585242447535-ap-southeast-2-an"
+    bucket               = "tofu-state-877127520873-ap-southeast-2-an"
     region               = "ap-southeast-2"
     profile              = "homelab-state-network"
     workspace_key_prefix = "network/dns"
@@ -28,7 +28,7 @@ terraform {
 
   encryption {
     key_provider "aws_kms" "state" {
-      kms_key_id         = "arn:aws:kms:ap-southeast-2:585242447535:alias/tofu-state"
+      kms_key_id         = "arn:aws:kms:ap-southeast-2:877127520873:alias/tofu-state"
       key_spec           = "AES_256"
       region             = "ap-southeast-2"
       profile            = "homelab-state-network"

@@ -101,14 +101,15 @@ cd ansible && uv run ansible-playbook full-upgrade.yml
 
 OpenTofu needs no wrapper. State and plans are encrypted with OpenTofu's own
 [`aws_kms` key provider](https://opentofu.org/docs/language/state/encryption/), under a
-key in the same account as the state bucket. Each team's state is reached as that team's
-role in Platform, which a layer names by profile - `homelab-state-<team>`, the first
-directory of its path. Locally, each is the role assumed from your `TofuState` session:
+key in the same account as the state bucket: State, which only the bootstrap role
+administers. Each team's state is reached as that team's role there, which a layer names by
+profile - `homelab-state-<team>`, the first directory of its path. Locally, each is the role
+assumed from your `TofuState` session in State:
 
 ```ini
 # ~/.aws/config
 [profile homelab-state-network]
-role_arn = arn:aws:iam::585242447535:role/tofu-state/tofu-state-network
+role_arn = arn:aws:iam::877127520873:role/tofu-state/tofu-state-network
 source_profile = homelab-state
 ```
 

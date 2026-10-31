@@ -44,7 +44,7 @@ locals {
         Statement = [{
           Effect   = "Allow"
           Action   = "sts:AssumeRole"
-          Resource = "arn:aws:iam::${local.account_ids["Platform"]}:role/tofu-state/*"
+          Resource = "arn:aws:iam::${local.account_ids["State"]}:role/tofu-state/*"
         }]
       })
     }
@@ -53,7 +53,8 @@ locals {
   members = keys(local.account_ids)
 
   assignments = concat(
-    [for account in local.members : { set = "Administrator", group = "Administrators", account = account }],
+    # No one administers State but the bootstrap role
+    [for account in local.members : { set = "Administrator", group = "Administrators", account = account } if account != "State"],
     [for account in local.members : { set = "SecurityAudit", group = "Security", account = account }],
     [{ set = "LogReader", group = "Security", account = "Log Archive" }],
     [
@@ -61,7 +62,7 @@ locals {
       { set = "Administrator", group = "Platform", account = "Platform" },
       { set = "Administrator", group = "Platform", account = "Sandbox" },
     ],
-    [for team in local.state_teams : { set = "TofuState", group = team, account = "Platform" }],
+    [for team in local.state_teams : { set = "TofuState", group = team, account = "State" }],
   )
 }
 

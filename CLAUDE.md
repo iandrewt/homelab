@@ -359,7 +359,9 @@ as a subinterface in the ifupdown2 renderer.
 
 **State is laid out by the team that owns it**: a layer's key is its path under `tofu/`,
 `<path>/terraform.tfstate` or `<path>/<workspace>/terraform.tfstate`, and the same path is its
-KMS encryption context (`alias/tofu-state`). A team's role, `tofu-state-<team>`, may touch only
+KMS encryption context (`alias/tofu-state`). Both are in the State account, which only the
+bootstrap role administers, and the bucket keeps every version under Object Lock for 90 days.
+A team's role, `tofu-state-<team>`, may touch only
 `${aws:PrincipalTag/team}/*`, and a layer reaches it as profile `homelab-state-<team>`, assumed
 from the `homelab-state` SSO profile (`aws sso login` first). Moving a layer: change its `key`
 and `encryption_context` together, then `tofu init -migrate-state`.

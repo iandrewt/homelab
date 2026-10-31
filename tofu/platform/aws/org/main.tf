@@ -8,6 +8,7 @@ locals {
   accounts = {
     "Log Archive" = "Security"
     "Security"    = "Security"
+    "State"       = "Security"
     "Network"     = "Infrastructure"
     "Platform"    = "Infrastructure"
     "Sandbox"     = "Sandbox"

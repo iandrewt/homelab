@@ -5,6 +5,8 @@ resource "aws_s3_bucket" "state" {
   bucket           = "tofu-state-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.region}-an"
   bucket_namespace = "account-regional"
 
+  object_lock_enabled = true
+
   lifecycle {
     prevent_destroy = true
   }
@@ -16,6 +18,20 @@ resource "aws_s3_bucket_versioning" "state" {
   versioning_configuration {
     status = "Enabled"
   }
+}
+
+# As long as an old version is kept, and only the bootstrap role may bypass it
+resource "aws_s3_bucket_object_lock_configuration" "state" {
+  bucket = aws_s3_bucket.state.id
+
+  rule {
+    default_retention {
+      mode = "GOVERNANCE"
+      days = 90
+    }
+  }
+
+  depends_on = [aws_s3_bucket_versioning.state]
 }
 
 resource "aws_s3_bucket_lifecycle_configuration" "state" {

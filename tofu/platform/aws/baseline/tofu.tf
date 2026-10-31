@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "tofu-state-585242447535-ap-southeast-2-an"
+    bucket       = "tofu-state-877127520873-ap-southeast-2-an"
     region       = "ap-southeast-2"
     profile      = "homelab-state-platform"
     key          = "platform/aws/baseline/terraform.tfstate"
@@ -18,7 +18,7 @@ terraform {
 
   encryption {
     key_provider "aws_kms" "state" {
-      kms_key_id         = "arn:aws:kms:ap-southeast-2:585242447535:alias/tofu-state"
+      kms_key_id         = "arn:aws:kms:ap-southeast-2:877127520873:alias/tofu-state"
       key_spec           = "AES_256"
       region             = "ap-southeast-2"
       profile            = "homelab-state-platform"
@@ -45,7 +45,7 @@ locals {
   profile = "homelab-management"
 
   # As org names them: a provider's for_each can't read anything, so they're here too
-  accounts = toset(["Management", "Log Archive", "Security", "Network", "Platform", "Sandbox"])
+  accounts = toset(["Management", "Log Archive", "Security", "Network", "Platform", "Sandbox", "State"])
 }
 
 provider "aws" {

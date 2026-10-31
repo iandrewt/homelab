@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket       = "tofu-state-585242447535-ap-southeast-2-an"
+    bucket       = "tofu-state-877127520873-ap-southeast-2-an"
     region       = "ap-southeast-2"
     profile      = "homelab-state-platform"
     key          = "platform/aws/state/terraform.tfstate"
@@ -18,7 +18,7 @@ terraform {
 
   encryption {
     key_provider "aws_kms" "state" {
-      kms_key_id         = "arn:aws:kms:ap-southeast-2:585242447535:alias/tofu-state"
+      kms_key_id         = "arn:aws:kms:ap-southeast-2:877127520873:alias/tofu-state"
       key_spec           = "AES_256"
       region             = "ap-southeast-2"
       profile            = "homelab-state-platform"
@@ -52,7 +52,7 @@ data "aws_organizations_organization" "this" {
 }
 
 locals {
-  state_account = one([for a in data.aws_organizations_organization.this.non_master_accounts : a.id if a.name == "Platform"])
+  state_account = one([for a in data.aws_organizations_organization.this.non_master_accounts : a.id if a.name == "State"])
 }
 
 # The key and the bucket are administered by the bootstrap role alone, so it applies them
