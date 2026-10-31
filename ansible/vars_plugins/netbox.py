@@ -29,7 +29,7 @@ class VarsModule(BaseVarsPlugin):
         for host in (e for e in entities if isinstance(e, Host)):
             try:
                 model = inventory.model(ITEM_REF)
-                site = inventory.site_of(host.name, ITEM_REF)
+                site = inventory.site_of(host.name, host.vars.get("sites"), ITEM_REF)
             except netbox.Unreachable as bad:
                 raise AnsibleError(f"NetBox: {bad}") from None
             if site is not None:

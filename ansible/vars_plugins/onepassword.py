@@ -40,7 +40,7 @@ class VarsModule(BaseVarsPlugin):
             if not wanted:
                 continue
             try:
-                site = inventory.site_of(host.name, NETBOX_ITEM_REF)
+                site = inventory.site_of(host.name, host.vars.get("sites"), NETBOX_ITEM_REF)
                 primary = inventory.dns_primary_site(NETBOX_ITEM_REF)
                 references = {
                     name: reference.format(host=host.name, site=site and site["slug"],

@@ -31,14 +31,21 @@ def vlan(vid, name, *, group=SITE, tags=(), vnet=None, zone=None) -> dict:
     }
 
 
+def location(slug, site_slug=SITE) -> dict:
+    return {"id": _id(slug), "name": slug, "slug": slug, "site": _site_ref(site_slug)}
+
+
 def prefix(cidr, *, site_slug=SITE, vid=None, role=None, status="active", origin=None,
-           tags=(), zone=None) -> dict:
+           tags=(), zone=None, at=None) -> dict:
+    """Scoped to the site, or to the Location `at`."""
     fields = {"origin": {"asn": origin} if origin else None, "zone": zone and {"slug": zone}}
+    scope = ({"scope_type": "dcim.location", "scope_id": at["id"], "scope": {"id": at["id"], "slug": at["slug"]}}
+             if at else
+             {"scope_type": "dcim.site" if site_slug else None, "scope": _site_ref(site_slug) if site_slug else None})
     return {
         "prefix": cidr,
         "status": {"value": status},
-        "scope_type": "dcim.site" if site_slug else None,
-        "scope": _site_ref(site_slug) if site_slug else None,
+        **scope,
         "vlan": {"vid": vid} if vid is not None else None,
         "role": {"slug": role} if role else None,
         "tags": [{"slug": t} for t in tags],

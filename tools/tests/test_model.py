@@ -1,6 +1,21 @@
 import dataclasses
 
-from conftest import DNS_ONE, DNS_TWO, OTHER, SITE, SPOKE, address, asn, device, prefix, service, soa, vlan, zone
+from conftest import (
+    DNS_ONE,
+    DNS_TWO,
+    OTHER,
+    SITE,
+    SPOKE,
+    address,
+    asn,
+    device,
+    location,
+    prefix,
+    service,
+    soa,
+    vlan,
+    zone,
+)
 from homelab import netbox
 from homelab.model import load, sources, unzoned
 
@@ -68,6 +83,15 @@ def test_a_sites_vlans_are_in_the_group_named_by_its_slug(snapshot):
     """Such a VLAN has no site of its own - matching on one found nothing in live data.
     OpenTofu's netbox-site module joins the same way, and the two have to agree."""
     assert set(loads(snapshot)["sites"][SITE]["vlans"]) == {"network", "san", "servers", "k8s-1"}
+
+
+def test_an_azs_networks_are_its_sites(snapshot):
+    """A prefix scoped to a Location is its site's, as NetBox's `site_id` filter has it, which
+    netbox-site reads by."""
+    az = location("one-az1")
+    vlans = loads(snapshot, locations=[az], vlans=[*snapshot.vlans, vlan(82, "k8s-2")],
+                  prefixes=[*snapshot.prefixes, prefix("10.0.8.32/27", vid=82, at=az)])["sites"][SITE]["vlans"]
+    assert vlans["k8s-2"]["ipv4"] == "10.0.8.32/27"
 
 
 def test_a_sites_forward_zone_is_its_substrate_zone_not_its_home_networks(snapshot):

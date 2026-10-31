@@ -25,6 +25,7 @@ class Unreachable(Exception):
 @dataclass(frozen=True)
 class Snapshot:
     sites: list[dict] = field(default_factory=list)
+    locations: list[dict] = field(default_factory=list)
     vlans: list[dict] = field(default_factory=list)
     prefixes: list[dict] = field(default_factory=list)
     addresses: list[dict] = field(default_factory=list)
@@ -60,6 +61,7 @@ def fetch(item: str | None = None) -> Snapshot:
     try:
         return Snapshot(
             sites=[dict(o) for o in nb.dcim.sites.all()],
+            locations=[dict(o) for o in nb.dcim.locations.all()],
             vlans=[dict(o) for o in nb.ipam.vlans.all()],
             prefixes=[dict(o) for o in nb.ipam.prefixes.all()],
             addresses=[dict(o) for o in nb.ipam.ip_addresses.all()],

@@ -66,7 +66,7 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
 
     # NetBox doesn't scope an IP to a site: an address is the site's when one of the site's
     # prefixes holds it, or when one of its speakers originates it
-    nets = [_net(p) for p in _at(snap.prefixes, slug)]
+    nets = [_net(p) for p in _at(snap, slug)]
     owned = {a for o in speakers.values() for a in o["addresses"]}
     addresses = [a for a in snap.addresses if str(_ip(a)) in owned or any(_ip(a) in n for n in nets)]
     ranges = _ranges(slug, snap)
@@ -81,7 +81,7 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
         "ranges": ranges,
         "gua_prefix": next((r for r in ranges if ":" in r), None),
         "internet_facing": sorted(
-            (p["prefix"] for p in _at(snap.prefixes, slug) if "internet" in (audience(p) or {}).get("zones", [])),
+            (p["prefix"] for p in _at(snap, slug) if "internet" in (audience(p) or {}).get("zones", [])),
             key=_sort_net,
         ),
         "vlans": vlans,
@@ -133,10 +133,17 @@ def _vlans(slug: str, snap: netbox.Snapshot, gateways: list) -> dict:
     """A site's VLANs are in the group named by its slug. Each gateway is the router's
     address inside the VLAN's prefix - and a VLAN-only network has none."""
     nets: dict[int, dict] = {}
-    for p in _at(snap.prefixes, slug):
+    for p in _at(snap, slug):
         if p.get("vlan") and _active(p):
             net = _net(p)
-            nets.setdefault(p["vlan"]["vid"], {})[net.version] = net
+            held = nets.setdefault(p["vlan"]["vid"], {})
+            other = held.get(net.version)
+            # A sub-pool naming its VLAN too is inside the VLAN's network, which stays
+            if other is None or net.supernet_of(other):
+                held[net.version] = net
+            elif not net.subnet_of(other):
+                raise ValueError(f"VLAN {p['vlan']['vid']} at {slug} holds {other} and {net}; "
+                                 "a VLAN is one network per family")
 
     vlans = {}
     for raw in snap.vlans:
@@ -244,7 +251,7 @@ def _segments(slug: str, snap: netbox.Snapshot) -> dict:
         if role not in SEGMENT_ROLES:
             continue
         net = _net(p)
-        mine = p in _at(snap.prefixes, slug) or any(net.subnet_of(g) for g in global_blocks
+        mine = _site_of(p, snap) == slug or any(net.subnet_of(g) for g in global_blocks
                                                      if g.version == net.version)
         if mine:
             segments.setdefault(role, {"ipv4": [], "ipv6": []})[f"ipv{net.version}"].append(str(net))
@@ -255,10 +262,10 @@ def _trusted(slug: str | None, snap: netbox.Snapshot) -> dict:
     """Trust is a source: each tag names the sub-pools and VLANs' prefixes carrying it, and the
     addresses of the devices and VMs carrying it. A site of None is every site."""
     vids = {(_slug(v, "group"), v["vid"]): _tags(v) for v in snap.vlans}
-    prefixes = snap.prefixes if slug is None else _at(snap.prefixes, slug)
+    prefixes = snap.prefixes if slug is None else _at(snap, slug)
     trusted: dict[str, list[str]] = {}
     for p in prefixes:
-        vlan = (_slug(p, "scope"), (p.get("vlan") or {}).get("vid"))
+        vlan = (_site_of(p, snap), (p.get("vlan") or {}).get("vid"))
         for tag in set(_tags(p)) | set(vids.get(vlan, [])):
             trusted.setdefault(tag, []).append(p["prefix"])
     # A host's tag covers its primary addresses, the ones it's reached from
@@ -271,9 +278,9 @@ def _trusted(slug: str | None, snap: netbox.Snapshot) -> dict:
     return {tag: sorted(set(nets), key=_sort_net) for tag, nets in sorted(trusted.items())}
 
 
-def _zone(p: dict, vlan_zones: dict) -> str | None:
+def _zone(p: dict, vlan_zones: dict, snap: netbox.Snapshot) -> str | None:
     """A prefix's own zone, else its VLAN's Role."""
-    vlan = (_slug(p, "scope"), (p.get("vlan") or {}).get("vid"))
+    vlan = (_site_of(p, snap), (p.get("vlan") or {}).get("vid"))
     return _slug(p.get("custom_fields"), "zone") or vlan_zones.get(vlan)
 
 
@@ -285,8 +292,8 @@ def sources(audience: dict, snap: netbox.Snapshot) -> dict:
     vlan_zones = {(_slug(v, "group"), v["vid"]): _slug(v, "role") for v in snap.vlans}
     sites = set(audience["sites"])
     nets = [p["prefix"] for p in snap.prefixes
-            if _zone(p, vlan_zones) in audience["zones"]
-            and (not sites or p.get("scope_type") != "dcim.site" or _slug(p, "scope") in sites)]
+            if _zone(p, vlan_zones, snap) in audience["zones"]
+            and (not sites or _site_of(p, snap) in sites | {None})]
     trusted = _trusted(None, snap)
     nets += [n for tag in audience["tags"] for n in trusted.get(tag, [])]
     nets = [ipaddress.ip_network(n) for n in nets]
@@ -385,13 +392,24 @@ def _dns(hosts: list[dict], addresses: list[dict], vlans: dict, speakers: dict,
 def _ranges(slug: str, snap: netbox.Snapshot) -> list[str]:
     """The widest container the site holds in each family: all of its own addresses, and in
     IPv6 what an ISP delegated it."""
-    containers = [_net(p) for p in _at(snap.prefixes, slug) if p["status"]["value"] == "container"]
+    containers = [_net(p) for p in _at(snap, slug) if p["status"]["value"] == "container"]
     return [str(min(nets, key=lambda n: n.prefixlen))
             for version in (4, 6) if (nets := [n for n in containers if n.version == version])]
 
 
-def _at(objects: list[dict], slug: str) -> list[dict]:
-    return [o for o in objects if o.get("scope_type") == "dcim.site" and _slug(o, "scope") == slug]
+def _at(snap: netbox.Snapshot, slug: str) -> list[dict]:
+    return [p for p in snap.prefixes if _site_of(p, snap) == slug]
+
+
+def _site_of(p: dict, snap: netbox.Snapshot) -> str | None:
+    """The site a prefix is scoped to, or to a Location at, as NetBox's own `site_id` filter has
+    it: an AZ's networks are its site's. The nested Location names no site, so the join is by id
+    within this one fetch."""
+    if p.get("scope_type") == "dcim.site":
+        return _slug(p, "scope")
+    if p.get("scope_type") == "dcim.location":
+        return next((_slug(loc, "site") for loc in snap.locations if loc["id"] == p["scope_id"]), None)
+    return None
 
 
 def _gateway(net, gateways: list) -> str | None:
