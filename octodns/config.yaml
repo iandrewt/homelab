@@ -51,3 +51,9 @@ zones:
     sources: [netbox-public]
     processors: [no-root-ns, ownership]
     targets: [route53]
+  # Each public reverse zone NetBox holds, named by `homelab dns`; Route53 makes its hosted zone on
+  # the first apply, for the ISP to delegate to
+  "*.arpa.":
+    sources: [netbox-public]
+    processors: [no-root-ns]
+    targets: [route53]

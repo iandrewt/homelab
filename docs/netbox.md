@@ -143,7 +143,9 @@ its NetBox name is where it is, which the repo never needs.
   `<region>.sys` for its services, `<site>.home` and `clients.<site>.home` for the home's
   network, and `<team>.int` for each team, all under `titmuss.zone`, and a reverse zone per
   block. One a team or external-dns writes itself is tagged `rfc2136`. A zone is signed while
-  its DNSSEC policy is active.
+  its DNSSEC policy is active. A name is in one view, never both.
+- The reverse zone of the prefix an ISP delegates is `public`, and Route53's: PTRs for what's
+  internet-facing, and an NS for each internal block's reverse zone, naming the nameservers.
 - The resolvers are devices or VMs with role `dns-resolver`, holding their authoritative
   addresses; the zones' one primary is tagged `dns-primary`.
 

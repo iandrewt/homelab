@@ -159,6 +159,13 @@ def _config(model: dict, api: Api) -> dict:
         "signed": sorted(f"{name}." for name, zone in model["zones"].items() if zone["dnssec_keys"]),
     }
     targets = [api.site]
+    if both := sorted(set(model["zones"]) & set(model["public_zones"])):
+        raise DnsError(f"{', '.join(both)} in both views: a name has one answer everywhere")
+    # A public reverse zone's name holds a site's prefix, which the repo never does
+    reverse = config["zones"].pop("*.arpa.")
+    for name in model["public_zones"]:
+        if name.endswith(".arpa"):
+            config["zones"][f"{name}."] = reverse
     # By name rather than `*`: a zone its owner writes over RFC 2136 would lose every record
     template = config["zones"].pop("*")
     for name, zone in sorted(model["zones"].items()):
