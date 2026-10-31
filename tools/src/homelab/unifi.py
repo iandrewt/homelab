@@ -1,12 +1,14 @@
 """UniFi's firewall, through Site Manager's connector to each site's gateway.
 
 A stopgap until a provider writes the firewall whole: `apply` takes the runbook's policies a
-step at a time, a dry run unless --apply, and leaves alone any policy its zone pair already
-has, by name or by match. A site's console is the one whose serial is its router's in NetBox.
+step at a time, a dry run unless --apply, updating a policy its zone pair already has, by name
+or by match, where it differs. A site's console is the one whose serial is its router's in NetBox.
 """
 
+import collections
 import json
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -20,11 +22,16 @@ SITE_MANAGER = "https://api.ui.com"
 # A block matches new flows alone: return traffic is per policy, and so is PMTUD's ICMP
 NEW = ["NEW", "INVALID"]
 CONSOLE_PORTS = [22, 80, 443]
-# UniFi's port reference, 2026-10-30
-PROTECT_PORTS = [(7441, 7445), 7447, 7550, 7552, 7888]
+# UniFi's port reference, 2026-10-30, and what its gear was seen using that it doesn't list
+PROTECT_PORTS = [(7441, 7445), 7447, 7550, 7552, 6666, 7888]
+UNIFI_UDP_PORTS = [3478, 5514, 10001, 10101]
 # Where a zone gets what it needs from the gateway, beside ICMP and DHCP
 GATEWAY_DNS = ("Work", "Workloads", "Cameras")
 GATEWAY_MDNS = ("People", "Devices", "Infrastructure")
+# Where a break-glass client sits when it's home, and its server's port, as UniFi has it: the
+# API takes no VPN server as a destination
+BREAK_GLASS_FROM = ("People",)
+BREAK_GLASS_PORT = 51821
 # Kept from the internet by a policy, not Internet Access: unticked, that counts every IPv6
 # destination outside UniFi's networks as the internet, break-glass and the recursor included
 OFFLINE = ("Default", "Network", "Out of Band", "Facilities")
@@ -50,6 +57,12 @@ def register(subparsers) -> None:
     show.add_argument("source", help="a zone's name, as UniFi has it")
     show.add_argument("destination")
     show.set_defaults(run=_show)
+
+    blocked = actions.add_parser("blocked", help="what the firewall blocked, by flow, most first")
+    blocked.add_argument("site")
+    blocked.add_argument("--minutes", type=int, default=60)
+    blocked.add_argument("--top", type=int, default=40)
+    blocked.set_defaults(run=_blocked)
 
     apply = actions.add_parser("apply", help="one step of the runbook's policies")
     apply.add_argument("site")
@@ -99,6 +112,36 @@ def _show(args) -> int:
     return _run(run)
 
 
+def _blocked(args) -> int:
+    """A reply is shown by the port it came from, since the one it went to is ephemeral."""
+    def run(model, key, consoles):
+        url = f"{SITE_MANAGER}/v1/connector/consoles/{consoles[args.site]}/proxy/network/v2/api/site/default/traffic-flows"
+        until = int(time.time() * 1000)
+        flows, page = [], 0
+        while True:
+            body = {"timestampFrom": until - args.minutes * 60_000, "timestampTo": until,
+                    "pageNumber": page, "pageSize": 1000, "action": ["blocked"]}
+            got = _call(key, "POST", url, body)
+            flows += got["data"]
+            page += 1
+            if not got.get("has_next"):
+                break
+        seen = collections.Counter()
+        for f in flows:
+            src, dst = f["source"], f["destination"]
+            port = dst.get("port")
+            if port and port >= 32768:
+                port = f"from {src.get('port')}"
+            policy = ", ".join(p.get("name") or p.get("internal_type", "?") for p in f.get("policies", []))
+            seen[(src.get("network_name") or src.get("zone_name") or "internet",
+                  dst.get("network_name") or dst.get("zone_name") or "internet",
+                  f.get("protocol"), port or "", policy)] += f.get("count", 1)
+        print(f"{sum(seen.values())} blocked in {args.minutes} minutes")
+        for (src, dst, protocol, port, policy), n in seen.most_common(args.top):
+            print(f"{n:7}  {src} -> {dst}  {protocol} {port}  {policy}")
+    return _run(run)
+
+
 def _apply(args) -> int:
     def run(model, key, consoles):
         if args.step == "gateway" and not args.zone:
@@ -107,7 +150,7 @@ def _apply(args) -> int:
         site = model["sites"][args.site]
         steps = {"egress": egress, "ipv6": ipv6, "gateway": gateway, "vpn": vpn}
         wanted = steps[args.step](c, site, model["sites"], args.zone)
-        c.create(wanted, apply=args.apply)
+        c.ensure(wanted, apply=args.apply)
     return _run(run)
 
 
@@ -198,23 +241,32 @@ class Console:
                      and p["destination"]["zoneId"] == body["destination"]["zoneId"]
                      and (p["name"] == body["name"] or same(p))), None)
 
-    def create(self, bodies: list[dict], *, apply: bool) -> None:
+    def ensure(self, bodies: list[dict], *, apply: bool) -> None:
         names = {z["id"]: n for n, z in self.zones.items()}
         pairs = set()
-        for body in bodies:
-            pair = (names[body["source"]["zoneId"]], names[body["destination"]["zoneId"]])
-            if held := self.existing(body):
-                print(f"  exists   {pair[0]} -> {pair[1]}: {held['name']}")
-                continue
-            if not apply:
-                print(f"  would    {pair[0]} -> {pair[1]}: {body['name']}\n           {json.dumps(body)}")
-                continue
-            made = self.call("POST", f"{self.site}/firewall/policies", body)
-            self.policies.append(made)
-            pairs.add(pair)
-            print(f"  created  {pair[0]} -> {pair[1]}: {body['name']}")
-        for pair in sorted(pairs):
-            self.settle(*pair)
+        try:
+            for body in bodies:
+                pair = (names[body["source"]["zoneId"]], names[body["destination"]["zoneId"]])
+                held = self.existing(body)
+                if held and _canonical({k: held.get(k) for k in body}) == _canonical(body):
+                    print(f"  exists   {pair[0]} -> {pair[1]}: {held['name']}")
+                    continue
+                verb = "update" if held else "create"
+                if not apply:
+                    print(f"  would {verb} {pair[0]} -> {pair[1]}: {body['name']}\n           {json.dumps(body)}")
+                    continue
+                if held:
+                    made = self.call("PUT", f"{self.site}/firewall/policies/{held['id']}", body)
+                    self.policies = [made if p["id"] == held["id"] else p for p in self.policies]
+                else:
+                    made = self.call("POST", f"{self.site}/firewall/policies", body)
+                    self.policies.append(made)
+                pairs.add(pair)
+                print(f"  {verb}d  {pair[0]} -> {pair[1]}: {body['name']}")
+        finally:
+            # A created allow is below the pair's block until then
+            for pair in sorted(pairs):
+                self.settle(*pair)
 
     def settle(self, source: str, destination: str) -> None:
         """A policy is created at the end of its pair, so one added after a block moves above it."""
@@ -227,6 +279,15 @@ class Console:
             self.call("PUT", url, {"orderedFirewallPolicyIds": {
                 "beforeSystemDefined": wanted, "afterSystemDefined": ids["afterSystemDefined"]}})
             print(f"  reordered {source} -> {destination}: allows first")
+
+
+def _canonical(value):
+    """The API returns a list in its own order."""
+    if isinstance(value, dict):
+        return {k: _canonical(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return sorted((_canonical(v) for v in value), key=json.dumps)
+    return value
 
 
 def ports(*spec) -> dict:
@@ -276,8 +337,8 @@ def egress(c: Console, site: dict, sites: dict, zone=None) -> list[dict]:
     """29 and 30. 33 is Cameras' Internet Access, unticked."""
     offline = [n for n in OFFLINE if n in c.networks]
     out = []
-    if "Facilities" in c.networks:
-        out.append(policy(c, "Allow Facilities NTP", "ALLOW", side(c, "Appliances", networks=["Facilities"]),
+    if timed := [n for n in ("Network", "Facilities") if n in c.networks]:
+        out.append(policy(c, "Allow Appliances NTP", "ALLOW", side(c, "Appliances", networks=timed),
                           side(c, "External", port=ports(123)), scope("UDP")))
     if offline:
         out.append(policy(c, "Block Appliances Internet", "BLOCK", side(c, "Appliances", networks=offline),
@@ -312,7 +373,14 @@ def gateway(c: Console, site: dict, sites: dict, zone: str) -> list[dict]:
     if zone in GATEWAY_DNS:
         out.append(policy(c, "Allow Gateway DNS", "ALLOW", src, side(c, "Gateway", port=ports(53)), scope("TCP_UDP")))
     if zone in GATEWAY_MDNS:
-        out.append(policy(c, "Allow Gateway mDNS", "ALLOW", src, side(c, "Gateway", port=ports(5353)), scope("UDP")))
+        out += [
+            policy(c, "Allow Gateway mDNS", "ALLOW", src, side(c, "Gateway", port=ports(5353)), scope("UDP")),
+            # The gateway asks from an ephemeral port, and a reply to a multicast query is NEW
+            policy(c, "Allow Gateway mDNS Replies", "ALLOW", side(c, zone, port=ports(5353)), gw, scope("UDP")),
+        ]
+    if zone in BREAK_GLASS_FROM and any(v["type"] == "WIREGUARD" for v in c.every("vpn/servers")):
+        out.append(policy(c, "Allow Break-glass", "ALLOW", src, side(c, "Gateway", port=ports(BREAK_GLASS_PORT)),
+                          scope("UDP")))
     if zone == "Workloads":
         out.append(policy(c, "Allow Gateway BGP", "ALLOW", src, side(c, "Gateway", port=ports(179)), scope("TCP")))
     if zone == "Appliances":
@@ -320,7 +388,7 @@ def gateway(c: Console, site: dict, sites: dict, zone: str) -> list[dict]:
         out += [
             policy(c, "Allow Gateway Inform", "ALLOW", unifi, side(c, "Gateway", port=ports(8080)), scope("TCP")),
             policy(c, "Allow Gateway STUN, Syslog and Discovery", "ALLOW", unifi,
-                   side(c, "Gateway", port=ports(3478, 5514, 10001)), scope("UDP")),
+                   side(c, "Gateway", port=ports(*UNIFI_UDP_PORTS)), scope("UDP")),
             policy(c, "Allow Repair Port Console", "ALLOW", side(c, zone, networks=["Default"]),
                    side(c, "Gateway", port=ports(*CONSOLE_PORTS)), scope("TCP"), log=True),
         ]

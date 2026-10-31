@@ -11,12 +11,13 @@ uv run homelab unifi status                        # Site Magic's tunnels
 uv run homelab unifi export <dir>                  # every site's policies, zones and networks
 uv run homelab unifi apply <site> <step> [--apply] # egress, ipv6, gateway <zone>, vpn
 uv run homelab unifi show <site> <from> <to>       # a zone pair's policies of ours, in order
+uv run homelab unifi blocked <site> [--minutes N]  # what the firewall blocked, by flow, most first
 ```
 
 A stopgap until a provider writes the firewall whole. Each step is a set of zone policies,
-a dry run unless `--apply`; one its zone pair already has, by name or by match, is left
-alone, and a pair's allows go above its blocks. A site's console is the one whose serial is
-its router's in NetBox. The key is `UniFi API` in `Network`, a Site Manager key.
+a dry run unless `--apply`; one its zone pair already has, by name or by match, is updated
+where it differs, and a pair's allows go above its blocks. A site's console is the one whose serial is
+its router's in NetBox. The key is `UniFi API Key - Site Manager` in `Network`.
 
 Every block matches NEW and INVALID alone: UniFi's return traffic is per policy, so a block on
 every state would drop the replies to what the gateway opens itself. The networks the
