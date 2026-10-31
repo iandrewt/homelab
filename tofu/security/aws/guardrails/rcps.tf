@@ -22,7 +22,7 @@ resource "aws_organizations_policy" "perimeter" {
         ]
         Resource = "*"
         Condition = {
-          StringNotEqualsIfExists = { "aws:PrincipalOrgID" = aws_organizations_organization.this.id }
+          StringNotEqualsIfExists = { "aws:PrincipalOrgID" = local.organization_id }
           StringNotEquals         = { "aws:PrincipalType" = "Anonymous" }
           BoolIfExists            = { "aws:PrincipalIsAWSService" = "false" }
         }
@@ -35,7 +35,7 @@ resource "aws_organizations_policy" "perimeter" {
         Resource  = "*"
         Condition = {
           StringEquals            = { "aws:PrincipalType" = "Anonymous" }
-          StringNotEqualsIfExists = { "aws:VpceOrgID" = aws_organizations_organization.this.id }
+          StringNotEqualsIfExists = { "aws:VpceOrgID" = local.organization_id }
         }
       },
       {
@@ -45,7 +45,7 @@ resource "aws_organizations_policy" "perimeter" {
         Action    = ["kms:*", "s3:*", "sts:*"]
         Resource  = "*"
         Condition = {
-          StringNotEqualsIfExists = { "aws:SourceOrgID" = aws_organizations_organization.this.id }
+          StringNotEqualsIfExists = { "aws:SourceOrgID" = local.organization_id }
           Null                    = { "aws:SourceAccount" = "false" }
           Bool                    = { "aws:PrincipalIsAWSService" = "true" }
         }
@@ -76,7 +76,7 @@ resource "aws_organizations_policy" "bootstrap_role_trust" {
       Resource  = local.bootstrap_role
       Condition = {
         ArnNotLike = {
-          "aws:PrincipalArn" = "arn:aws:iam::${local.management_id}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_${aws_ssoadmin_permission_set.management_administrator.name}_*"
+          "aws:PrincipalArn" = "arn:aws:iam::${local.management_id}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_${local.management_administrator}_*"
         }
         BoolIfExists = { "aws:PrincipalIsAWSService" = "false" }
       }

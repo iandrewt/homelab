@@ -22,7 +22,7 @@ locals {
   aws_sp        = data.azuread_service_principal.aws.object_id
   aws_extension = one([for n in data.msgraph_resource.extensions.output.names : n if endswith(n, "_aws")])
 
-  # platform/aws/identity assigns every one of them
+  # identity/aws/identity-center assigns every one of them
   aws_users = toset(flatten(values(module.groups.users)))
 }
 

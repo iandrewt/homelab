@@ -88,7 +88,7 @@ Each file is a contract for one thing, and nothing reaches across:
 |---|---|
 | NetBox | addresses, prefixes, VLANs, and what each machine is |
 | `tofu/identity/tenancy/teams/<team>.yaml` | which teams exist: each one's Entra group, 1Password vault and state role. Never who is in them - that's Entra's |
-| Entra (`tofu/platform/entra/*`) | people and their groups; an app per platform instance, vended from its data file |
+| Entra (`tofu/identity/entra/*`) | people and their groups; an app per platform instance, vended from its data file |
 | `tofu/platform/proxmox/clusters/<name>.yaml` | a Proxmox cell: nodes, storage, MAC prefix, the API endpoint, what it grants each tenant |
 | `tofu/platform/proxmox/images/<site>.yaml` | the site's pinned image library, on storage every cell there mounts |
 | `tofu/platform/kubernetes/clusters/<name>.yaml` | a Kubernetes cluster: versions, node classes, VMs, the cells it may use, the integrations it asks them for |
@@ -312,7 +312,7 @@ systemd-resolved, and shadows `rpi-cloud-init-mods`' NM default with a file of t
 
 Entra ID Free: tokens carry groups as **object IDs**, and only users can be assigned to an app.
 **Groups decide**: `Administrators` and one per team (`Security` is a team), made by
-`tofu/platform/entra/directory`. Each consumer looks groups up by display name at plan time and
+`tofu/identity/entra/directory`. Each consumer looks groups up by display name at plan time and
 maps the IDs back itself: Proxmox gets a `<object id>-entra` group per grant, the apiserver a
 CEL map to `oidc:<team>`. **Assignments only gate**: each platform instance has its own app (its
 client ID the audience), *assignment required*, and `entra/apps` assigns the members of the
@@ -327,6 +327,10 @@ AWS is ABAC: a permission set says what an entity can do, never who it is. `entr
 the `team-<team>` SAML claims and SCIM's scope; membership is written onto users and groups as
 the `aws` directory extension, which the scoping filters read, always before the scope is saved
 (saving starts a sync that disables whoever is out of scope).
+
+The organisation and its accounts are Platform's (`platform/aws/org`); what every account runs
+under - guardrails, the trail, detection, the state account - is Security's (`security/aws/*`),
+which reads the organisation by name; Identity Center's sets and assignments are Identity's.
 
 The three states apply in order, by blast radius: `directory`, `aws`, `apps`, each reading the
 others by name. **Nothing unattended applies them** (assignments need

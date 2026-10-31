@@ -15,8 +15,8 @@ terraform {
   backend "s3" {
     bucket       = "tofu-state-877127520873-ap-southeast-2-an"
     region       = "ap-southeast-2"
-    profile      = "homelab-state-platform"
-    key          = "platform/entra/aws/terraform.tfstate"
+    profile      = "homelab-state-identity"
+    key          = "identity/entra/directory/terraform.tfstate"
     use_lockfile = true
   }
 
@@ -25,8 +25,8 @@ terraform {
       kms_key_id         = "arn:aws:kms:ap-southeast-2:877127520873:alias/tofu-state"
       key_spec           = "AES_256"
       region             = "ap-southeast-2"
-      profile            = "homelab-state-platform"
-      encryption_context = { state = "platform/entra/aws/terraform.tfstate" }
+      profile            = "homelab-state-identity"
+      encryption_context = { state = "identity/entra/directory/terraform.tfstate" }
     }
 
     method "aes_gcm" "state" {
@@ -45,7 +45,7 @@ terraform {
   }
 }
 
-# An admin's `az login`, never unattended: assignments need AppRoleAssignment.ReadWrite.All
+# An admin's `az login`
 provider "azuread" {}
 
 provider "msgraph" {

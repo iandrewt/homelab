@@ -1,11 +1,11 @@
 locals {
   proxmox_clusters = {
-    for f in fileset("${path.module}/../../proxmox/clusters", "*.yaml") :
-    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../../proxmox/clusters/${f}"))
+    for f in fileset("${path.module}/../../../platform/proxmox/clusters", "*.yaml") :
+    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../../../platform/proxmox/clusters/${f}"))
   }
   kubernetes_clusters = {
-    for f in fileset("${path.module}/../../kubernetes/clusters", "*.yaml") :
-    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../../kubernetes/clusters/${f}"))
+    for f in fileset("${path.module}/../../../platform/kubernetes/clusters", "*.yaml") :
+    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../../../platform/kubernetes/clusters/${f}"))
   }
 
   # One per instance, since the client ID is the audience. Owned here, so a rebuild keeps it.

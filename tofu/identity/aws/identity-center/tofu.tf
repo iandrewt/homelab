@@ -11,8 +11,8 @@ terraform {
   backend "s3" {
     bucket       = "tofu-state-877127520873-ap-southeast-2-an"
     region       = "ap-southeast-2"
-    profile      = "homelab-state-platform"
-    key          = "platform/aws/state/terraform.tfstate"
+    profile      = "homelab-state-identity"
+    key          = "identity/aws/identity-center/terraform.tfstate"
     use_lockfile = true
   }
 
@@ -21,8 +21,8 @@ terraform {
       kms_key_id         = "arn:aws:kms:ap-southeast-2:877127520873:alias/tofu-state"
       key_spec           = "AES_256"
       region             = "ap-southeast-2"
-      profile            = "homelab-state-platform"
-      encryption_context = { state = "platform/aws/state/terraform.tfstate" }
+      profile            = "homelab-state-identity"
+      encryption_context = { state = "identity/aws/identity-center/terraform.tfstate" }
     }
 
     method "aes_gcm" "state" {
@@ -52,20 +52,24 @@ data "aws_organizations_organization" "this" {
 }
 
 locals {
-  state_account = one([for a in data.aws_organizations_organization.this.non_master_accounts : a.id if a.name == "State"])
+  account_ids = {
+    for account in data.aws_organizations_organization.this.non_master_accounts :
+    account.name => account.id if account.state == "ACTIVE"
+  }
 }
 
-# The key and the bucket are administered by the bootstrap role alone, so it applies them
+# Through the bootstrap role rather than a permission set: what grants access can't depend
+# on it
 provider "aws" {
   region  = "ap-southeast-2"
   profile = "homelab-management"
 
   assume_role {
-    role_arn     = "arn:aws:iam::${local.state_account}:role/OrganizationAccountAccessRole"
-    session_name = "state"
+    role_arn     = "arn:aws:iam::${local.account_ids["Security"]}:role/OrganizationAccountAccessRole"
+    session_name = "identity"
   }
 
   default_tags {
-    tags = { managed-by = "opentofu", layer = "platform/aws/state" }
+    tags = { managed-by = "opentofu", layer = "identity/aws/identity-center" }
   }
 }

@@ -278,13 +278,13 @@ resource "aws_organizations_policy_attachment" "root_scps" {
 # On the OUs, not the root: a new account is created in the root, where Organizations makes
 # the role, and moved after
 resource "aws_organizations_policy_attachment" "bootstrap_role" {
-  for_each = aws_organizations_organizational_unit.top
+  for_each = local.ou_ids
 
   policy_id = aws_organizations_policy.bootstrap_role.id
-  target_id = each.value.id
+  target_id = each.value
 }
 
 resource "aws_organizations_policy_attachment" "suspended" {
   policy_id = aws_organizations_policy.suspended.id
-  target_id = aws_organizations_organizational_unit.top["Suspended"].id
+  target_id = local.ou_ids["Suspended"]
 }

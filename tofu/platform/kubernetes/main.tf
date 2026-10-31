@@ -49,7 +49,7 @@ locals {
 
 data "azuread_client_config" "this" {}
 
-# platform/entra/apps's
+# identity/entra/apps's
 data "azuread_application" "this" {
   display_name = "Kubernetes ${local.name}"
 }

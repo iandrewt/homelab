@@ -9,7 +9,7 @@ locals {
 }
 
 # Only the management account can change a permission set provisioned in it, so its own
-# are here rather than in identity
+# are here rather than in identity/aws/identity-center
 resource "aws_ssoadmin_permission_set" "management_administrator" {
   instance_arn     = local.sso_instance_arn
   name             = "ManagementAdministrator"

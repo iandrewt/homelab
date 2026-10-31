@@ -10,7 +10,7 @@ locals {
 
   state_teams = toset([for team in module.tenancy.teams : team.title])
 
-  # platform/aws/logging's
+  # security/aws/logging's
   trail_bucket = "arn:aws:s3:::cloudtrail-${local.account_ids["Log Archive"]}-ap-southeast-2-an"
 
   permission_sets = {
@@ -38,7 +38,7 @@ locals {
       })
     }
     TofuState = {
-      description = "OpenTofu state: becomes a team's role in platform/aws/state"
+      description = "OpenTofu state: becomes a team's role in security/aws/state"
       inline = jsonencode({
         Version = "2012-10-17"
         Statement = [{
@@ -66,7 +66,7 @@ locals {
   )
 }
 
-# Entra's, synced by SCIM: every group platform/entra makes, whose members it provisions
+# Entra's, synced by SCIM: every group identity/entra makes, whose members it provisions
 data "aws_identitystore_group" "this" {
   for_each = module.tenancy.groups
 

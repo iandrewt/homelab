@@ -18,9 +18,14 @@ docs/         how to stand this up yourself, starting with what goes in NetBox
 ```
 tofu/identity/
   tenancy/teams/          the teams: each one's Entra group, 1Password vault and state role
-tofu/platform/
   entra/                  directory (groups, the aws extension), aws (Identity Center's app), apps (one per platform instance)
-  aws/                    the organisation, identity, the state bucket and its key, logging
+  aws/identity-center/    permission sets, and each group's assignments
+tofu/security/aws/
+  guardrails/             the SCPs, RCPs and declarative policies every account runs under
+  state/                  the state bucket and its key, and a role per team
+  logging/, detection/    the organisation's trail, GuardDuty and Access Analyzer, and their alarms
+tofu/platform/
+  aws/                    the organisation, its accounts, and each account's baseline
   proxmox/clusters/       a file per Proxmox cluster, read by the admin layers (alf-pve-01.yaml, schema.json)
   proxmox/images/         a pinned image library per site (alfheim.yaml)
   proxmox/admin/          a workspace per cluster (images: per site)
