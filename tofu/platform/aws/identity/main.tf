@@ -10,9 +10,33 @@ locals {
 
   state_teams = toset([for team in module.tenancy.teams : team.title])
 
+  # platform/aws/logging's
+  trail_bucket = "arn:aws:s3:::cloudtrail-${local.account_ids["Log Archive"]}-ap-southeast-2-an"
+
   permission_sets = {
     Administrator = { description = "Administers an account", managed = ["AdministratorAccess"] }
     SecurityAudit = { description = "Reads configuration and findings", managed = ["SecurityAudit"] }
+    LogReader = {
+      description = "Reads the organisation's trail"
+      inline = jsonencode({
+        Version = "2012-10-17"
+        Statement = [
+          {
+            Sid      = "Trail"
+            Effect   = "Allow"
+            Action   = ["s3:GetObject", "s3:ListBucket"]
+            Resource = [local.trail_bucket, "${local.trail_bucket}/*"]
+          },
+          {
+            Sid       = "TrailKey"
+            Effect    = "Allow"
+            Action    = "kms:Decrypt"
+            Resource  = "arn:aws:kms:ap-southeast-2:${local.account_ids["Log Archive"]}:key/*"
+            Condition = { "ForAnyValue:StringEquals" = { "kms:ResourceAliases" = "alias/cloudtrail" } }
+          },
+        ]
+      })
+    }
     TofuState = {
       description = "OpenTofu state: becomes a team's role in platform/aws/state"
       inline = jsonencode({
@@ -31,6 +55,7 @@ locals {
   assignments = concat(
     [for account in local.members : { set = "Administrator", group = "Administrators", account = account }],
     [for account in local.members : { set = "SecurityAudit", group = "Security", account = account }],
+    [{ set = "LogReader", group = "Security", account = "Log Archive" }],
     [
       { set = "Administrator", group = "Network", account = "Network" },
       { set = "Administrator", group = "Platform", account = "Platform" },
