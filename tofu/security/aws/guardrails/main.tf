@@ -1,13 +1,16 @@
 # Platform's organisation, which Security only writes the policies of
 data "aws_organizations_organization" "this" {}
 
+module "regions" {
+  source = "../../../modules/regions"
+}
+
 data "aws_organizations_organizational_units" "top" {
   parent_id = local.root_id
 }
 
 locals {
-  # Platform enables the opt-in ones, in platform/aws/org
-  regions = ["ap-southeast-2", "ap-southeast-4"]
+  regions = module.regions.names
 
   organization_id = data.aws_organizations_organization.this.id
   root_id         = data.aws_organizations_organization.this.roots[0].id

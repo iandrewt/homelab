@@ -1,5 +1,9 @@
+module "regions" {
+  source = "../../../modules/regions"
+}
+
 locals {
-  regions = ["ap-southeast-2", "ap-southeast-4"]
+  regions = module.regions.names
 
   # Paths, nested with a slash: an OU can't move once made, but an account can
   organizational_units = ["Security", "Infrastructure", "Sandbox", "Suspended"]

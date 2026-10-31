@@ -1,5 +1,9 @@
+module "regions" {
+  source = "../../../modules/regions"
+}
+
 locals {
-  regions = toset(["ap-southeast-2", "ap-southeast-4"])
+  regions = toset(module.regions.names)
 
   features = ["S3_DATA_EVENTS", "EKS_AUDIT_LOGS"]
   runtime  = ["Sandbox"]
