@@ -93,6 +93,14 @@ resource "aws_kms_key" "state" {
         Resource  = "*"
       },
       {
+        # Access Analyzer's role and SecurityAudit, by IAM: the policy, never the key
+        Sid       = "Readers"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${local.account}:root" }
+        Action    = ["kms:DescribeKey", "kms:GetKeyPolicy", "kms:GetKeyRotationStatus", "kms:ListGrants", "kms:ListKeyPolicies", "kms:ListResourceTags"]
+        Resource  = "*"
+      },
+      {
         Sid       = "StateRoles"
         Effect    = "Allow"
         Principal = { AWS = "arn:aws:iam::${local.account}:root" }
