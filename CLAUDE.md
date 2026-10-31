@@ -166,8 +166,10 @@ purpose**. A **speaker group** shares an ASN: a DNS fleet, a Kubernetes cluster,
   Kubernetes needs no such rule.
 - A speaker's **service address** is from its own block, on `lo`; an anycast address is what
   clients are configured with. The resolvers' anycast address is on `anycast0`, held down
-  (`activation-mode: manual`) and raised by `anycast.service` only while what it fronts runs
-  (`frr_bgp_anycast_needs`); `import-check` advertises it only while the link is up.
+  (`activation-mode: manual`) and raised by `anycast-check` only while what it fronts runs
+  (`frr_bgp_anycast_needs`) and answers (`frr_bgp_anycast_check`: a signed internal name, and a
+  public one while a root server answers), unless drained (`/var/lib/anycast/drain`); it never
+  starts what it needs. `import-check` advertises it only while the link is up.
 - **Between sites is Site Magic, UniFi's OSPF**, IPv4 alone. UniFi refuses our `router ospf`,
   so a hub's *Redistribute to SD-WAN* (`redistribute bgp`, E1) offers every BGP route, and **a
   tier is reach by firewall**: spokes learn a hub's site segments, and its zone policies drop

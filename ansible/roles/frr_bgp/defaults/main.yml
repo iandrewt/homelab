@@ -14,6 +14,11 @@ frr_bgp_service_addresses: []
 frr_bgp_anycast_addresses: []
 frr_bgp_anycast_service: ~
 frr_bgp_anycast_needs: []
+# A command that exits 0 while this host serves the anycast addresses well
+frr_bgp_anycast_check: "true"
+frr_bgp_anycast_interval: 5
+# Present, the host withdraws them whatever the check says
+frr_bgp_anycast_drain: /var/lib/anycast/drain
 
 # The netplan ID of the uplink, as cloud-init and the install seeds name it
 frr_bgp_uplink: primary

@@ -14,6 +14,11 @@
       string "None" in pdns.conf. It comes from inventory/onepassword.yml.
   when: powerdns_resolver_role == 'primary'
 
+- name: Assert a signed zone for the health check to validate
+  ansible.builtin.assert:
+    that: powerdns_resolver_health_internal | length > 0
+    fail_msg: No zone is signed, so the anycast health check has no answer to expect AD on.
+
 - name: Zones and records
   ansible.builtin.import_tasks: zones.yml
 
@@ -158,11 +163,12 @@
   when: powerdns_resolver_role == 'primary'
   changed_when: false
 
-- name: Build dnsdist's anycast listen address list
+- name: Build dnsdist's listen address list, the health check's on loopback last
   ansible.builtin.set_fact:
     powerdns_resolver_dnsdist_locals: >-
       {{ ([powerdns_resolver_anycast_v4 ~ ':53'] if powerdns_resolver_anycast_v4 is not none else [])
-         + (['[' ~ powerdns_resolver_anycast_v6 ~ ']:53'] if powerdns_resolver_anycast_v6 is not none else []) }}
+         + (['[' ~ powerdns_resolver_anycast_v6 ~ ']:53'] if powerdns_resolver_anycast_v6 is not none else [])
+         + ['127.0.0.1:' ~ powerdns_resolver_health_port] }}
 
 - name: Configure dnsdist
   ansible.builtin.include_role:
@@ -175,7 +181,7 @@
       {% for local in powerdns_resolver_dnsdist_locals %}
       {{ 'setLocal' if loop.first else 'addLocal' }}("{{ local }}", {reusePort=true})
       {% endfor %}
-      setACL({ {{- powerdns_resolver_acl | map('to_json') | join(', ') -}} })
+      setACL({ {{- (powerdns_resolver_acl + ['127.0.0.1/32']) | map('to_json') | join(', ') -}} })
       {% if powerdns_resolver_query_logging | bool %}
       -- First, so no other rule's answer goes unlogged
       addAction(AllRule(), LogAction("", false, false, false, false))
@@ -186,3 +192,16 @@
     dnsdist_controlsocket: "::1"
     # addACL appends to dnsdist's defaults, every private range among them; setACL replaces them
     dnsdist_acls: []
+
+- name: Install dig, for the health check
+  ansible.builtin.apt:
+    name: bind9-dnsutils
+    state: present
+
+- name: Write the anycast health check
+  ansible.builtin.template:
+    src: dns-health.j2
+    dest: /usr/local/libexec/dns-health
+    owner: root
+    group: root
+    mode: "0755"

@@ -36,6 +36,14 @@ powerdns_resolver_acl: []
 # [{name, nameservers, soa, soa_ttl}]
 powerdns_resolver_zones: []
 
+# The anycast health check, through dnsdist on loopback: a signed internal zone, and a signed
+# public name that withdraws only while a root server answers
+powerdns_resolver_health_port: 5300
+powerdns_resolver_health_internal: >-
+  {{ powerdns_resolver_zones | rejectattr('dnssec_keys', 'eq', []) | map(attribute='name') | first | default('') }}
+powerdns_resolver_health_public: "."
+powerdns_resolver_health_roots: [198.41.0.4, "2001:503:ba3e::2:30", 193.0.14.129, "2001:7fd::1"]
+
 # {zone: [{keytype, privatekey, active, published}]}, for a rebuilt primary: `homelab dns keys
 # restore` runs the play with them in its environment
 powerdns_resolver_restored_keys: "{{ lookup('env', 'POWERDNS_RESOLVER_RESTORED_KEYS') | default('{}', true) | from_json }}"

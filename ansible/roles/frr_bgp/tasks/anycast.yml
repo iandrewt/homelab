@@ -8,8 +8,27 @@
     mode: "0644"
   notify: Restart anycast
 
-- name: Raise anycast0 whenever the fronted service runs
+- name: Write the health loop
+  ansible.builtin.template:
+    src: anycast-check.j2
+    dest: /usr/local/libexec/anycast-check
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart anycast-check
+
+- name: Write the health loop's unit
+  ansible.builtin.template:
+    src: anycast-check.service.j2
+    dest: /etc/systemd/system/anycast-check.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart anycast-check
+
+- name: Raise anycast0 whenever this host is healthy
   ansible.builtin.systemd_service:
-    name: anycast.service
+    name: anycast-check.service
     enabled: true
+    state: started
     daemon_reload: true

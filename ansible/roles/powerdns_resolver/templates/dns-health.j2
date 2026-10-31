@@ -1,0 +1,19 @@
+#!/bin/sh
+# Managed by Ansible (powerdns_resolver role). Exits 0 while this resolver answers through
+# dnsdist, validated, as its clients would be answered.
+
+validated() {
+  out=$(dig @127.0.0.1 -p {{ powerdns_resolver_health_port }} +dnssec +noall +comments +tries=2 +time=2 "$1" SOA) || return 1
+  printf '%s\n' "$out" | grep -q 'status: NOERROR' && printf '%s\n' "$out" | grep -Eq '^;; flags:[a-z ]* ad[ ;]'
+}
+
+# With a root server answering, a failed public name is this resolver's fault, not the WAN's
+online() {
+  for server in {{ powerdns_resolver_health_roots | join(' ') }}; do
+    dig @"$server" +norec +noall +comments +tries=1 +time=2 . SOA | grep -q 'status: NOERROR' && return 0
+  done
+  return 1
+}
+
+validated {{ powerdns_resolver_health_internal }} || exit 1
+validated {{ powerdns_resolver_health_public }} || ! online

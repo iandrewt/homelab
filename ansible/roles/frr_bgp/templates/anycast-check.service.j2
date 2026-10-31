@@ -1,0 +1,11 @@
+# Managed by Ansible (frr_bgp role).
+[Unit]
+Description=Raise anycast0 while this host is healthy and not drained, and lower it otherwise
+
+[Service]
+ExecStart=/usr/local/libexec/anycast-check
+Restart=always
+StateDirectory=anycast
+
+[Install]
+WantedBy=multi-user.target

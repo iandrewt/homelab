@@ -20,7 +20,8 @@ frr_bgp_service_addresses: "{{ [dns_resolver.ipv4, dns_resolver.ipv6] | select |
 frr_bgp_anycast_addresses: >-
   {{ [netbox_site.dns.recursor.ipv4, netbox_site.dns.recursor.ipv6] | select | list }}
 frr_bgp_anycast_service: dnsdist.service
-frr_bgp_anycast_needs: [pdns-recursor.service]
+frr_bgp_anycast_needs: [pdns-recursor.service, pdns.service]
+frr_bgp_anycast_check: /usr/local/libexec/dns-health
 
 powerdns_resolver_anycast_v4: "{{ netbox_site.dns.recursor.ipv4 }}"
 powerdns_resolver_anycast_v6: "{{ netbox_site.dns.recursor.ipv6 }}"
@@ -50,3 +51,4 @@ powerdns_resolver_primary_api_url: >-
      'http://%s:8081/api/v1/servers/localhost' % dns_resolver_primary.ipv4 }}
 
 powerdns_resolver_zones: "{{ netbox_zones }}"
+powerdns_resolver_health_public: titmuss.zone

@@ -32,7 +32,7 @@ network:
 {% if frr_bgp_anycast_addresses %}
   dummy-devices:
     anycast0:
-      # Held down; anycast.service raises it only while the service it fronts runs
+      # Held down; anycast-check raises it only while the service it fronts answers
       activation-mode: manual
       addresses:
 {% for address in frr_bgp_anycast_addresses %}

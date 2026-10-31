@@ -2,6 +2,7 @@
 [Unit]
 {% set units = [frr_bgp_anycast_service] + frr_bgp_anycast_needs %}
 Description=anycast0 up while {{ units | join(' and ') }} run
+# Raised only by anycast-check, which never starts these
 BindsTo={{ units | join(' ') }} sys-subsystem-net-devices-anycast0.device
 After={{ units | join(' ') }} sys-subsystem-net-devices-anycast0.device
 
@@ -9,7 +10,8 @@ After={{ units | join(' ') }} sys-subsystem-net-devices-anycast0.device
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/sbin/ip link set anycast0 up
+# The kernel drops a link's IPv6 addresses with it; put them back rather than count on networkd to
+{% for address in frr_bgp_anycast_addresses %}
+ExecStart=/usr/sbin/ip address replace {{ address }}/{{ 128 if ':' in address else 32 }} dev anycast0
+{% endfor %}
 ExecStop=/usr/sbin/ip link set anycast0 down
-
-[Install]
-UpheldBy={{ frr_bgp_anycast_service }}
