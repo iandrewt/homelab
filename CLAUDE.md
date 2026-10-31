@@ -316,8 +316,9 @@ Entra ID Free: tokens carry groups as **object IDs**, and only users can be assi
 maps the IDs back itself: Proxmox gets a `<object id>-entra` group per grant, the apiserver a
 CEL map to `oidc:<team>`. **Assignments only gate**: each platform instance has its own app (its
 client ID the audience), *assignment required*, and `entra/apps` assigns the members of the
-groups it grants. Apps live there (`modules/entra-app`), so a rebuild keeps its client ID. App
-roles are for permissions an app defines itself, never team membership.
+groups it grants. Apps live there (`modules/entra-app`), so a rebuild keeps its client ID, and
+each is consented for everyone, so no user may consent to anything. App roles are for
+permissions an app defines itself, never team membership.
 
 AWS is ABAC: a permission set says what an entity can do, never who it is. `entra/aws` writes
 the `team-<team>` SAML claims and SCIM's scope; membership is written onto users and groups as

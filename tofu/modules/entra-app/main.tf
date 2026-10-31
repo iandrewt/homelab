@@ -51,6 +51,17 @@ resource "azuread_service_principal" "this" {
   app_role_assignment_required = true
 }
 
+data "azuread_service_principal" "graph" {
+  client_id = "00000003-0000-0000-c000-000000000000"
+}
+
+# For everyone, so no user is ever asked to consent, and the tenant can let none
+resource "azuread_service_principal_delegated_permission_grant" "this" {
+  service_principal_object_id          = azuread_service_principal.this.object_id
+  resource_service_principal_object_id = data.azuread_service_principal.graph.object_id
+  claim_values                         = ["openid", "profile", "email", "offline_access"]
+}
+
 # Gates sign-in; groups grant. With P1, assign the groups instead.
 resource "azuread_app_role_assignment" "this" {
   for_each = var.users
