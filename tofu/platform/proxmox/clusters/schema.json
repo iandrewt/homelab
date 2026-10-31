@@ -124,7 +124,7 @@
       }
     },
     "tenants": {
-      "description": "Teams, from tofu/platform/tenancy/teams, granted a share: a pool, a token that makes its workloads as pools under it, and the VNets it may join.",
+      "description": "Teams, from tofu/identity/tenancy/teams, granted a share: a pool, a token that makes its workloads as pools under it, and the VNets it may join.",
       "type": "object",
       "additionalProperties": {
         "type": "object",

@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schema.json
+title: Facilities
+comment: The Facilities team.
+kind: infrastructure

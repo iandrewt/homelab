@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schema.json
+title: Observability
+comment: The Observability team.
+kind: infrastructure

@@ -16,8 +16,9 @@ docs/         how to stand this up yourself, starting with what goes in NetBox
 ```
 
 ```
-tofu/platform/
+tofu/identity/
   tenancy/teams/          the teams: each one's Entra group, 1Password vault and state role
+tofu/platform/
   entra/                  directory (groups, the aws extension), aws (Identity Center's app), apps (one per platform instance)
   aws/                    the organisation, identity, the state bucket and its key, logging
   proxmox/clusters/       a file per Proxmox cluster, read by the admin layers (alf-pve-01.yaml, schema.json)
@@ -45,7 +46,7 @@ The tofu is shaped for n of everything: a layer per kind of thing, a workspace a
 per instance. Adding a Proxmox cluster, a Kubernetes cluster or a site's resolvers is a file (or
 NetBox records) and `tofu workspace new`.
 
-Teams are defined once, in `tofu/platform/tenancy/teams/`, and vended everywhere: an Entra group,
+Teams are defined once, in `tofu/identity/tenancy/teams/`, and vended everywhere: an Entra group,
 a state role, and whatever each platform grants them. A Proxmox cluster file's `tenants` says
 only what a team gets there - a pool, a token written to 1Password, the VNets it may join - and
 the team makes its own workloads under `tofu/<team>/`. Anything running *inside* a workload

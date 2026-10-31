@@ -60,7 +60,7 @@ NETBOX_ITEM_REF=op://<vault>/<your admin token> uv run homelab netbox apply --id
 On a new NetBox, run `--identity` first: it makes the `schema` user the plain `apply` runs as.
 A user is never deleted, whatever `--prune` says.
 
-It also makes a tenant for each team in `tofu/platform/tenancy/teams/`, in the tenant group
+It also makes a tenant for each team in `tofu/identity/tenancy/teams/`, in the tenant group
 its `kind` names. It never touches an allocation. An object of a type it states but the schema
 doesn't name is reported, and deleted only with `--prune`.
 

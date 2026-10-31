@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schema.json
+title: Household IT
+comment: The Household IT team.
+kind: infrastructure

@@ -162,7 +162,7 @@
       }
     },
     "tenants": {
-      "description": "Teams, from tofu/platform/tenancy/teams, who may sign in. What each may do is RBAC in the cluster's directory.",
+      "description": "Teams, from tofu/identity/tenancy/teams, who may sign in. What each may do is RBAC in the cluster's directory.",
       "type": "object",
       "additionalProperties": {
         "type": "object",

@@ -122,7 +122,7 @@ def wanted(repo: Repo) -> dict[str, dict]:
     schema = yaml.safe_load((repo.root / "netbox" / "schema.yaml").read_text())
     schema["tenants"] = {
         path.stem: {"name": team["title"], "group": TENANT_GROUPS[team["kind"]], "description": team["comment"]}
-        for path in sorted((repo.root / "tofu" / "platform" / "tenancy" / "teams").glob("*.yaml"))
+        for path in sorted((repo.root / "tofu" / "identity" / "tenancy" / "teams").glob("*.yaml"))
         for team in [yaml.safe_load(path.read_text())]
     }
     rules = {}

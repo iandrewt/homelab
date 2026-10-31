@@ -87,7 +87,7 @@ Each file is a contract for one thing, and nothing reaches across:
 | Source | Owns |
 |---|---|
 | NetBox | addresses, prefixes, VLANs, and what each machine is |
-| `tofu/platform/tenancy/teams/<team>.yaml` | which teams exist: each one's Entra group, 1Password vault and state role. Never who is in them - that's Entra's |
+| `tofu/identity/tenancy/teams/<team>.yaml` | which teams exist: each one's Entra group, 1Password vault and state role. Never who is in them - that's Entra's |
 | Entra (`tofu/platform/entra/*`) | people and their groups; an app per platform instance, vended from its data file |
 | `tofu/platform/proxmox/clusters/<name>.yaml` | a Proxmox cell: nodes, storage, MAC prefix, the API endpoint, what it grants each tenant |
 | `tofu/platform/proxmox/images/<site>.yaml` | the site's pinned image library, on storage every cell there mounts |

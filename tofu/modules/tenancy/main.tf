@@ -1,5 +1,5 @@
 locals {
-  dir   = "${path.module}/../../platform/tenancy/teams"
+  dir   = "${path.module}/../../identity/tenancy/teams"
   teams = { for f in fileset(local.dir, "*.yaml") : trimsuffix(f, ".yaml") => yamldecode(file("${local.dir}/${f}")) }
 }
 

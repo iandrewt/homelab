@@ -1,20 +1,20 @@
 # NetBox's schema: what every consumer in this repo reads NetBox by, the same in anyone's
 # NetBox. `homelab netbox plan` shows what differs from it, and `apply` makes it so. Allocations
 # - prefixes, VLANs, addresses, sessions, devices - are NetBox's, and never here. Everything is
-# Network's unless it says otherwise; tenants come from tofu/platform/tenancy/teams/.
+# Network's unless it says otherwise; tenants come from tofu/identity/tenancy/teams/.
 owner_groups:
-  Household IT:
+  Teams:
     description: Teams that change NetBox
 owners:
   Network:
-    group: Household IT
+    group: Teams
     description: ''
   Platform:
-    group: Household IT
+    group: Teams
     description: ''
   Facilities:
-    group: Household IT
-    description: Power, cabling and racks
+    group: Teams
+    description: Power, cooling, physical security and the plant
 tenant_groups:
   infrastructure:
     name: Infrastructure
