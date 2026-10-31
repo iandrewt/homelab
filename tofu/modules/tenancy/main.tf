@@ -15,12 +15,15 @@ output "teams" {
 }
 
 output "groups" {
-  description = "Every Entra group, by display name: Administrators, Security, and one per team."
+  description = "Every Entra group, by display name: Administrators, and one per team."
   value = merge(
-    {
-      Administrators = "Administers everything."
-      Security       = "Audits everything, and changes nothing."
-    },
+    { Administrators = "Administers everything." },
     { for team in local.teams : team.title => team.comment },
   )
+
+  # A team of that name would be merged into it, with every grant Administrators has
+  precondition {
+    condition     = !contains([for team in local.teams : team.title], "Administrators")
+    error_message = "No team may be titled Administrators."
+  }
 }

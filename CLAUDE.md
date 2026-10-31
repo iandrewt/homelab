@@ -311,7 +311,7 @@ systemd-resolved, and shadows `rpi-cloud-init-mods`' NM default with a file of t
 ## Identity
 
 Entra ID Free: tokens carry groups as **object IDs**, and only users can be assigned to an app.
-**Groups decide**: `Administrators`, `Security` and one per team, made by
+**Groups decide**: `Administrators` and one per team (`Security` is a team), made by
 `tofu/platform/entra/directory`. Each consumer looks groups up by display name at plan time and
 maps the IDs back itself: Proxmox gets a `<object id>-entra` group per grant, the apiserver a
 CEL map to `oidc:<team>`. **Assignments only gate**: each platform instance has its own app (its

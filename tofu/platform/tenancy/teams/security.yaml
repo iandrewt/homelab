@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schema.json
+title: Security
+comment: The Security team.
+kind: infrastructure
