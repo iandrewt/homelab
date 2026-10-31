@@ -43,12 +43,65 @@ resource "aws_s3_bucket_lifecycle_configuration" "state" {
   depends_on = [aws_s3_bucket_versioning.state]
 }
 
-# Encrypts every layer's state and plans. The key policy is the default - the account
-# delegates to IAM - so what each team may decrypt is TofuState's, by encryption context.
+locals {
+  account        = data.aws_caller_identity.current.account_id
+  bootstrap_role = "arn:aws:iam::${local.account}:role/OrganizationAccountAccessRole"
+  state_roles    = "arn:aws:iam::${local.account}:role/tofu-state/*"
+}
+
+resource "aws_s3_bucket_policy" "state" {
+  bucket = aws_s3_bucket.state.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "OnlyStateRoles"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "s3:*"
+        Resource  = "${aws_s3_bucket.state.arn}/*"
+        Condition = { ArnNotLike = { "aws:PrincipalArn" = [local.state_roles, local.bootstrap_role] } }
+      },
+      {
+        Sid       = "ConfigurationIsBootstrap"
+        Effect    = "Deny"
+        Principal = "*"
+        NotAction = ["s3:Get*", "s3:List*"]
+        Resource  = aws_s3_bucket.state.arn
+        Condition = { ArnNotLike = { "aws:PrincipalArn" = local.bootstrap_role } }
+      },
+    ]
+  })
+}
+
+# Encrypts every layer's state and plans. IAM decides which team decrypts what, by encryption
+# context, but only for a state role; the key itself is the bootstrap role's.
 resource "aws_kms_key" "state" {
   description             = "OpenTofu state and plan encryption"
   enable_key_rotation     = true
   deletion_window_in_days = 30
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "Administration"
+        Effect    = "Allow"
+        Principal = { AWS = local.bootstrap_role }
+        Action    = "kms:*"
+        Resource  = "*"
+      },
+      {
+        Sid       = "StateRoles"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${local.account}:root" }
+        Action    = ["kms:GenerateDataKey", "kms:Decrypt"]
+        Resource  = "*"
+        Condition = { ArnLike = { "aws:PrincipalArn" = local.state_roles } }
+      },
+    ]
+  })
 
   lifecycle {
     prevent_destroy = true
@@ -69,8 +122,9 @@ locals {
 }
 
 # One role per team, and one policy for them all: the role's own `team` tag is what scopes
-# it. Who may become the team is the trust policy's - today a member, by the tag Entra
-# gives their session; CI by its OIDC token, when there is CI. The trust grants no
+# it. Who may become the team is the trust policy's - today a member, through TofuState with
+# the tag Entra gives their session; CI by its OIDC token, when there is CI. IAM makes
+# nothing under aws-reserved but Identity Center's roles, and the trust grants no
 # sts:TagSession, so nobody can bring a `team` tag of their own.
 resource "aws_iam_role" "state" {
   for_each = local.teams
@@ -84,9 +138,12 @@ resource "aws_iam_role" "state" {
     Statement = [{
       Sid       = "Members"
       Effect    = "Allow"
-      Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+      Principal = { AWS = "arn:aws:iam::${local.account}:root" }
       Action    = "sts:AssumeRole"
-      Condition = { StringEquals = { "aws:PrincipalTag/team-${each.key}" = "true" } }
+      Condition = {
+        StringEquals = { "aws:PrincipalTag/team-${each.key}" = "true" }
+        ArnLike      = { "aws:PrincipalArn" = "arn:aws:iam::${local.account}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_TofuState_*" }
+      }
     }]
   })
 }
