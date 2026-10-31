@@ -14,6 +14,10 @@ terraform {
       source  = "1Password/onepassword"
       version = "~> 3.3"
     }
+    netbox = {
+      source  = "e-breuninger/netbox"
+      version = "~> 5.8"
+    }
   }
 
   backend "s3" {
@@ -69,7 +73,17 @@ ephemeral "onepassword_item" "cloudflare" {
   title = "Cloudflare API Token - Tofu"
 }
 
-# TODO: drop Cloudflare and 1Password once an apply has destroyed the public copy's records
+# TODO: drop Cloudflare once an apply has destroyed the public copy's records
 provider "cloudflare" {
   api_token = ephemeral.onepassword_item.cloudflare.credential
+}
+
+ephemeral "onepassword_item" "netbox" {
+  vault = data.onepassword_vault.network.uuid
+  title = "NetBox API Token - Tofu"
+}
+
+provider "netbox" {
+  server_url = ephemeral.onepassword_item.netbox.hostname
+  api_token  = ephemeral.onepassword_item.netbox.credential
 }

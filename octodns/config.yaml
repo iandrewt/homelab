@@ -28,7 +28,8 @@ providers:
     pagerules: false
   route53:
     class: octodns_route53.Route53Provider
-    profile: homelab-network
+    # Network's `octodns` role, which can't touch a cluster's names
+    profile: homelab-octodns
 
 processors:
   ownership:

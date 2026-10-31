@@ -115,6 +115,15 @@ source_profile = homelab-state
 CI would define the same profile names from its OIDC token (`web_identity_token_file`)
 instead, so the layers don't change. The 1Password provider reads every other secret.
 
+octoDNS writes Route53 as `network/aws/dns`'s `octodns` role, which can't touch a cluster's
+names, assumed from your Network session:
+
+```ini
+[profile homelab-octodns]
+role_arn = <its octodns_role_arn output>
+source_profile = homelab-network
+```
+
 ```
 aws sso login
 export OP_ACCOUNT=<name>               # the desktop app; a service account token is for CI
