@@ -1,0 +1,78 @@
+---
+# PowerDNS's webserver has no TLS, so it listens on loopback alone and HAProxy fronts it, with a
+# key made here and a certificate its clients pin in NetBox.
+- name: Install HAProxy, and what makes its key
+  ansible.builtin.apt:
+    name: [haproxy, python3-cryptography]
+    state: present
+
+- name: Make the API's key
+  community.crypto.openssl_privatekey:
+    path: "{{ powerdns_resolver_api_certificate }}.key"
+    type: ECC
+    curve: secp256r1
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Reload haproxy
+
+- name: Describe the API's certificate
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ powerdns_resolver_api_certificate }}.key"
+    common_name: "{{ inventory_hostname }}"
+    subject_alt_name: "{{ powerdns_resolver_api_addresses | map('regex_replace', '^', 'IP:') | list }}"
+    basic_constraints: [CA:FALSE]
+    basic_constraints_critical: true
+    key_usage: [digitalSignature]
+    key_usage_critical: true
+    extended_key_usage: [serverAuth]
+  register: powerdns_resolver_api_csr
+  changed_when: false
+
+# Made again only when what it says changes, an address say; then it's pinned again
+- name: Sign it with its own key
+  community.crypto.x509_certificate:
+    path: "{{ powerdns_resolver_api_certificate }}"
+    csr_content: "{{ powerdns_resolver_api_csr.csr }}"
+    privatekey_path: "{{ powerdns_resolver_api_certificate }}.key"
+    provider: selfsigned
+    selfsigned_not_after: +3650d
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload haproxy
+
+- name: Configure HAProxy
+  ansible.builtin.template:
+    src: haproxy.cfg.j2
+    dest: /etc/haproxy/haproxy.cfg
+    owner: root
+    group: root
+    mode: "0644"
+    validate: haproxy -c -f %s
+  notify: Reload haproxy
+
+- name: Ensure HAProxy is running
+  ansible.builtin.systemd_service:
+    name: haproxy
+    state: started
+    enabled: true
+
+- name: Read the certificate back
+  ansible.builtin.slurp:
+    src: "{{ powerdns_resolver_api_certificate }}"
+  register: powerdns_resolver_api_served
+
+- name: Read its fingerprint
+  community.crypto.x509_certificate_info:
+    path: "{{ powerdns_resolver_api_certificate }}"
+  register: powerdns_resolver_api_info
+  when: (powerdns_resolver_api_served.content | b64decode | trim) != (powerdns_resolver_api_pinned | default('', true) | trim)
+
+- name: Say what to pin, when NetBox pins something else
+  ansible.builtin.debug:
+    msg: >-
+      NetBox doesn't pin the certificate {{ inventory_hostname }}'s PowerDNS API serves, so nothing
+      will trust it. This run read it over SSH; once you trust this run, `homelab pin dns-api
+      --fingerprint {{ powerdns_resolver_api_info.fingerprints.sha256 }}`.
+  when: powerdns_resolver_api_info is not skipped

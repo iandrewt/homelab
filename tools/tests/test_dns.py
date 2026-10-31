@@ -13,7 +13,7 @@ def test_octodns_never_writes_a_zone_its_owner_writes_over_rfc_2136(snapshot):
         zones=[*snapshot.zones, zone("k8s-1.one.test"), zone("apps.k8s-1.one.test", tags=["rfc2136"])],
         records=[*snapshot.records, soa("k8s-1.one.test"), soa("apps.k8s-1.one.test")],
     )
-    zones = dns._config(load(snap))["zones"]
+    zones = dns._config(load(snap), dns.Api("one", "10.0.40.1", 8081, "/dev/null"))["zones"]
 
     assert "apps.k8s-1.one.test." not in zones
     assert "*" not in zones

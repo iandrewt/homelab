@@ -3,6 +3,7 @@ keys at plan time and published in its parent, so nothing holds a copy of them."
 
 import json
 import logging
+import ssl
 import urllib.request
 
 from octodns.record import Record
@@ -19,13 +20,15 @@ class PowerDnsDelegations(BaseSource):
     SUPPORTS_GEO = False
     SUPPORTS_DYNAMIC = False
 
-    def __init__(self, id, url, api_key, ttl=3600):
+    def __init__(self, id, url, api_key, ca_file, ttl=3600):
         super().__init__(id)
         self.url, self.api_key, self.ttl = url, api_key, ttl
+        # The primary's pinned certificate, and nothing else
+        self.context = ssl.create_default_context(cafile=ca_file)
 
     def _get(self, path: str):
         request = urllib.request.Request(f"{self.url}{path}", headers={"X-API-Key": self.api_key})
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=10, context=self.context) as response:
             return json.load(response)
 
     def populate(self, zone, target=False, lenient=False):

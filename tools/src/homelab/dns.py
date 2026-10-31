@@ -4,18 +4,21 @@
 the plan still matches it, so what reaches PowerDNS is what was reviewed.
 """
 
+import contextlib
 import json
 import os
+import ssl
 import subprocess
 import sys
 import tempfile
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
-from . import netbox, secrets
+from . import netbox, pins, secrets
 from .model import PRIMARY_TAG, load, unzoned
 from .repo import Repo
 
@@ -30,6 +33,19 @@ RESTORED_KEYS = "POWERDNS_RESOLVER_RESTORED_KEYS"
 
 class DnsError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class Api:
+    """The one primary's API, as its Service names it, and its pinned certificate's file."""
+    site: str
+    host: str
+    port: int
+    cafile: str
+
+    @property
+    def base(self) -> str:
+        return f"https://{self.host}:{self.port}/api/v1/servers/localhost"
 
 
 def register(subparsers) -> None:
@@ -85,56 +101,58 @@ def _sync(*flags: str) -> int:
         print(f"UNZONED: {problem}", file=sys.stderr)
 
     try:
-        config = _config(model)
+        with _pinned(model) as api:
+            config = _config(model, api)
+            env = _secrets(config)
+            problems = _unready(api, env[_env_name(config["providers"][api.site]["api_key"])], model["zones"])
+            if problems:
+                for problem in problems:
+                    print(f"FAIL: {problem}", file=sys.stderr)
+                return 1
+
+            sync = Path(sys.executable).with_name("octodns-sync")
+            with tempfile.NamedTemporaryFile("w", suffix=".yaml") as path:
+                yaml.safe_dump(config, path)
+                path.flush()
+                command = [str(sync), "--quiet", "--config-file", path.name, *flags]
+                return subprocess.run(command, env={**os.environ, **env}, check=False).returncode
     except DnsError as bad:
         print(f"FAIL: {bad}", file=sys.stderr)
         return 1
-    env = _secrets(config)
-    zones = {f"{name}." for name in model["zones"]}
-
-    if missing := _uncreated(config, env, zones):
-        for problem in missing:
-            print(f"FAIL: {problem}", file=sys.stderr)
-        print(
-            "The resolvers play creates zones, with NetBox's SOA; octoDNS would create "
-            "them with PowerDNS's default instead. Run it first.",
-            file=sys.stderr,
-        )
-        return 1
-
-    sync = Path(sys.executable).with_name("octodns-sync")
-    with tempfile.NamedTemporaryFile("w", suffix=".yaml") as path:
-        yaml.safe_dump(config, path)
-        path.flush()
-        command = [str(sync), "--quiet", "--config-file", path.name, *flags]
-        return subprocess.run(command, env={**os.environ, **env}, check=False).returncode
 
 
-def _config(model: dict) -> dict:
-    """The committed config, plus the one primary NetBox tags, by its authoritative address: the
-    internal zones' target, and where the delegations' DS come from. Each internal zone
-    octoDNS writes is listed, and one holding another's delegation publishes its DS."""
-    config = yaml.safe_load(Repo.discover().octodns_config.read_text())
-    primaries = [
-        (slug, server)
-        for slug, site in sorted(model["sites"].items())
-        for server in site["dns"]["servers"].values()
-        if server["primary"]
-    ]
+@contextlib.contextmanager
+def _pinned(model: dict):
+    """The one primary's API, held to the certificate NetBox pins for it, for as long as it's used."""
+    primaries = [name for site in model["sites"].values()
+                 for name, server in site["dns"]["servers"].items() if server["primary"]]
     if len(primaries) > 1:
         # Every resolver would replicate from whichever came first
         raise DnsError(f"{len(primaries)} servers are tagged {PRIMARY_TAG}; zones have one primary")
-    targets = []
-    for slug, primary in primaries:
-        # By address: its name is served by the primary itself, so it's only right once synced
-        host = primary["ipv4"] or f"[{primary['ipv6']}]"
-        api_key = f"env/{slug.upper()}_POWERDNS_API_KEY"
-        config["providers"][slug] = {"class": POWERDNS, "host": host, "api_key": api_key,
-                                     "enable_dynamic": False}
-        config["providers"]["delegations"] = {
-            "class": DELEGATIONS, "url": f"http://{host}:8081/api/v1/servers/localhost", "api_key": api_key,
-        }
-        targets.append(slug)
+    try:
+        slug, name, address, port, certificate = pins.api_endpoint(model)
+    except pins.PinError as bad:
+        raise DnsError(str(bad)) from bad
+    if not certificate:
+        raise DnsError(f"{name}'s {pins.API_SERVICE} has no pinned certificate: `homelab pin dns-api`")
+    with tempfile.NamedTemporaryFile("w", suffix=".pem") as cafile:
+        cafile.write(certificate)
+        cafile.flush()
+        yield Api(slug, f"[{address}]" if ":" in address else address, port, cafile.name)
+
+
+def _config(model: dict, api: Api) -> dict:
+    """The committed config, plus the one primary NetBox tags, by its API's address: the internal
+    zones' target, and where the delegations' DS come from. Each internal zone octoDNS writes is
+    listed, and one holding another's delegation publishes its DS."""
+    config = yaml.safe_load(Repo.discover().octodns_config.read_text())
+    api_key = f"env/{api.site.upper()}_POWERDNS_API_KEY"
+    config["providers"][api.site] = {"class": POWERDNS, "host": api.host, "port": api.port, "scheme": "https",
+                                     "ssl_verify": api.cafile, "api_key": api_key, "enable_dynamic": False}
+    config["providers"]["delegations"] = {
+        "class": DELEGATIONS, "url": api.base, "api_key": api_key, "ca_file": api.cafile,
+    }
+    targets = [api.site]
     # By name rather than `*`: a zone its owner writes over RFC 2136 would lose every record
     template = config["zones"].pop("*")
     for name, zone in sorted(model["zones"].items()):
@@ -178,49 +196,46 @@ def _secrets(config: dict) -> dict[str, str]:
     return env
 
 
-def _uncreated(config: dict, env: dict[str, str], zones: set[str]) -> list[str]:
-    problems = []
-    for site, provider in _primaries(config).items():
-        url = f"http://{provider['host']}:8081/api/v1/servers/localhost/zones"
-        request = urllib.request.Request(
-            url, headers={"X-API-Key": env[_env_name(provider["api_key"])]}
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=10) as response:
-                present = {z["name"] for z in json.load(response)}
-        except (urllib.error.URLError, TimeoutError) as down:
-            problems.append(f"{site}: can't list zones at {url}: {down}")
-            continue
-        problems += [f"{site}: {zone} doesn't exist yet" for zone in sorted(zones - present)]
-    return problems
-
+def _unready(api: Api, key: str, zones: dict) -> list[str]:
+    """Zones the resolvers play hasn't created, which octoDNS would create with PowerDNS's
+    default SOA rather than NetBox's."""
+    try:
+        present = {z["name"].rstrip(".") for z in _api(api, key, "/zones")}
+    except DnsError as down:
+        return [f"{api.site}: can't list zones: {down}"]
+    return [f"{api.site}: {name} doesn't exist yet; run the resolvers play first"
+            for name in sorted(zones.keys() - present)]
 
 def _backup(args) -> int:
     try:
-        api, key = _primary_api(load())
-        written = set()
-        for zone in sorted(_api(api, key, "/zones"), key=lambda z: z["name"]):
-            if not zone.get("dnssec"):
-                continue
-            name = zone["name"].rstrip(".")
-            fields = {}
-            for listed in _api(api, key, f"/zones/{zone['name']}/cryptokeys"):
-                k = _api(api, key, f"/zones/{zone['name']}/cryptokeys/{listed['id']}")
-                tag = k["ds"][0].split()[0] if k.get("ds") else str(k["id"])
-                section = f"{k['keytype']} {tag}"
-                fields |= {
-                    (section, "private key"): k["privatekey"], (section, "keytype"): k["keytype"],
-                    (section, "active"): str(k["active"]).lower(),
-                    (section, "published"): str(k.get("published", True)).lower(),
-                }
-            title = KEY_ITEM + name
-            print(f"{secrets.write_item(KEY_VAULT, title, fields, concealed={'private key'}, tags=['homelab/dnssec'])}: {name}")
-            written.add(title)
-        for title in sorted(set(secrets.read_items(KEY_VAULT, KEY_ITEM)) - written):
-            print(f"STALE: {title}: the primary signs no such zone", file=sys.stderr)
+        with _pinned(load()) as api:
+            return _write_keys(api, secrets.resolve_one(f"op://Network/PowerDNS API Key - {api.site}/credential"))
     except (netbox.Unreachable, secrets.SecretError, DnsError) as bad:
         print(f"FAIL: {bad}", file=sys.stderr)
         return 1
+
+
+def _write_keys(api: Api, key: str) -> int:
+    written = set()
+    for zone in sorted(_api(api, key, "/zones"), key=lambda z: z["name"]):
+        if not zone.get("dnssec"):
+            continue
+        name = zone["name"].rstrip(".")
+        fields = {}
+        for listed in _api(api, key, f"/zones/{zone['name']}/cryptokeys"):
+            k = _api(api, key, f"/zones/{zone['name']}/cryptokeys/{listed['id']}")
+            tag = k["ds"][0].split()[0] if k.get("ds") else str(k["id"])
+            section = f"{k['keytype']} {tag}"
+            fields |= {
+                (section, "private key"): k["privatekey"], (section, "keytype"): k["keytype"],
+                (section, "active"): str(k["active"]).lower(),
+                (section, "published"): str(k.get("published", True)).lower(),
+            }
+        title = KEY_ITEM + name
+        print(f"{secrets.write_item(KEY_VAULT, title, fields, concealed={'private key'}, tags=['homelab/dnssec'])}: {name}")
+        written.add(title)
+    for title in sorted(set(secrets.read_items(KEY_VAULT, KEY_ITEM)) - written):
+        print(f"STALE: {title}: the primary signs no such zone", file=sys.stderr)
     return 0
 
 
@@ -256,18 +271,10 @@ def _primary(model: dict) -> tuple[str, str, dict]:
     return found
 
 
-def _primary_api(model: dict) -> tuple[str, str]:
-    """The one primary's API, and its key."""
-    slug, _, primary = _primary(model)
-    host = primary["ipv4"] or f"[{primary['ipv6']}]"
-    key = secrets.resolve_one(f"op://Network/PowerDNS API Key - {slug}/credential")
-    return f"http://{host}:8081/api/v1/servers/localhost", key
-
-
-def _api(base: str, key: str, path: str):
-    request = urllib.request.Request(base + path, headers={"X-API-Key": key})
+def _api(api: Api, key: str, path: str):
+    request = urllib.request.Request(api.base + path, headers={"X-API-Key": key})
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with urllib.request.urlopen(request, timeout=10, context=ssl.create_default_context(cafile=api.cafile)) as response:
             return json.load(response)
     except (urllib.error.URLError, TimeoutError) as down:
-        raise DnsError(f"{base}{path}: {down}") from down
+        raise DnsError(f"{api.base}{path}: {down}") from down

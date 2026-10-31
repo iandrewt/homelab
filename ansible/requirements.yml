@@ -2,6 +2,7 @@
 collections:
   - name: community.general
   - name: ansible.posix
+  - name: community.crypto
   - name: netbox.netbox
 
 roles:

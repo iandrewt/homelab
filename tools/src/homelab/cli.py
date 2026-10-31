@@ -3,7 +3,7 @@
 import argparse
 import sys
 
-from . import bootstrap, dns, fleet, netbox, schema, secrets, unifi
+from . import bootstrap, dns, fleet, netbox, pins, schema, secrets, unifi
 from .bootstrap.shell import BootstrapError
 from .model import load
 from .render import firewall, frr, seed
@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     dns.register(subparsers)
     fleet.register(subparsers)
+    pins.register(subparsers)
     schema.register(subparsers)
     unifi.register(subparsers)
 

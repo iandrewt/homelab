@@ -100,6 +100,11 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
         "services": _services(hosts, addresses, snap),
         "dns": _dns(hosts, addresses, vlans, speakers, snap),
         "hosts": sorted(h["name"] for h in hosts),
+        # Each host's pinned SSH key, at the primary addresses it's reached by
+        "host_keys": {
+            h["name"]: {"key": key, "addresses": [str(_ip(p)) for p in (h.get("primary_ip6"), h.get("primary_ip4")) if p]}
+            for h in hosts if (key := (h.get("custom_fields") or {}).get("ssh_host_key"))
+        },
         "named": {str(_ip(a)): a["dns_name"] for a in addresses if a.get("dns_name")},
     }
 
@@ -365,6 +370,8 @@ def _services(hosts: list[dict], site_addresses: list[dict], snap: netbox.Snapsh
             "ports": svc["ports"],
             "addresses": [str(ipaddress.ip_interface(a).ip) for a in addresses],
             "sources": sources(wanted, snap) if wanted else None,
+            # What it serves, pinned by its clients
+            "certificate": (svc.get("custom_fields") or {}).get("certificate"),
         }
     return services
 

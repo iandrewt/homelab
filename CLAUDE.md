@@ -63,6 +63,8 @@ where NetBox has nothing, and points at a built-in object rather than a choice:
 | an address many hosts serve | an FHRP group, protocol `other`: the anycast addresses on it, the interfaces serving them (`anycast0`) its members, its Services on it. The recursor, and each cluster's API |
 | a source narrower than a zone | a trust tag (`connector`, `breakglass`, `proxmox-api`, `nas-api`, `bmc-control`, `storage-client`) on a sub-pool, a VLAN, or a device or VM (covering its primary addresses): a rule names the tag, never an address |
 | a BMC | its device's `oob_ip`, named `idrac-<service tag>` |
+| a host's SSH host key | Device or VM, custom field `ssh_host_key`: made on the host, recorded by `homelab pin ssh` once checked. Ansible connects by primary address and takes no other key |
+| a Service's certificate | Service, custom field `certificate`: made on the host, recorded by `homelab pin` from a fingerprint read over SSH. Its clients trust nothing else |
 | a resolver | Device or VM, role `dns-resolver`, holding its authoritative address per family, named `<host>.titmuss.zone` as its NS records name it; a VM's size, cluster, host and VLAN are what `network/dns` builds |
 | the recursor | FHRP group `recursor`, the global `dns-recursor` pool's address, `dns.titmuss.zone`, originated by every fleet |
 | which view names an address | the view holding the longest prefix with any: `_default_` the home blocks, `public` the nameservers' and the recursor's pools, so their glue follows NetBox. netbox_dns writes a PTR only in its forward record's view, so those PTRs are stated |
@@ -111,7 +113,8 @@ computes; what a prefix must satisfy is NetBox's own containment. The design is 
   `<slug>.infra.titmuss.zone`. Only the `_default_` view is internal; a zone of the same name in
   another view is somebody else's copy.
 - **octoDNS writes the records** (`homelab dns`) from the internal view to the one primary,
-  deletes included; every other server replicates. Ansible only creates zones, with NetBox's SOA
+  deletes included, through its API's HAProxy and the certificate NetBox pins (the API itself
+  is on loopback); every other server replicates. Ansible only creates zones, with NetBox's SOA
   (octoDNS would use PowerDNS's default), so a new zone needs the resolvers play before its first
   sync. A zone tagged `rfc2136` is its owner's - a cluster's `apps.<name>.k8s.<region>.sys`, a
   team's `<team>.int`, a site's `clients.<site>.home` - and `homelab dns` lists every other zone
@@ -362,6 +365,7 @@ uv run homelab netbox plan        # what NetBox's schema lacks; `apply`, with th
 uv run homelab generate           # rewrite derived files; --check reports drift
 uv run homelab dns plan           # what octoDNS would change, and a checksum
 uv run homelab dns apply <sum>    # apply that plan, only if it still matches
+uv run homelab pin ssh <host>     # record a host's key once it's checked, with your own token
 uv run homelab unifi apply <site> <step>   # a step of the firewall, dry-run until --apply
 uv run pytest
 

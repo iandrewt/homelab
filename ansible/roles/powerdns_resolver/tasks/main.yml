@@ -14,6 +14,14 @@
       string "None" in pdns.conf. It comes from inventory/onepassword.yml.
   when: powerdns_resolver_role == 'primary'
 
+- name: Assert the primary's API has somewhere to listen
+  ansible.builtin.assert:
+    that: powerdns_resolver_api_addresses | length > 0
+    fail_msg: >-
+      The primary's PowerDNS API Service names no addresses in NetBox; give it the server's
+      authoritative ones, which HAProxy serves it on.
+  when: powerdns_resolver_role == 'primary'
+
 - name: Assert a signed zone for the health check to validate
   ansible.builtin.assert:
     that: powerdns_resolver_health_internal | length > 0
@@ -33,15 +41,6 @@
          + (powerdns_resolver_primary_addresses | select('search', ':') | map('regex_replace', '^', '[')
             | map('regex_replace', '$', ']:53') | list) }}
 
-# The API listens on `::`, where an IPv4 client arrives as ::ffff:a.b.c.d - and PowerDNS
-# matches its ACL against that mapped form, never the plain IPv4 one.
-- name: Write the API's allowed sources as the dual-stack socket reports them
-  ansible.builtin.set_fact:
-    powerdns_resolver_api_acl: >-
-      ::1/128{% for net in powerdns_resolver_api_allow_from %},{{
-        net if ':' in net else '::ffff:' ~ net.split('/')[0] ~ '/' ~ (96 + net.split('/')[1] | int)
-      }}{% endfor %}
-
 - name: Compute the authoritative server's pdns_config
   no_log: true
   ansible.builtin.set_fact:
@@ -51,8 +50,8 @@
          'query-local-address': powerdns_resolver_service_v4 ~ ',' ~ powerdns_resolver_service_v6,
          'local-port': 53}
         | combine(
-            {'primary': true, 'webserver': true, 'webserver-address': '::',
-             'webserver-port': 8081, 'webserver-allow-from': powerdns_resolver_api_acl, 'api': true,
+            {'primary': true, 'webserver': true, 'webserver-address': '::1',
+             'webserver-port': 8081, 'webserver-allow-from': '::1/128', 'api': true,
              'api-key': powerdns_resolver_api_key,
              'also-notify': powerdns_resolver_peer_notify_addresses | join(','),
              'allow-axfr-ips': powerdns_resolver_peer_addresses | join(',')}
@@ -104,6 +103,10 @@
     pdns_provision_zones: "{{ (powerdns_resolver_provision_zones | default([])) if powerdns_resolver_role == 'primary' else [] }}"
     pdns_provision_pdnsutils: "{{ powerdns_resolver_secondary_zone_commands | default([]) }}"
     pdns_provision_cryptokeys: "{{ (powerdns_resolver_provision_cryptokeys | default([])) if powerdns_resolver_role == 'primary' else [] }}"
+
+- name: The API, over TLS
+  ansible.builtin.import_tasks: api.yml
+  when: powerdns_resolver_role == 'primary'
 
 # create-secondary-zone only runs while a zone doesn't exist, so a primary that moves never
 # reaches an existing one. pdnsutil can't say whether this changed anything.

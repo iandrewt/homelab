@@ -156,6 +156,17 @@ its NetBox name is where it is, which the repo never needs.
 
 - A Service per port a firewall should know of, made from a template, on its host - or on its
   FHRP group, for anycast - with an audience where the port needs other than its prefix's.
+- The primary's `PowerDNS API` Service, on its authoritative addresses, which HAProxy serves.
+
+**Pins**
+
+What a host is, recorded once it's checked, by you rather than a consumer (`NETBOX_ITEM_REF` at
+your own token, so the changelog says who trusted it):
+
+- `homelab pin ssh <host>`: its Ed25519 host key, in `ssh_host_key`, if your known_hosts already
+  holds it or it has the fingerprint its console shows. Again after a rebuild.
+- `homelab pin dns-api --fingerprint <sha256>`: the certificate its API serves, in the Service's
+  `certificate`, with the fingerprint the resolvers play printed.
 
 ## Keeping it
 

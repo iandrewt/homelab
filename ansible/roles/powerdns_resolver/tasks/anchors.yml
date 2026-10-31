@@ -1,7 +1,8 @@
 ---
+# On the primary, over SSH: its API listens on loopback
 - name: Read each signed zone's keys from the primary
   ansible.builtin.uri:
-    url: "{{ powerdns_resolver_primary_api_url }}/zones/{{ item.name }}./cryptokeys"
+    url: "http://[::1]:8081/api/v1/servers/localhost/zones/{{ item.name }}./cryptokeys"
     headers:
       X-Api-Key: "{{ powerdns_resolver_primary_api_key }}"
     status_code: [200, 404]
@@ -9,7 +10,7 @@
   loop_control:
     label: "{{ item.name }}"
   register: powerdns_resolver_cryptokeys
-  delegate_to: localhost
+  delegate_to: "{{ powerdns_resolver_primary_host }}"
   become: false
   check_mode: false
   no_log: true

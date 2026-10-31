@@ -4,8 +4,9 @@ dns_resolver: "{{ netbox_site.dns.servers[inventory_hostname] }}"
 dns_resolver_all: >-
   {{ netbox_sites.values() | map(attribute='dns') | map(attribute='servers')
      | map('dict2items') | flatten | items2dict }}
-dns_resolver_primary: >-
-  {{ dns_resolver_all.values() | selectattr('primary') | first }}
+dns_resolver_primary_name: >-
+  {{ dns_resolver_all | dict2items | selectattr('value.primary') | map(attribute='key') | first }}
+dns_resolver_primary: "{{ dns_resolver_all[dns_resolver_primary_name] }}"
 dns_resolver_peers: >-
   {{ dns_resolver_all | dict2items | rejectattr('key', 'eq', inventory_hostname)
      | map(attribute='value') | list }}
@@ -40,15 +41,17 @@ powerdns_resolver_primary_addresses: "{{ [dns_resolver_primary.ipv4, dns_resolve
 
 powerdns_resolver_role: "{{ 'primary' if dns_resolver.primary else 'secondary' }}"
 
-dns_resolver_api_sources: "{{ netbox_site.services[inventory_hostname]['PowerDNS API'].sources }}"
-powerdns_resolver_api_allow_from: "{{ dns_resolver_api_sources.ipv4 + dns_resolver_api_sources.ipv6 }}"
+dns_resolver_api: "{{ netbox_site.services[inventory_hostname]['PowerDNS API'] }}"
+powerdns_resolver_api_addresses: "{{ dns_resolver_api.addresses }}"
+powerdns_resolver_api_port: "{{ dns_resolver_api.ports | first }}"
+powerdns_resolver_api_allow_from: >-
+  {{ ['0.0.0.0/0', '::/0'] if dns_resolver_api.sources.internet
+     else dns_resolver_api.sources.ipv4 + dns_resolver_api.sources.ipv6 }}
+powerdns_resolver_api_pinned: "{{ dns_resolver_api.certificate }}"
 
 powerdns_resolver_api_key: "{{ powerdns_api_key }}"
 powerdns_resolver_primary_api_key: "{{ powerdns_primary_api_key }}"
-powerdns_resolver_primary_api_url: >-
-  {{ 'http://[%s]:8081/api/v1/servers/localhost' % dns_resolver_primary.ipv6
-     if dns_resolver_primary.ipv6 else
-     'http://%s:8081/api/v1/servers/localhost' % dns_resolver_primary.ipv4 }}
+powerdns_resolver_primary_host: "{{ dns_resolver_primary_name }}"
 
 powerdns_resolver_zones: "{{ netbox_zones }}"
 powerdns_resolver_health_public: titmuss.zone

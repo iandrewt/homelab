@@ -1,0 +1,30 @@
+# Managed by Ansible (powerdns_resolver role).
+global
+  log /dev/log local0
+  chroot /var/lib/haproxy
+  user haproxy
+  group haproxy
+  daemon
+  ssl-default-bind-options ssl-min-ver TLSv1.3
+
+defaults
+  log global
+  mode http
+  option httplog
+  timeout connect 5s
+  timeout client 30s
+  timeout server 30s
+
+frontend powerdns-api
+{% for address in powerdns_resolver_api_addresses %}
+  bind {{ '[' ~ address ~ ']' if ':' in address else address }}:{{ powerdns_resolver_api_port }} ssl crt {{ powerdns_resolver_api_certificate }}
+{% endfor %}
+{% if powerdns_resolver_api_allow_from %}
+  tcp-request connection reject unless { src {{ powerdns_resolver_api_allow_from | join(' ') }} }
+{% else %}
+  tcp-request connection reject
+{% endif %}
+  default_backend powerdns
+
+backend powerdns
+  server pdns [::1]:8081

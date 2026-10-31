@@ -308,6 +308,19 @@ custom_fields:
     type: text
     label: VNet
     description: Proxmox SDN VNet ID
+  ssh_host_key:
+    object_types:
+      - dcim.device
+      - virtualization.virtualmachine
+    type: text
+    label: SSH Host Key
+    description: Pinned Ed25519 public key
+  certificate:
+    object_types:
+      - ipam.service
+    type: longtext
+    label: Certificate
+    description: Pinned TLS certificate, in PEM
 cluster_types:
   proxmox-ve:
     name: Proxmox VE

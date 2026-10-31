@@ -16,5 +16,6 @@ groups:
     ['debian-13-trixie', 'proxmox-ve-9-2', 'raspberry-pi-os-13']
   raspberry_pi_os: "platform is defined and platform.slug.startswith('raspberry-pi-os-')"
 
-ansible_host_dns_name: true
+# By primary address: the hosts that serve DNS can't be reached by a name they serve
+ansible_host_dns_name: false
 interfaces: true
