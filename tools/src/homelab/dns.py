@@ -104,7 +104,11 @@ def _sync(*flags: str) -> int:
         with _pinned(model) as api:
             config = _config(model, api)
             env = _secrets(config)
-            problems = _unready(api, env[_env_name(config["providers"][api.site]["api_key"])], model["zones"])
+            problems, signing = _unready(api, env[_env_name(config["providers"][api.site]["api_key"])],
+                                         model["zones"])
+            for name in signing:
+                print(f"UNSIGN: {name}'s DNSSEC policy isn't active, so this sync withdraws its DS; the "
+                      "primary still signs it until it's unsigned, once the DS's TTL has passed", file=sys.stderr)
             if problems:
                 for problem in problems:
                     print(f"FAIL: {problem}", file=sys.stderr)
@@ -151,6 +155,8 @@ def _config(model: dict, api: Api) -> dict:
                                      "ssl_verify": api.cafile, "api_key": api_key, "enable_dynamic": False}
     config["providers"]["delegations"] = {
         "class": DELEGATIONS, "url": api.base, "api_key": api_key, "ca_file": api.cafile,
+        # A zone's DS follows NetBox's policy, so it's withdrawn before the zone is unsigned
+        "signed": sorted(f"{name}." for name, zone in model["zones"].items() if zone["dnssec_keys"]),
     }
     targets = [api.site]
     # By name rather than `*`: a zone its owner writes over RFC 2136 would lose every record
@@ -196,15 +202,20 @@ def _secrets(config: dict) -> dict[str, str]:
     return env
 
 
-def _unready(api: Api, key: str, zones: dict) -> list[str]:
+def _unready(api: Api, key: str, zones: dict) -> tuple[list[str], list[str]]:
     """Zones the resolvers play hasn't created, which octoDNS would create with PowerDNS's
-    default SOA rather than NetBox's."""
+    default SOA rather than NetBox's; and zones the primary signs though NetBox's policy is
+    inactive, which nothing unsigns."""
     try:
-        present = {z["name"].rstrip(".") for z in _api(api, key, "/zones")}
+        present = {z["name"].rstrip("."): z for z in _api(api, key, "/zones")}
     except DnsError as down:
-        return [f"{api.site}: can't list zones: {down}"]
-    return [f"{api.site}: {name} doesn't exist yet; run the resolvers play first"
-            for name in sorted(zones.keys() - present)]
+        return [f"{api.site}: can't list zones: {down}"], []
+    problems = [f"{api.site}: {name} doesn't exist yet; run the resolvers play first"
+                for name in sorted(zones.keys() - present.keys())]
+    signing = [name for name, zone in sorted(zones.items())
+               if not zone["dnssec_keys"] and present.get(name, {}).get("dnssec")]
+    return problems, signing
+
 
 def _backup(args) -> int:
     try:

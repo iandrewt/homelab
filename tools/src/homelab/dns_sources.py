@@ -1,5 +1,6 @@
 """The octoDNS source the repo adds: the DS of each zone PowerDNS signs, read from the primary's
-keys at plan time and published in its parent, so nothing holds a copy of them."""
+keys at plan time and published in its parent, so nothing holds a copy of them - while NetBox's
+policy says it's signed, so the DS goes before the signatures do."""
 
 import json
 import logging
@@ -20,9 +21,9 @@ class PowerDnsDelegations(BaseSource):
     SUPPORTS_GEO = False
     SUPPORTS_DYNAMIC = False
 
-    def __init__(self, id, url, api_key, ca_file, ttl=3600):
+    def __init__(self, id, url, api_key, ca_file, signed, ttl=3600):
         super().__init__(id)
-        self.url, self.api_key, self.ttl = url, api_key, ttl
+        self.url, self.api_key, self.signed, self.ttl = url, api_key, set(signed), ttl
         # The primary's pinned certificate, and nothing else
         self.context = ssl.create_default_context(cafile=ca_file)
 
@@ -35,7 +36,7 @@ class PowerDnsDelegations(BaseSource):
         delegated = {r.name for r in zone.records if r._type == "NS" and r.name}
         names = [z["name"] for z in self._get("/zones")]
         for name in names:
-            if not name.endswith(f".{zone.name}"):
+            if not name.endswith(f".{zone.name}") or name not in self.signed:
                 continue
             # A grandchild's DS is in its own parent, delegated from this one
             if any(name.endswith(f".{between}") and between.endswith(f".{zone.name}") for between in names):
