@@ -42,11 +42,17 @@
 - name: Load it, rolled back unless Ansible can still connect afterwards  # noqa: no-handler
   when: host_firewall_ruleset is changed
   block:
+    # With no file before it, what it replaced was no ruleset at all
     - name: Restore the ruleset it replaced in a while, unless this is called off
       ansible.builtin.command:
         argv: [systemd-run, "--on-active={{ host_firewall_rollback_seconds }}", --unit=host-firewall-rollback,
-               --collect, /bin/sh, -c,
-               "mv -f {{ host_firewall_ruleset.backup_file | quote }} {{ host_firewall_config | quote }} && exec /usr/sbin/nft -f {{ host_firewall_config | quote }}"]
+               --collect, /bin/sh, -c, "{{ restore }}"]
+      vars:
+        restore: >-
+          {{ 'mv -f ' ~ (host_firewall_ruleset.backup_file | quote) ~ ' ' ~ (host_firewall_config | quote)
+             ~ ' && exec /usr/sbin/nft -f ' ~ (host_firewall_config | quote)
+             if host_firewall_ruleset.backup_file is defined else
+             'rm -f ' ~ (host_firewall_config | quote) ~ ' && exec /usr/sbin/nft flush ruleset' }}
       changed_when: true
 
     - name: Load the ruleset
@@ -70,6 +76,7 @@
       ansible.builtin.file:
         path: "{{ host_firewall_ruleset.backup_file }}"
         state: absent
+      when: host_firewall_ruleset.backup_file is defined
 
 - name: Load it at boot
   ansible.builtin.systemd_service:
