@@ -1,0 +1,3 @@
+---
+# Added to sshd's config, e.g. `PermitRootLogin: prohibit-password`
+sshd_options: {}

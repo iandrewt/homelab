@@ -1,0 +1,2 @@
+---
+host_firewall_config: /etc/sysconfig/nftables.conf

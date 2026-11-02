@@ -11,7 +11,7 @@
   hosts: all
   tags: [always]
   tasks:
-    - name: Fail a host whose OS has no baseline, rather than leave it without one
+    - name: Fail a host whose OS has no baseline
       ansible.builtin.assert:
         that: ansible_facts['distribution'] in ['Debian']
         fail_msg: "{{ inventory_hostname }} runs {{ ansible_facts['distribution'] }}, which has no baseline"
@@ -26,4 +26,5 @@
   become: true
   roles:
     - homelab.debian.hardening
-    - homelab.debian.host
+    - homelab.linux.sshd
+    - homelab.linux.host

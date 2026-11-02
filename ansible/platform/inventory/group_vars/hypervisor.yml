@@ -1,7 +1,7 @@
 ---
 # Ansible reaches this node as root, using the key answer.toml planted at install, and
 # Proxmox uses root SSH for migration and cluster work. CIS 5.1.21 would set this to `no`.
-hardening_sshd_options:
+sshd_options:
   PermitRootLogin: prohibit-password
 deb13cis_rule_5_1_21: false
 

@@ -10,7 +10,7 @@
   loop_control:
     label: "{{ item.key }}"
 
-# Included, so a run selecting other tags never loads its `always` tasks
+# Included, so only a run selecting it loads its `always` tasks
 - name: CIS Debian 13
   ansible.builtin.include_role:
     name: DEBIAN13-CIS

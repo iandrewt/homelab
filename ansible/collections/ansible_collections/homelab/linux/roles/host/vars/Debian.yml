@@ -1,0 +1,2 @@
+---
+host_upgrade_timer: apt-daily-upgrade.timer

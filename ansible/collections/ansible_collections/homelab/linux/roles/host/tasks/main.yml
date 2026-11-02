@@ -1,4 +1,8 @@
 ---
+- name: Take this OS family's specifics
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
+  tags: [always]
+
 - name: Upgrade schedule
   ansible.builtin.import_tasks: upgrade_schedule.yml
   tags: [upgrades]

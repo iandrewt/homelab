@@ -1,5 +1,8 @@
 ---
-# PasswordAuthentication and KbdInteractiveAuthentication have no CIS control at all
+- name: Take this OS family's specifics
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
+  tags: [always]
+
 - name: Harden sshd (key-only)
   ansible.builtin.copy:
     dest: /etc/ssh/sshd_config.d/10-hardening.conf
@@ -9,7 +12,7 @@
     content: |
       PasswordAuthentication no
       KbdInteractiveAuthentication no
-      {% for key, value in hardening_sshd_options | dictsort %}
+      {% for key, value in sshd_options | dictsort %}
       {{ key }} {{ value }}
       {% endfor %}
     validate: sshd -t -f %s

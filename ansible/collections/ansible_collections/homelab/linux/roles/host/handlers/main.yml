@@ -1,0 +1,6 @@
+---
+- name: Reload and restart the upgrade timer
+  ansible.builtin.systemd_service:
+    name: "{{ host_upgrade_timer }}"
+    daemon_reload: true
+    state: restarted

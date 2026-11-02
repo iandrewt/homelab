@@ -1,0 +1,115 @@
+---
+# Every role on a systemd container of each family it claims, checked where the families differ.
+# From the repo, with community.docker (tests/requirements.yml):
+#   ANSIBLE_COLLECTIONS_PATH=ansible/collections:~/.ansible/collections \
+#     ansible-playbook ansible/collections/ansible_collections/homelab/linux/tests/linux.yml
+- name: Start a container per family
+  hosts: localhost
+  gather_facts: false
+  vars:
+    families:
+      debian:
+        image: docker.io/library/debian:trixie
+        packages: apt-get update && apt-get install -y systemd systemd-sysv python3 openssh-server
+        timer: apt-daily-upgrade.timer
+      almalinux:
+        image: docker.io/library/almalinux:10
+        packages: dnf install -y systemd python3 openssh-server dnf-automatic && ssh-keygen -A
+        timer: dnf-automatic.timer
+  tasks:
+    - name: Remove any left from a run that failed
+      ansible.builtin.command: docker rm -f linux-test-{{ item }}
+      loop: "{{ families.keys() }}"
+      changed_when: false
+
+    - name: Start each, installing what an image would carry, then systemd
+      ansible.builtin.command:
+        argv: [docker, run, --detach, --privileged, --name, "linux-test-{{ item.key }}", "{{ item.value.image }}",
+               /bin/sh, -c, "{{ item.value.packages }} && exec /sbin/init"]
+      loop: "{{ families | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      changed_when: true
+
+    - name: Wait for each to boot
+      ansible.builtin.command: docker exec linux-test-{{ item }} systemctl is-system-running --wait
+      register: booted
+      until: booted.stdout in ['running', 'degraded']
+      retries: 60
+      delay: 5
+      failed_when: false
+      changed_when: false
+      loop: "{{ families.keys() }}"
+
+    - name: Add each
+      ansible.builtin.add_host:
+        name: linux-test-{{ item.key }}
+        groups: linux_test
+        ansible_connection: community.docker.docker
+        timer: "{{ item.value.timer }}"
+      loop: "{{ families | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+- name: Apply every role
+  hosts: linux_test
+  roles:
+    - role: homelab.linux.sshd
+      vars:
+        sshd_options:
+          MaxAuthTries: 3
+    - role: homelab.linux.host
+      vars:
+        host_upgrade_schedule: "*-*-* 03:00 Australia/Sydney"
+        host_service_accounts:
+          - name: linux-test
+            ssh_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFUUjIFxxhCLc5CeL42izNncTpkcv/zsUG7ZD22IuydM linux-test
+    - role: homelab.linux.host_firewall
+      vars:
+        host_firewall_rules:
+          - name: SSH
+            protocol: tcp
+            ports: [22]
+            addresses: []
+            sources: { ipv4: [192.0.2.0/24], ipv6: [] }
+
+- name: Check each where the families differ
+  hosts: linux_test
+  gather_facts: false
+  tasks:
+    - name: Load the ruleset from where the OS's nftables.service reads it
+      ansible.builtin.systemd_service:
+        name: nftables
+        state: restarted
+
+    - name: Read the ruleset
+      ansible.builtin.command: nft list ruleset
+      register: ruleset
+      changed_when: false
+
+    - name: Read sshd's effective config
+      ansible.builtin.command: sshd -T
+      register: sshd
+      changed_when: false
+
+    - name: Read the upgrade timer's schedule
+      ansible.builtin.systemd_service:
+        name: "{{ timer }}"
+      register: schedule
+
+    - name: Assert each took
+      ansible.builtin.assert:
+        that:
+          - "'comment \"SSH\"' in ruleset.stdout"
+          - "'passwordauthentication no' in sshd.stdout_lines"
+          - "'maxauthtries 3' in sshd.stdout_lines"
+          - "'Australia/Sydney' in schedule.status.TimersCalendar"
+        quiet: true
+
+- name: Remove the containers
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Remove each
+      ansible.builtin.command: docker rm -f {{ groups['linux_test'] | join(' ') }}
+      changed_when: true

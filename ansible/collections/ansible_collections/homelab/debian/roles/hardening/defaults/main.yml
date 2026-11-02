@@ -4,7 +4,7 @@ hardening_cis:
   deb13cis_level_1: true
   deb13cis_level_2: true
 
-  deb13cis_section4: false  # the hypervisor's, or host_firewall's
+  deb13cis_section4: false  # the hypervisor's, or homelab.linux.host_firewall's
 
   # leaving controls for /tmp (1.1.2.1.x) and /dev/shm (1.1.2.2.x) enabled
   deb13cis_rule_1_1_2_3_1: false  # /home separate partition
@@ -50,8 +50,6 @@ hardening_cis:
   deb13cis_auditd_disk_full_action: syslog
   deb13cis_auditd_admin_space_left_action: syslog
   deb13cis_auditd_space_left_action: syslog
-
-hardening_sshd_options: {}
 
 hardening_unattended_upgrade_origins:
   - "origin=Debian,codename=${distro_codename},label=Debian"

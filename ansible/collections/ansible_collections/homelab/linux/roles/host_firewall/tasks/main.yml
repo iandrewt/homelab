@@ -1,4 +1,8 @@
 ---
+- name: Take this OS family's specifics
+  ansible.builtin.include_vars: "{{ ansible_facts['os_family'] }}.yml"
+  tags: [always]
+
 - name: Assert a rule admits each port this host can't do without
   ansible.builtin.assert:
     that:
@@ -19,14 +23,14 @@
   when: item.address | default('') is not none
 
 - name: Install nftables
-  ansible.builtin.apt:
+  ansible.builtin.package:
     name: nftables
     state: present
 
 - name: Write the ruleset
   ansible.builtin.template:
     src: nftables.conf.j2
-    dest: /etc/nftables.conf
+    dest: "{{ host_firewall_config }}"
     owner: root
     group: root
     mode: "0644"
@@ -42,7 +46,7 @@
       ansible.builtin.command:
         argv: [systemd-run, "--on-active={{ host_firewall_rollback_seconds }}", --unit=host-firewall-rollback,
                --collect, /bin/sh, -c,
-               "mv -f {{ host_firewall_ruleset.backup_file | quote }} /etc/nftables.conf && exec /usr/sbin/nft -f /etc/nftables.conf"]
+               "mv -f {{ host_firewall_ruleset.backup_file | quote }} {{ host_firewall_config | quote }} && exec /usr/sbin/nft -f {{ host_firewall_config | quote }}"]
       changed_when: true
 
     - name: Load the ruleset

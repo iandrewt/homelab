@@ -276,14 +276,16 @@ is in netplan. Roles write netplan and assume networkd; an OS's quirks belong to
 or its own role. Proxmox is the exception: ifupdown2, which `proxmox_node` writes from the
 node's NetBox interfaces, with a static `resolv.conf`.
 
-**A host admits what its NetBox Services do**, through nftables (`homelab.debian.host_firewall`,
+**A host admits what its NetBox Services do**, through nftables (`homelab.linux.host_firewall`,
 from Network's tree, one host at a time, rolled back to the last ruleset unless Ansible can still
 connect); UniFi can't see traffic within a VLAN. A Proxmox node's firewall is tofu's.
 
-**The baseline is a collection per OS** (`ansible/collections/`), which `baseline.yml` applies
-by each host's distribution, failing a host whose OS has none. Debian's is `homelab.debian`:
-`hardening`, `host` and `host_firewall`, taking plain variables and reading nothing of NetBox,
-so tenants can use it too. The trees map NetBox onto them in their own vars. `hardening` sets
+**The baseline is `homelab.linux` and a collection per OS** (`ansible/collections/`), which
+`baseline.yml` applies by each host's distribution, failing a host whose OS has none.
+`homelab.linux` is what any systemd Linux shares (`sshd`, `host`, `host_firewall`), loading what
+differs from `vars/<os_family>.yml`, and its `tests/linux.yml` proves it on each family it
+claims. Debian's own is `homelab.debian`'s `hardening`. Every role takes plain variables, so
+tenants can use them too; the trees map NetBox onto them in their own vars. `hardening` sets
 CIS's settings as facts where the inventory sets none, since DEBIAN13-CIS's defaults outrank any
 other role's; a host overrides one with its own `deb13cis_*`.
 

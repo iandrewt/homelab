@@ -91,8 +91,9 @@ Each team runs its own hosts from its own tree, as its own NetBox user and from 
 [`ansible/platform/`](ansible/platform) what Platform owns and gave no one. There is no
 inventory file: a tree's `inventory/netbox.yml` builds it from NetBox, active or staged hosts
 tagged `ansible-managed`, grouped by device role into the groups its `site.yml` plays against.
-Both apply the baseline, [`ansible/baseline.yml`](ansible/baseline.yml): a collection per OS,
-Debian's [`homelab.debian`](ansible/collections/ansible_collections/homelab/debian). What each
+Both apply the baseline, [`ansible/baseline.yml`](ansible/baseline.yml):
+[`homelab.linux`](ansible/collections/ansible_collections/homelab/linux), and a collection per
+OS, Debian's [`homelab.debian`](ansible/collections/ansible_collections/homelab/debian). What each
 host needs to know about its site comes from
 [`ansible/vars_plugins/netbox.py`](ansible/vars_plugins/netbox.py), which loads the same model
 `homelab generate` renders from - so Ansible runs through `uv`. A tree's secrets are

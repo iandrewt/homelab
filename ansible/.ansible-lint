@@ -1,5 +1,5 @@
 ---
-# homelab.debian is installed from Git at a collection/debian/ tag, never published to Galaxy
+# Installed from Git at a collection/<name>/ tag, whose history is the changelog
 skip_list:
   - galaxy[no-changelog]
 

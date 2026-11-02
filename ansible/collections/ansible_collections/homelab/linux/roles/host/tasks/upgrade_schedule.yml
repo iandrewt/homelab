@@ -1,31 +1,31 @@
 ---
 - name: Remove any upgrade-schedule override
   ansible.builtin.file:
-    path: /etc/systemd/system/apt-daily-upgrade.timer.d/schedule.conf
+    path: /etc/systemd/system/{{ host_upgrade_timer }}.d/schedule.conf
     state: absent
   when: host_upgrade_schedule is none
-  notify: Reload and restart apt-daily-upgrade timer
+  notify: Reload and restart the upgrade timer
 
-- name: Ensure apt-daily-upgrade.timer's drop-in directory exists
+- name: Ensure the upgrade timer's drop-in directory exists
   ansible.builtin.file:
-    path: /etc/systemd/system/apt-daily-upgrade.timer.d
+    path: /etc/systemd/system/{{ host_upgrade_timer }}.d
     state: directory
     owner: root
     group: root
     mode: "0755"
   when: host_upgrade_schedule is not none
 
-- name: Override apt-daily-upgrade.timer's schedule
+- name: Override the upgrade timer's schedule
   ansible.builtin.copy:
-    dest: /etc/systemd/system/apt-daily-upgrade.timer.d/schedule.conf
+    dest: /etc/systemd/system/{{ host_upgrade_timer }}.d/schedule.conf
     owner: root
     group: root
     mode: "0644"
     # OnCalendar= accumulates across drop-ins rather than replacing - the empty
-    # assignment clears the base unit's 06:00 before setting this host's own.
+    # assignment clears the base unit's schedule before setting this host's own.
     content: |
       [Timer]
       OnCalendar=
       OnCalendar={{ host_upgrade_schedule }}
   when: host_upgrade_schedule is not none
-  notify: Reload and restart apt-daily-upgrade timer
+  notify: Reload and restart the upgrade timer

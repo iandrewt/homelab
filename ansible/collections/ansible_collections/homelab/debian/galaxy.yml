@@ -12,7 +12,5 @@ repository: https://github.com/iandrewt/homelab
 tags:
   - linux
   - security
-dependencies:
-  ansible.posix: ">=2.0.0"
 build_ignore:
   - "*.tar.gz"

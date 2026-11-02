@@ -1,5 +1,5 @@
 ---
-# A list, not one dict: the recursor's Services share their names with a resolver's own
+# A list, since the recursor's Services share their names with a resolver's own
 network_services:
   - "{{ netbox_site.services[inventory_hostname] | default({}) }}"
 

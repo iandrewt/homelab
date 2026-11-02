@@ -3,10 +3,6 @@
   ansible.builtin.import_tasks: cis.yml
   tags: [cis]
 
-- name: SSH hardening
-  ansible.builtin.import_tasks: ssh.yml
-  tags: [ssh]
-
 - name: Upgrades
   ansible.builtin.import_tasks: upgrades.yml
   tags: [upgrades]

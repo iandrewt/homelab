@@ -10,7 +10,7 @@
   serial: 1
   max_fail_percentage: 0
   roles:
-    - homelab.debian.host_firewall
+    - homelab.linux.host_firewall
 
 - name: DNS resolvers
   tags: [resolvers]
