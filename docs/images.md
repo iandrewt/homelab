@@ -40,6 +40,24 @@ Its disk is laid out for CIS, by [these definitions](../images/debian-13-amd64-v
 **`/var` grows to fill whatever disk the VM is given**, on its first boot. Everything else is
 fixed, `/opt` and `/srv` included: data belongs in `/var/lib`, or on a disk of its own.
 
+## Getting one
+
+Each is a release of this repo, tagged `image/<profile>/<version>`: the image, its package
+manifest, and `SHA256SUMS`, signed keylessly by the workflow that built it. Check the signature
+names [`images.yml`](../.github/workflows/images.yml) at that tag, then the files against the sums:
+
+```
+tag=image/debian-13-amd64-vm/2026.11.0
+gh release download "$tag" --repo iandrewt/homelab
+cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity "https://github.com/iandrewt/homelab/.github/workflows/images.yml@refs/tags/$tag"
+sha256sum --check SHA256SUMS
+```
+
+Or build one: `uv run homelab image build debian-13-amd64-vm`, then `uv run homelab image test
+debian-13-amd64-vm` to check it.
+
 ## Booting one
 
 **Give it an EFI disk with an empty key store** (in Proxmox, `pre-enrolled-keys=0`). Its first

@@ -34,7 +34,8 @@ def register(verbs) -> None:
     build = verbs.add_parser(
         "build", help="build a profile's image",
         description="Builds the tree with mkosi, lays it out with systemd-repart, boots it to bake in "
-        f"the baseline, and seals it, into {builder.CACHE}/<profile>/<profile>.qcow2.",
+        f"the baseline, and seals it, into {builder.CACHE}/<profile>/<profile>.qcow2, with its "
+        "package manifest beside it.",
     )
     build.add_argument("profile", help="a directory in images/, e.g. debian-13-amd64-vm")
     build.add_argument("--version", default="dev", help="what its release file names it (default: dev)")
@@ -106,6 +107,7 @@ def _bake(root: Path, recipe: Path, out: Path) -> None:
             vm.ssh("sudo sh -s", input=(recipe / "install-bootloader").read_text())
         vm.ssh(f"sudo tee {sources} >/dev/null && sudo rm /etc/apt/apt.conf.d/99snapshot",
                input=(recipe / "mkosi.extra" / sources.lstrip("/")).read_text())
+        (out / f"{recipe.name}.packages").write_text(vm.ssh("dpkg-query --show --showformat '${Package} ${Version}\\n'"))
         vm.seal()
     finally:
         vm.remove()
