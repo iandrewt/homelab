@@ -1,0 +1,8 @@
+---
+# The unit passes these on its command line, which outranks the config file
+- name: Allow only these RPCs
+  ansible.builtin.lineinfile:
+    path: /etc/sysconfig/qemu-ga
+    regexp: "^FILTER_RPC_ARGS="
+    line: FILTER_RPC_ARGS="--allow-rpcs={{ guest_agent_rpcs | join(',') }}"
+  notify: Restart the guest agent

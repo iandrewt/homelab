@@ -1,0 +1,7 @@
+---
+- name: Install the guest agent
+  ansible.builtin.package:
+    name: qemu-guest-agent
+
+- name: Allow only these RPCs, as this OS family configures it
+  ansible.builtin.include_tasks: "{{ ansible_facts['os_family'] }}.yml"

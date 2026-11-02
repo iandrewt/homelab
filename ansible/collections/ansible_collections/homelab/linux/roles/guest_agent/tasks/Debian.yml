@@ -1,0 +1,11 @@
+---
+- name: Allow only these RPCs
+  ansible.builtin.copy:
+    dest: /etc/qemu/qemu-ga.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [general]
+      allow-rpcs={{ guest_agent_rpcs | join(',') }}
+  notify: Restart the guest agent

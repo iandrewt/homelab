@@ -282,12 +282,13 @@ connect); UniFi can't see traffic within a VLAN. A Proxmox node's firewall is to
 
 **The baseline is `homelab.linux` and a collection per OS** (`ansible/collections/`), which
 `baseline.yml` applies by each host's distribution, failing a host whose OS has none.
-`homelab.linux` is what any systemd Linux shares (`sshd`, `host`, `host_firewall`), loading what
-differs from `vars/<os_family>.yml`, and its `tests/linux.yml` proves it on each family it
-claims. Debian's own is `homelab.debian`'s `hardening`. Every role takes plain variables, so
-tenants can use them too; the trees map NetBox onto them in their own vars. `hardening` sets
-CIS's settings as facts where the inventory sets none, since DEBIAN13-CIS's defaults outrank any
-other role's; a host overrides one with its own `deb13cis_*`.
+`homelab.linux` is what any systemd Linux shares (`sshd`, `host`, `host_firewall`, `cloud_init`,
+`guest_agent`), loading what differs from `vars/<os_family>.yml` or `tasks/<os_family>.yml`, and
+its `tests/linux.yml` proves it on each family it claims. Debian's own is `homelab.debian`'s
+`hardening` and `network`. Every role takes plain variables, so tenants can use them too; the
+trees map NetBox onto them in their own vars. `hardening` sets CIS's settings as facts where the
+inventory sets none, since DEBIAN13-CIS's defaults outrank any other role's; a host overrides
+one with its own `deb13cis_*`.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,
@@ -353,7 +354,7 @@ types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
 images/       Platform's base images: a recipe per profile, built in one pinned container
-ansible/      a tree per team (network/, platform/), the homelab.debian collection, and the roles, plugins and baseline they share
+ansible/      a tree per team (network/, platform/), the homelab.linux and homelab.debian collections, and the roles, plugins and baseline they share
 tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
 kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
 unifi/        generated config for the UniFi gateways that no API takes

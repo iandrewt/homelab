@@ -1,0 +1,13 @@
+---
+- name: Install cloud-init
+  ansible.builtin.package:
+    name: cloud-init
+
+- name: Take a seed only from these datasources
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/90-datasources.cfg
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      datasource_list: {{ cloud_init_datasources | to_json }}

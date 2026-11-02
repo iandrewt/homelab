@@ -1,0 +1,19 @@
+---
+- name: Make networkd's drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/networkd.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Set networkd's defaults for every link
+  ansible.builtin.copy:
+    dest: /etc/systemd/networkd.conf.d/50-homelab.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Network]
+      UseDomains={{ network_use_domains | ternary('yes', 'no') }}
+  notify: Restart networkd

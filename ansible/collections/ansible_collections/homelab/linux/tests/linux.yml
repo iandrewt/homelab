@@ -12,10 +12,12 @@
         image: docker.io/library/debian:trixie
         packages: apt-get update && apt-get install -y systemd systemd-sysv python3 openssh-server
         timer: apt-daily-upgrade.timer
+        agent_conf: qemu-ga -D
       almalinux:
         image: docker.io/library/almalinux:10
         packages: dnf install -y systemd python3 openssh-server dnf-automatic && ssh-keygen -A
         timer: dnf-automatic.timer
+        agent_conf: sh -c '. /etc/sysconfig/qemu-ga && exec qemu-ga $FILTER_RPC_ARGS -D'
   tasks:
     - name: Remove any left from a run that failed
       ansible.builtin.command: docker rm -f linux-test-{{ item }}
@@ -47,12 +49,15 @@
         groups: linux_test
         ansible_connection: community.docker.docker
         timer: "{{ item.value.timer }}"
+        agent_conf: "{{ item.value.agent_conf }}"
       loop: "{{ families | dict2items }}"
       loop_control:
         label: "{{ item.key }}"
 
 - name: Apply every role
   hosts: linux_test
+  vars:
+    guest_agent_rpcs: [guest-sync-delimited, guest-ping, guest-file-read]
   roles:
     - role: homelab.linux.sshd
       vars:
@@ -64,6 +69,8 @@
         host_service_accounts:
           - name: linux-test
             ssh_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFUUjIFxxhCLc5CeL42izNncTpkcv/zsUG7ZD22IuydM linux-test
+    - role: homelab.linux.guest_agent
+    - role: homelab.linux.cloud_init
     - role: homelab.linux.host_firewall
       vars:
         host_firewall_rules:
@@ -76,6 +83,8 @@
 - name: Check each where the families differ
   hosts: linux_test
   gather_facts: false
+  vars:
+    guest_agent_rpcs: [guest-sync-delimited, guest-ping, guest-file-read]
   tasks:
     - name: Load the ruleset from where the OS's nftables.service reads it
       ansible.builtin.systemd_service:
@@ -92,6 +101,11 @@
       register: sshd
       changed_when: false
 
+    - name: Read the guest agent's effective config, as its unit starts it
+      ansible.builtin.command: "{{ agent_conf }}"
+      register: agent
+      changed_when: false
+
     - name: Read the upgrade timer's schedule
       ansible.builtin.systemd_service:
         name: "{{ timer }}"
@@ -104,6 +118,7 @@
           - "'passwordauthentication no' in sshd.stdout_lines"
           - "'maxauthtries 3' in sshd.stdout_lines"
           - "'Australia/Sydney' in schedule.status.TimersCalendar"
+          - "'allow-rpcs=' ~ guest_agent_rpcs | sort | join(',') in agent.stdout_lines"
         quiet: true
 
 - name: Remove the containers

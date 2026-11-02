@@ -1,0 +1,3 @@
+---
+# Take each lease's and advert's search domains, which networkd ignores by default
+network_use_domains: true

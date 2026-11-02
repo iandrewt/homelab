@@ -1,0 +1,5 @@
+---
+# Only if it runs: the agent starts with its virtio port, which a host without one never has
+- name: Restart the guest agent
+  ansible.builtin.command: systemctl try-restart qemu-guest-agent  # noqa: command-instead-of-module
+  changed_when: true
