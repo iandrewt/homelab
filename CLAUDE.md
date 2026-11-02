@@ -451,7 +451,13 @@ Not: arithmetic you can read, or that something *doesn't* appear in output. Neve
 NetBox or a real cluster file from a test; `conftest.py` builds a synthetic snapshot.
 
 **Commits** follow Conventional Commits, signed off (`-s`), with a `Co-Authored-By: Claude ...`
-trailer and never a `Claude-Session` one.
+trailer and never a `Claude-Session` one. **A PR of our own lands by fast-forwarding `main`
+locally** once CI passes, so its signed commits reach `main` unchanged (GitHub's rebase rewrites
+them unsigned); Dependabot's are squashed.
+
+**An image is released by a signed tag**, `image/<profile>/<YYYY.MM.N>` on `main`: `images.yml`
+builds and tests it at that commit, and publishes it with its package manifest and `SHA256SUMS`,
+signed keylessly by the workflow (`docs/images.md` says how to check one).
 
 **`internal/design/` can lag the code.** Verify against it before citing one.
 
