@@ -16,4 +16,4 @@
       {{ key }} {{ value }}
       {% endfor %}
     validate: sshd -t -f %s
-  notify: Restart sshd
+  notify: Restart the SSH server
