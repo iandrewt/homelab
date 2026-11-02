@@ -8,5 +8,5 @@ host_firewall_services: []
 host_firewall_needed:
   - { protocol: tcp, port: 22 }
 
-# How long a ruleset that cut off Ansible stays, before it's flushed
+# How long a ruleset that cut off Ansible stays, before the one it replaced is restored
 host_firewall_rollback_seconds: 90

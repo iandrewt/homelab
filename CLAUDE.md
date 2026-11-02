@@ -276,8 +276,8 @@ or its own role. Proxmox is the exception: ifupdown2, which `proxmox_node` write
 node's NetBox interfaces, with a static `resolv.conf`.
 
 **A host admits what its NetBox Services do**, through nftables (`host_firewall`, one host at a
-time, flushed again unless Ansible can still connect); UniFi can't see traffic within a VLAN.
-A Proxmox node's firewall is tofu's.
+time, rolled back to the last ruleset unless Ansible can still connect); UniFi can't see traffic
+within a VLAN. A Proxmox node's firewall is tofu's.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,

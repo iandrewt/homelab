@@ -66,4 +66,6 @@ host_firewall_needed:
   - { protocol: udp, port: 53, address: "{{ dns_resolver.ipv6 }}" }
   - { protocol: tcp, port: 53, address: "{{ dns_resolver.ipv6 }}" }
   - { protocol: udp, port: 53, address: "{{ powerdns_resolver_anycast_v4 }}" }
+  - { protocol: tcp, port: 53, address: "{{ powerdns_resolver_anycast_v4 }}" }
   - { protocol: udp, port: 53, address: "{{ powerdns_resolver_anycast_v6 }}" }
+  - { protocol: tcp, port: 53, address: "{{ powerdns_resolver_anycast_v6 }}" }
