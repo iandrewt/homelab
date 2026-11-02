@@ -352,6 +352,7 @@ types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
 
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
+images/       Platform's base images: a recipe per profile, built in one pinned container
 ansible/      a tree per team (network/, platform/), the homelab.debian collection, and the roles, plugins and baseline they share
 tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
 kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
@@ -398,6 +399,7 @@ uv run pytest
 uv run homelab bootstrap pi --device /dev/sdX --hostname ratatoskr --site alfheim \
   --ssh-key-ref op://...
 uv run homelab bootstrap proxmox --host yggdrasil   # its answer inside its cell's newest ISO
+uv run homelab image build debian-13-amd64-vm          # its disk, into ~/.cache/homelab/images
 
 cd ansible/network && uv run ansible-playbook site.yml --limit <host>   # or ansible/platform
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan   # workspace alf-pve-01

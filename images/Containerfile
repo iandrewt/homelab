@@ -1,0 +1,30 @@
+# What every image is built with, on a laptop and in CI alike
+FROM debian:trixie@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1
+
+ARG SNAPSHOT=20261102T082611Z
+ARG MKOSI_COMMIT=ecf7f5702bb2052b7a69cab3fe7d37bc3b9ad77b
+
+RUN printf '%s\n' \
+      "Types: deb" \
+      "URIs: http://snapshot.debian.org/archive/debian/${SNAPSHOT}" \
+      "Suites: trixie trixie-updates" \
+      "Components: main" \
+      "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
+      "" \
+      "Types: deb" \
+      "URIs: http://snapshot.debian.org/archive/debian-security/${SNAPSHOT}" \
+      "Suites: trixie-security" \
+      "Components: main" \
+      "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
+      > /etc/apt/sources.list.d/debian.sources \
+ && apt-get -o Acquire::Check-Valid-Until=false update \
+ && apt-get install -y --no-install-recommends \
+      apt ca-certificates dosfstools e2fsprogs git mtools python3 python3-pefile systemd \
+      systemd-repart zstd \
+ && rm -rf /var/lib/apt/lists/*
+
+# v27.1: trixie's mkosi has no Snapshot=
+RUN git clone --quiet --branch v27.1 https://github.com/systemd/mkosi /opt/mkosi \
+ && test "$(git -C /opt/mkosi rev-parse HEAD)" = "${MKOSI_COMMIT}" \
+ && printf '#!/bin/sh\nPYTHONPATH=/opt/mkosi exec python3 -m mkosi "$@"\n' > /usr/local/bin/mkosi \
+ && chmod +x /usr/local/bin/mkosi
