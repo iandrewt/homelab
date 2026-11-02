@@ -19,8 +19,8 @@ RUN printf '%s\n' \
       > /etc/apt/sources.list.d/debian.sources \
  && apt-get -o Acquire::Check-Valid-Until=false update \
  && apt-get install -y --no-install-recommends \
-      apt ca-certificates dosfstools e2fsprogs git mtools python3 python3-pefile systemd \
-      systemd-repart zstd \
+      apt ca-certificates dosfstools e2fsprogs efitools git mtools openssl python3 python3-pefile \
+      systemd systemd-repart uuid-runtime zstd \
  && rm -rf /var/lib/apt/lists/*
 
 # v27.1: trixie's mkosi has no Snapshot=
