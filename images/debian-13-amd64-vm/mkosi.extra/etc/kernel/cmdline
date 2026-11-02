@@ -1,1 +1,1 @@
-root=LABEL=root ro console=tty0 console=ttyS0,115200
+root=LABEL=root ro console=tty0 console=ttyS0,115200 lsm=landlock,lockdown,yama,apparmor,bpf audit=1 audit_backlog_limit=8192

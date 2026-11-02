@@ -288,7 +288,9 @@ its `tests/linux.yml` proves it on each family it claims. Debian's own is `homel
 `hardening` and `network`. Every role takes plain variables, so tenants can use them too; the
 trees map NetBox onto them in their own vars. `hardening` sets CIS's settings as facts where the
 inventory sets none, since DEBIAN13-CIS's defaults outrank any other role's; a host overrides
-one with its own `deb13cis_*`.
+one with its own `deb13cis_*`. A host built from one of `images/` is grouped by it too (`IMAGE_ID`
+in `/usr/lib/homelab/image-release`), and its profile's settings are that group's vars. An image
+is baked by running `baseline.yml` against its build VM, with no NetBox or 1Password loaded.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,
@@ -400,7 +402,8 @@ uv run pytest
 uv run homelab bootstrap pi --device /dev/sdX --hostname ratatoskr --site alfheim \
   --ssh-key-ref op://...
 uv run homelab bootstrap proxmox --host yggdrasil   # its answer inside its cell's newest ISO
-uv run homelab image build debian-13-amd64-vm          # its disk, into ~/.cache/homelab/images
+uv run homelab image build debian-13-amd64-vm          # baked and sealed, into ~/.cache/homelab/images
+uv run homelab image test debian-13-amd64-vm           # boots it twice, as new VMs, and checks its contract
 
 cd ansible/network && uv run ansible-playbook site.yml --limit <host>   # or ansible/platform
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan   # workspace alf-pve-01
@@ -461,5 +464,8 @@ trailer and never a `Claude-Session` one.
   `insecure`. Its endpoint is a machine name served by ratatoskr, so the DNS fleet's primary is
   built first.
 - `ansible/roles/PowerDNS.*` and `DEBIAN13-CIS` are galaxy installs, gitignored.
+- A handler's name is global to its play, and DEBIAN13-CIS's sshd handlers listen on `Restart
+  sshd`: a role of ours whose handler shares a name or topic with CIS's runs on CIS's notify,
+  before its own vars are loaded.
 - Snippets go up by SFTP as `tofu`, which has no sudo, into `/var/lib/vz/snippets`. `local` holds
   snippets alone, because every tenant has `Datastore.Allocate` on it.

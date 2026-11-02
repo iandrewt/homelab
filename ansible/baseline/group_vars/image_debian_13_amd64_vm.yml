@@ -1,0 +1,6 @@
+---
+# grub-only; /etc/kernel/cmdline and the ESP's umask do each instead
+deb13cis_rule_1_3_1_2: false
+deb13cis_rule_1_4_2: false
+deb13cis_rule_6_2_1_3: false
+deb13cis_rule_6_2_1_4: false

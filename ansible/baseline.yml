@@ -21,6 +21,19 @@
       ansible.builtin.group_by:
         key: "{{ ansible_facts['distribution'] | lower }}"
 
+    - name: Read which image this host was built from
+      ansible.builtin.slurp:
+        src: /usr/lib/homelab/image-release
+      register: image_release
+      failed_when: false
+
+    - name: Group by image
+      ansible.builtin.group_by:
+        key: >-
+          image_{{ (image_release.content | b64decode).splitlines() | select('match', 'IMAGE_ID=')
+                   | first | regex_replace('^IMAGE_ID=', '') | replace('-', '_') }}
+      when: image_release.content is defined
+
 - name: Debian
   hosts: debian
   become: true
@@ -28,3 +41,11 @@
     - homelab.debian.hardening
     - homelab.linux.sshd
     - homelab.linux.host
+
+- name: Built from debian-13-amd64-vm
+  hosts: image_debian_13_amd64_vm
+  become: true
+  roles:
+    - homelab.debian.network
+    - homelab.linux.cloud_init
+    - homelab.linux.guest_agent
