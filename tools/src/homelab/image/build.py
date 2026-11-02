@@ -106,9 +106,7 @@ def _bake(root: Path, recipe: Path, out: Path) -> None:
             vm.ssh("sudo sh -s", input=(recipe / "install-bootloader").read_text())
         vm.ssh(f"sudo tee {sources} >/dev/null && sudo rm /etc/apt/apt.conf.d/99snapshot",
                input=(recipe / "mkosi.extra" / sources.lstrip("/")).read_text())
-        # Scheduled, so the seal's exit reaches us before the default user it removes is gone
-        vm.ssh("sudo sh -c '/usr/lib/homelab/seal && systemd-run --on-active=2 systemctl poweroff' >/dev/null")
-        vm.wait_until_stopped()
+        vm.seal()
     finally:
         vm.remove()
 
@@ -122,18 +120,13 @@ def _bake(root: Path, recipe: Path, out: Path) -> None:
 def _baseline(root: Path, work: Path, vm: Vm) -> None:
     """The baseline as the trees run it, with nothing of NetBox or 1Password loaded."""
     ansible = root / "ansible"
-    (work / "inventory.yml").write_text(yaml.safe_dump({"all": {"hosts": {"build": {
-        "ansible_host": "127.0.0.1", "ansible_port": vm.port, "ansible_user": "debian",
-        "ansible_ssh_private_key_file": str(vm.key),
-        "ansible_ssh_common_args": "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o IdentitiesOnly=yes",
-    }}}}))
     env = os.environ | {
         "ANSIBLE_ROLES_PATH": str(ansible / "roles"),
         "ANSIBLE_COLLECTIONS_PATH": f"{ansible / 'collections'}:{Path.home() / '.ansible/collections'}",
         "ANSIBLE_PIPELINING": "true",
         "ANSIBLE_INTERPRETER_PYTHON": "auto_silent",
     }
-    subprocess.run(["ansible-playbook", "-i", str(work / "inventory.yml"), "-i", str(ansible / "baseline"),
+    subprocess.run(["ansible-playbook", "-i", str(vm.inventory()), "-i", str(ansible / "baseline"),
                     str(ansible / "baseline.yml")], cwd=work, env=env, check=True)
 
 

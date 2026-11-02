@@ -7,6 +7,8 @@ import time
 import uuid
 from pathlib import Path
 
+import yaml
+
 from ..bootstrap.shell import BootstrapError, run
 from ..render import seed
 from . import builder
@@ -14,6 +16,11 @@ from . import builder
 OVMF = "/usr/share/OVMF/OVMF_CODE_4M.secboot.fd"
 # No keys enrolled, as a Proxmox EFI disk without pre-enrolled ones: the image enrolls its own
 OVMF_SETUP_MODE = "/usr/share/OVMF/OVMF_VARS_4M.fd"
+
+# A throwaway VM's host key is never pinned; IdentitiesOnly, since CIS's MaxAuthTries is less than
+# an agent's keys
+SSH_OPTIONS = ("-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR",
+               "-o", "ConnectTimeout=5", "-o", "IdentitiesOnly=yes")
 
 # One JSON command per line in, one reply per line out
 AGENT_CLIENT = """
@@ -77,12 +84,26 @@ class Vm:
 
     @property
     def ssh_args(self) -> list[str]:
-        return ["-i", str(self.key), "-p", str(self.port), "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null", "-o", "LogLevel=ERROR", "-o", "ConnectTimeout=5",
-                "-o", "IdentitiesOnly=yes"]
+        return ["-i", str(self.key), "-p", str(self.port), *SSH_OPTIONS]
 
     def ssh(self, command: str, *, input: str | None = None) -> str:
         return run("ssh", *self.ssh_args, "debian@127.0.0.1", command, capture=True, input=input)
+
+    def inventory(self) -> Path:
+        """An Ansible inventory of this VM alone, as host `build`."""
+        path = self.work / "inventory.yml"
+        path.write_text(yaml.safe_dump({"all": {"hosts": {"build": {
+            "ansible_host": "127.0.0.1", "ansible_port": self.port, "ansible_user": "debian",
+            "ansible_ssh_private_key_file": str(self.key),
+            "ansible_ssh_common_args": " ".join(SSH_OPTIONS),
+        }}}}))
+        return path
+
+    def seal(self) -> None:
+        """Runs the image's seal, and waits for it to power off."""
+        # Scheduled, so the seal's exit reaches us before the default user it removes is gone
+        self.ssh("sudo sh -c '/usr/lib/homelab/seal && systemd-run --on-active=2 systemctl poweroff' >/dev/null")
+        self.wait_until_stopped()
 
     def wait_for_ssh(self, timeout: int = 300) -> None:
         deadline = time.monotonic() + timeout

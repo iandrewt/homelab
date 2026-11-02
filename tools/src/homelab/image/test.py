@@ -18,6 +18,8 @@ def register(verbs) -> None:
         "and checks what every consumer relies on.",
     )
     test.add_argument("profile", help="a directory in images/, e.g. debian-13-amd64-vm")
+    test.add_argument("--image", type=Path,
+                      help="an image derived from the profile's, instead of the profile's own build")
     test.set_defaults(run=_test)
 
 
@@ -25,14 +27,16 @@ def _test(args) -> int:
     images = builder.ensure()
     recipe = images / args.profile
     out = builder.CACHE / args.profile
-    if not (out / f"{args.profile}.qcow2").is_file():
-        raise BootstrapError(f"no image built for {args.profile}: `homelab image build {args.profile}`")
+    image = (args.image or out / f"{args.profile}.qcow2").resolve()
+    if not image.is_file():
+        raise BootstrapError(f"no image at {image}: `homelab image build {args.profile}`")
+    out.mkdir(parents=True, exist_ok=True)
 
     failures = []
     identities = []
     for boot in ("first", "second"):
         say(f"booting it as a new VM, the {boot}")
-        identity, failed = _boot(recipe, out, check=boot == "first")
+        identity, failed = _boot(recipe, image, out, check=boot == "first")
         identities.append(identity)
         failures += failed
     failures += _check("each VM has its own host key and machine ID", identities[0] != identities[1],
@@ -42,15 +46,15 @@ def _test(args) -> int:
     return 1 if failures else 0
 
 
-def _boot(recipe: Path, out: Path, check: bool) -> tuple[tuple[str, str], list[str]]:
+def _boot(recipe: Path, image: Path, out: Path, check: bool) -> tuple[tuple[str, str], list[str]]:
     work = out / "test"
     if work.exists():
         builder.run_in({out: "/out"}, "rm", "-rf", "/out/test")
     work.mkdir()
-    vm = Vm(work, "test", mounts={out: "/image:ro"})
+    vm = Vm(work, "test", mounts={image.parent: "/image:ro"})
     try:
         builder.run_in(vm.mounts, "qemu-img", "create", "-q", "-f", "qcow2", "-F", "qcow2",
-                       "-b", f"/image/{recipe.name}.qcow2", "/work/disk.qcow2", DISK)
+                       "-b", f"/image/{image.name}", "/work/disk.qcow2", DISK)
         vm.start("disk.qcow2")
         vm.wait_for_ssh()
         cloud_init = vm.ssh("cloud-init status --wait --long || true")
