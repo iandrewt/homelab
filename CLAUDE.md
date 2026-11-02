@@ -276,13 +276,20 @@ is in netplan. Roles write netplan and assume networkd; an OS's quirks belong to
 or its own role. Proxmox is the exception: ifupdown2, which `proxmox_node` writes from the
 node's NetBox interfaces, with a static `resolv.conf`.
 
-**A host admits what its NetBox Services do**, through nftables (`host_firewall`, one host at a
-time, rolled back to the last ruleset unless Ansible can still connect); UniFi can't see traffic
-within a VLAN. A Proxmox node's firewall is tofu's.
+**A host admits what its NetBox Services do**, through nftables (`homelab.debian.host_firewall`,
+from Network's tree, one host at a time, rolled back to the last ruleset unless Ansible can still
+connect); UniFi can't see traffic within a VLAN. A Proxmox node's firewall is tofu's.
+
+**The baseline is a collection per OS** (`ansible/collections/`), which `baseline.yml` applies
+by each host's distribution, failing a host whose OS has none. Debian's is `homelab.debian`:
+`hardening`, `host` and `host_firewall`, taking plain variables and reading nothing of NetBox,
+so tenants can use it too. The trees map NetBox onto them in their own vars. `hardening` sets
+CIS's settings as facts where the inventory sets none, since DEBIAN13-CIS's defaults outrank any
+other role's; a host overrides one with its own `deb13cis_*`.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,
-resolvers, timezone and apt are Ansible's. Ansible never reads a cluster file - the trunk
+resolvers and apt are Ansible's. Ansible never reads a cluster file - the trunk
 bridge's name and MTU are stated on both sides (NetBox for the node, `sdn` in the cluster file),
 and a mismatch fails in ifupdown2. SDN owns `<bridge>.<vid>` for every VNet, so a node joins a
 VNet with an address on the VNet's bridge, and a host-only VLAN with a subinterface.
@@ -301,7 +308,8 @@ systemd-resolved, and shadows `rpi-cloud-init-mods`' NM default with a file of t
 | `user-data` | only what is host-specific |
 | `network-config` | DHCP and SLAAC; a resolver pins its own resolvers |
 
-- The hostname comes from `local-hostname` alone; timezone is Ansible's.
+- The hostname comes from `local-hostname` alone. Nothing sets a timezone: UTC, and a schedule
+  meant in local time names its zone (`OnCalendar=*-*-* 03:00 Australia/Sydney`).
 - **Always write `user-data`, empty if there's nothing to say**: NoCloud requires it, and
   without it skips the whole seed silently.
 - `#cloud-config` must be the first line of a cloud-config we generate. user-data is copied
@@ -342,7 +350,7 @@ types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
 
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
-ansible/      a tree per team (network/, platform/), and the roles, plugins and baseline they share
+ansible/      a tree per team (network/, platform/), the homelab.debian collection, and the roles, plugins and baseline they share
 tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
 kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
 unifi/        generated config for the UniFi gateways that no API takes

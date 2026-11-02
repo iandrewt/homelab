@@ -110,5 +110,11 @@ jobs:
       # ansible-lint pulls ansible-core in, but ansible-galaxy ships with core itself.
       - run: uvx --from ansible-core ansible-galaxy collection install -r ansible/requirements.yml
       - run: uvx --from ansible-core ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles
+      - run: >-
+          uvx --from ansible-core ansible-galaxy role install -p ansible/roles
+          -r ansible/collections/ansible_collections/homelab/debian/requirements.yml
       - working-directory: ansible
         run: uvx ansible-lint
+        # ansible-lint reads neither tree's ansible.cfg
+        env:
+          ANSIBLE_COLLECTIONS_PATH: collections:~/.ansible/collections

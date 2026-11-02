@@ -1,7 +1,7 @@
 ---
 ansible_user: debian
 
-debian_host_upgrade_hour: 3  # staggered against ratatoskr - see ratatoskr.yml
+host_upgrade_schedule: "*-*-* 03:00 Australia/Sydney"  # staggered against ratatoskr - see ratatoskr.yml
 
 deb13cis_sudoers_exclude_nopasswd_list:
   - debian

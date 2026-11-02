@@ -1,5 +1,5 @@
 ---
-- name: Base OS
+- name: Baseline
   ansible.builtin.import_playbook: ../baseline.yml
 
 - name: Host firewall
@@ -10,7 +10,7 @@
   serial: 1
   max_fail_percentage: 0
   roles:
-    - host_firewall
+    - homelab.debian.host_firewall
 
 - name: DNS resolvers
   tags: [resolvers]

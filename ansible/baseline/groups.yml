@@ -1,4 +1,4 @@
-# After a tree's own inventory: the groups Platform's base OS varies by
+# After a tree's own inventory: the groups the baseline varies by
 plugin: ansible.builtin.constructed
 strict: true
 groups:

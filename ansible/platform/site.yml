@@ -6,5 +6,5 @@
   roles:
     - proxmox_node
 
-- name: Base OS
+- name: Baseline
   ansible.builtin.import_playbook: ../baseline.yml

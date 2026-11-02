@@ -1,4 +1,8 @@
 ---
+# homelab.debian is installed from Git at a collection/debian/ tag, never published to Galaxy
+skip_list:
+  - galaxy[no-changelog]
+
 exclude_paths:
   - roles/DEBIAN13-CIS/
   - roles/PowerDNS.pdns/

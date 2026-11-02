@@ -1,5 +1,5 @@
 ---
-- name: Assert a Service admits each port this host can't do without
+- name: Assert a rule admits each port this host can't do without
   ansible.builtin.assert:
     that:
       - candidates | length > 0
@@ -8,12 +8,12 @@
         or candidates | selectattr('addresses', 'eq', []) | list | length > 0
         or candidates | selectattr('addresses', 'contains', item.address) | list | length > 0
     fail_msg: >-
-      No Service in NetBox admits {{ item.protocol }} {{ item.port }}{{ ' to ' ~ item.address if item.address is defined }}
-      on {{ inventory_hostname }}, so its firewall would refuse it. Give the host one, with an audience.
+      No rule admits {{ item.protocol }} {{ item.port }}{{ ' to ' ~ item.address if item.address is defined }}
+      on {{ inventory_hostname }}, so its firewall would refuse it.
     quiet: true
   vars:
     candidates: >-
-      {{ host_firewall_services | map(attribute='value') | selectattr('sources')
+      {{ host_firewall_rules | selectattr('sources')
          | selectattr('protocol', 'eq', item.protocol) | selectattr('ports', 'contains', item.port) | list }}
   loop: "{{ host_firewall_needed }}"
   when: item.address | default('') is not none

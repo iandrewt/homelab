@@ -2,14 +2,14 @@
 # PasswordAuthentication and KbdInteractiveAuthentication have no CIS control at all
 - name: Harden sshd (key-only)
   ansible.builtin.copy:
-    dest: /etc/ssh/sshd_config.d/10-debian-host-hardening.conf
+    dest: /etc/ssh/sshd_config.d/10-hardening.conf
     owner: root
     group: root
     mode: "0600"
     content: |
-      PasswordAuthentication {{ debian_host_ssh_password_auth | ternary('yes', 'no') }}
+      PasswordAuthentication no
       KbdInteractiveAuthentication no
-      {% for key, value in debian_host_sshd_options | dictsort %}
+      {% for key, value in hardening_sshd_options | dictsort %}
       {{ key }} {{ value }}
       {% endfor %}
     validate: sshd -t -f %s

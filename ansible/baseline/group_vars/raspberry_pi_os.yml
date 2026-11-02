@@ -22,6 +22,6 @@ deb13cis_rule_6_3_2: false
 deb13cis_rule_6_3_3: false
 
 # The Pi's kernel and firmware; and forky, which is pinned to audit alone - see raspberry_pi_os
-debian_host_unattended_upgrade_extra_origins:
+hardening_unattended_upgrade_extra_origins:
   - "origin=Raspberry Pi Foundation,codename=${distro_codename},label=Raspberry Pi Foundation"
   - "origin=Debian,codename=forky,label=Debian"

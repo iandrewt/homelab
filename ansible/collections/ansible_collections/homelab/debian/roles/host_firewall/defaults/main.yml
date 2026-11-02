@@ -1,7 +1,7 @@
 ---
-# NetBox's Services on this host, as `dict2items` of the model's: each {protocol, ports,
-# addresses, sources}. A Service with no audience admits no one.
-host_firewall_services: []
+# Each {name, protocol, ports, addresses (empty: all the host's), sources: {internet: true} or
+# {ipv4, ipv6}}. A rule with no sources admits no one.
+host_firewall_rules: []
 
 # What this host can't do without, each {protocol, port, address?}: the role refuses a ruleset
 # that admits none of them from anywhere, rather than cut the host off

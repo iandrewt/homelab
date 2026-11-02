@@ -1,5 +1,5 @@
 ---
-# Platform's base OS, which every team's tree applies to its own hosts
+# Applied by every team's tree to its own hosts, by each one's OS
 - name: Raspberry Pi OS boot configuration
   tags: [pi]
   hosts: raspberry_pi_os
@@ -7,21 +7,23 @@
   roles:
     - raspberry_pi_os
 
-- name: CIS Debian 13 baseline
-  tags: [cis]
+- name: Group by OS
   hosts: all
-  become: true
-  pre_tasks:
-    - name: Leave CIS alone unless this run selects it
-      ansible.builtin.meta: end_play
-      when: "'all' not in ansible_run_tags and 'cis' not in ansible_run_tags"
-      tags: always
-  roles:
-    - DEBIAN13-CIS
+  tags: [always]
+  tasks:
+    - name: Fail a host whose OS has no baseline, rather than leave it without one
+      ansible.builtin.assert:
+        that: ansible_facts['distribution'] in ['Debian']
+        fail_msg: "{{ inventory_hostname }} runs {{ ansible_facts['distribution'] }}, which has no baseline"
+        quiet: true
 
-- name: Debian host
-  tags: [debian]
-  hosts: all
+    - name: Group by distribution
+      ansible.builtin.group_by:
+        key: "{{ ansible_facts['distribution'] | lower }}"
+
+- name: Debian
+  hosts: debian
   become: true
   roles:
-    - debian_host
+    - homelab.debian.hardening
+    - homelab.debian.host

@@ -1,0 +1,6 @@
+---
+# apt-daily-upgrade.timer's OnCalendar=, e.g. `*-*-* 03:00 Australia/Sydney`
+host_upgrade_schedule: ~
+
+# Machine accounts: {name, ssh_key, comment?, shell?, sudo_commands?, directories?}.
+host_service_accounts: []

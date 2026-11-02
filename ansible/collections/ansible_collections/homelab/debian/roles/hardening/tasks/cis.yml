@@ -1,0 +1,18 @@
+---
+# Facts, since DEBIAN13-CIS's defaults outrank ours; set before they're in scope, so what's
+# defined is the inventory's
+- name: Take the image's CIS settings, where the inventory sets none
+  ansible.builtin.set_fact:  # noqa: var-naming[no-jinja]
+    "{{ item.key }}": "{{ item.value }}"
+  loop: >-
+    {{ hardening_cis | dict2items
+       | rejectattr('key', 'in', lookup('ansible.builtin.varnames', '^deb13cis_', wantlist=True)) }}
+  loop_control:
+    label: "{{ item.key }}"
+
+# Included, so a run selecting other tags never loads its `always` tasks
+- name: CIS Debian 13
+  ansible.builtin.include_role:
+    name: DEBIAN13-CIS
+    apply:
+      tags: [cis]

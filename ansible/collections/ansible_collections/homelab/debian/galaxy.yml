@@ -1,0 +1,18 @@
+---
+namespace: homelab
+name: debian
+version: 0.1.0
+readme: README.md
+authors:
+  - Andrew Titmuss
+description: Hardened Debian
+license:
+  - MIT
+repository: https://github.com/iandrewt/homelab
+tags:
+  - linux
+  - security
+dependencies:
+  ansible.posix: ">=2.0.0"
+build_ignore:
+  - "*.tar.gz"

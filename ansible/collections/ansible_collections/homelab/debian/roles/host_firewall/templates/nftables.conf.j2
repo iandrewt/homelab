@@ -1,5 +1,5 @@
 #!/usr/sbin/nft -f
-# Managed by Ansible (host_firewall role), from the Services NetBox gives this host.
+# Managed by Ansible (homelab.debian.host_firewall role).
 flush ruleset
 
 table inet host {
@@ -11,13 +11,12 @@ table inet host {
     meta l4proto { icmp, ipv6-icmp } accept
     # A DHCPv4 offer, before there's a flow for conntrack to know it by
     udp sport 67 udp dport 68 accept
-{% for service in host_firewall_services %}
-{%   set s = service.value %}
+{% for s in host_firewall_rules %}
 {%   for match, v6 in [('ip', false), ('ip6', true)] %}
 {%     set daddrs = s.addresses | select('search', ':') | list if v6 else s.addresses | reject('search', ':') | list %}
 {%     set saddrs = (s.sources or {}).get('ipv6' if v6 else 'ipv4', []) %}
-{%     if s.sources and (daddrs or not s.addresses) and (s.sources.internet or saddrs) %}
-    {% if not s.sources.internet %}{{ match }} saddr { {{ saddrs | join(', ') }} } {% endif %}{% if daddrs %}{{ match }} daddr { {{ daddrs | join(', ') }} } {% endif %}{{ s.protocol }} dport { {{ s.ports | join(', ') }} } accept comment "{{ service.key }}"
+{%     if s.sources and (daddrs or not s.addresses) and (s.sources.internet | default(false) or saddrs) %}
+    {% if not s.sources.internet | default(false) %}{{ match }} saddr { {{ saddrs | join(', ') }} } {% endif %}{% if daddrs %}{{ match }} daddr { {{ daddrs | join(', ') }} } {% endif %}{{ s.protocol }} dport { {{ s.ports | join(', ') }} } accept comment "{{ s.name }}"
 {%     endif %}
 {%   endfor %}
 {% endfor %}

@@ -56,9 +56,9 @@ powerdns_resolver_primary_host: "{{ dns_resolver_primary_name }}"
 powerdns_resolver_zones: "{{ netbox_zones }}"
 powerdns_resolver_health_public: titmuss.zone
 
-host_firewall_services: >-
-  {{ (netbox_site.services[inventory_hostname] | default({}) | dict2items)
-     + (netbox_site.services.recursor | dict2items) }}
+network_services:
+  - "{{ netbox_site.services[inventory_hostname] | default({}) }}"
+  - "{{ netbox_site.services.recursor }}"
 host_firewall_needed:
   - { protocol: tcp, port: 22 }
   - { protocol: udp, port: 53, address: "{{ dns_resolver.ipv4 }}" }

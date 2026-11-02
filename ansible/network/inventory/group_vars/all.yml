@@ -1,0 +1,10 @@
+---
+# A list, not one dict: the recursor's Services share their names with a resolver's own
+network_services:
+  - "{{ netbox_site.services[inventory_hostname] | default({}) }}"
+
+host_firewall_rules: >-
+  {{ network_services | map('dict2items') | flatten | map(attribute='value')
+     | zip(network_services | map('dict2items') | flatten | map(attribute='key')
+           | map('community.general.dict_kv', 'name'))
+     | map('combine') | list }}

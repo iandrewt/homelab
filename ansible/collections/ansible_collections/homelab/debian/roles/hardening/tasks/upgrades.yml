@@ -1,27 +1,4 @@
 ---
-- name: Set hostname
-  ansible.builtin.hostname:
-    name: "{{ inventory_hostname }}"
-
-- name: Read current timezone
-  ansible.builtin.stat:
-    path: /etc/localtime
-  register: debian_host_current_timezone
-
-- name: Set timezone
-  ansible.builtin.command: timedatectl set-timezone {{ debian_host_timezone }}
-  changed_when: true
-  when: (debian_host_current_timezone.stat.lnk_source | default('')) != '/usr/share/zoneinfo/' + debian_host_timezone
-
-- name: Stamp each successful apt update
-  ansible.builtin.copy:
-    content: |
-      APT::Update::Post-Invoke-Success {"touch /var/lib/apt/periodic/update-success-stamp 2>/dev/null || true";};
-    dest: /etc/apt/apt.conf.d/15update-stamp
-    owner: root
-    group: root
-    mode: "0644"
-
 - name: Update apt cache
   ansible.builtin.apt:
     update_cache: true
@@ -53,12 +30,11 @@
     mode: "0644"
     content: |
       Unattended-Upgrade::Origins-Pattern {
-      {% for origin in debian_host_unattended_upgrade_origins + debian_host_unattended_upgrade_extra_origins %}
+      {% for origin in hardening_unattended_upgrade_origins + hardening_unattended_upgrade_extra_origins %}
           "{{ origin }}";
       {% endfor %}
       };
       Unattended-Upgrade::Remove-Unused-Dependencies "true";
-      Unattended-Upgrade::Automatic-Reboot "false";
       Unattended-Upgrade::SyslogEnable "true";
 
 - name: Remove packages nothing depends on any more

@@ -1,0 +1,61 @@
+---
+# Each applied unless the inventory sets it (tasks/cis.yml)
+hardening_cis:
+  deb13cis_level_1: true
+  deb13cis_level_2: true
+
+  deb13cis_section4: false  # the hypervisor's, or host_firewall's
+
+  # leaving controls for /tmp (1.1.2.1.x) and /dev/shm (1.1.2.2.x) enabled
+  deb13cis_rule_1_1_2_3_1: false  # /home separate partition
+  deb13cis_rule_1_1_2_3_2: false
+  deb13cis_rule_1_1_2_3_3: false
+  deb13cis_rule_1_1_2_4_1: false  # /var
+  deb13cis_rule_1_1_2_4_2: false
+  deb13cis_rule_1_1_2_4_3: false
+  deb13cis_rule_1_1_2_5_1: false  # /var/tmp
+  deb13cis_rule_1_1_2_5_2: false
+  deb13cis_rule_1_1_2_5_3: false
+  deb13cis_rule_1_1_2_5_4: false
+  deb13cis_rule_1_1_2_6_1: false  # /var/log
+  deb13cis_rule_1_1_2_6_2: false
+  deb13cis_rule_1_1_2_6_3: false
+  deb13cis_rule_1_1_2_6_4: false
+  deb13cis_rule_1_1_2_7_1: false  # /var/log/audit
+  deb13cis_rule_1_1_2_7_2: false
+  deb13cis_rule_1_1_2_7_3: false
+  deb13cis_rule_1_1_2_7_4: false
+
+  # users have no passwords
+  deb13cis_rule_5_2_4: false
+  deb13cis_rule_5_4_2_4: false
+
+  deb13cis_tmp_svc: true
+
+  deb13cis_rule_6_1_1_2_2: false  # No journal receiver yet
+  deb13cis_rule_6_1_1_2_3: false  # ...so nothing for journal-upload to send to
+
+  deb13cis_time_pool:
+    - name: au.pool.ntp.org
+      pool_options: iburst maxsources 4
+  deb13cis_time_servers:
+    - name: 0.au.pool.ntp.org
+      options: iburst
+    - name: 1.au.pool.ntp.org
+      options: iburst
+    - name: 2.au.pool.ntp.org
+      options: iburst
+
+  # The role's defaults halt the host when the audit disk fills or errors.
+  deb13cis_auditd_disk_full_action: syslog
+  deb13cis_auditd_admin_space_left_action: syslog
+  deb13cis_auditd_space_left_action: syslog
+
+hardening_sshd_options: {}
+
+hardening_unattended_upgrade_origins:
+  - "origin=Debian,codename=${distro_codename},label=Debian"
+  - "origin=Debian,codename=${distro_codename},label=Debian-Security"
+  - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
+# Added to the above, so a group can allow one more origin without restating them
+hardening_unattended_upgrade_extra_origins: []
