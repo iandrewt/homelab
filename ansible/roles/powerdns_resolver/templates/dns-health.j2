@@ -1,9 +1,13 @@
 #!/bin/sh
 # Managed by Ansible (powerdns_resolver role). Exits 0 while this resolver answers through
-# dnsdist, validated, as its clients would be answered.
+# dnsdist as its clients would be answered.
+
+answer() {
+  dig @127.0.0.1 -p {{ powerdns_resolver_health_port }} +dnssec +noall +comments +tries=2 +time=2 "$@" SOA
+}
 
 validated() {
-  out=$(dig @127.0.0.1 -p {{ powerdns_resolver_health_port }} +dnssec +noall +comments +tries=2 +time=2 "$1" SOA) || return 1
+  out=$(answer "$1") || return 1
   printf '%s\n' "$out" | grep -q 'status: NOERROR' && printf '%s\n' "$out" | grep -Eq '^;; flags:[a-z ]* ad[ ;]'
 }
 
@@ -15,5 +19,9 @@ online() {
   return 1
 }
 
-validated {{ powerdns_resolver_health_internal }} || exit 1
+# Every server holds the same zones and anchors, so a bogus internal zone is bogus on all of
+# them: withdrawing would take public names down too. Only an unanswered one withdraws.
+answer +cd {{ powerdns_resolver_health_internal }} | grep -q 'status: NOERROR' || exit 1
+validated {{ powerdns_resolver_health_internal }} \
+  || logger -t dns-health -p daemon.err "{{ powerdns_resolver_health_internal }} doesn't validate"
 validated {{ powerdns_resolver_health_public }} || ! online

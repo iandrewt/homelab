@@ -42,8 +42,8 @@ powerdns_resolver_acl: []
 # [{name, nameservers, soa, soa_ttl}]
 powerdns_resolver_zones: []
 
-# The anycast health check, through dnsdist on loopback: a signed internal zone, and a signed
-# public name that withdraws only while a root server answers
+# The anycast health check, through dnsdist on loopback: a signed internal zone, logged when it
+# doesn't validate, and a signed public name that withdraws only while a root server answers
 powerdns_resolver_health_port: 5300
 powerdns_resolver_health_internal: >-
   {{ powerdns_resolver_zones | rejectattr('dnssec_keys', 'eq', []) | map(attribute='name') | first | default('') }}
