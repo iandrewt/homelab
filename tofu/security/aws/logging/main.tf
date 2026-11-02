@@ -162,8 +162,8 @@ resource "aws_s3_bucket_policy" "trail" {
   })
 }
 
-# What detection's alarms filter, every account's and region's in one place. The bucket is the
-# archive; this keeps a fortnight for looking into an alarm.
+# What detection mails guardrail events from, every account's and region's in one place. The
+# bucket is the archive; this keeps a fortnight for looking into one.
 resource "aws_cloudwatch_log_group" "trail" {
   provider = aws.security
 

@@ -116,7 +116,7 @@ resource "aws_sns_topic_policy" "findings" {
         Action    = "sns:Publish"
         Resource  = aws_sns_topic.findings[each.key].arn
         Condition = {
-          ArnEquals = { "aws:SourceArn" = [for alarm in aws_cloudwatch_metric_alarm.guardrails : alarm.arn] }
+          ArnEquals = { "aws:SourceArn" = aws_cloudwatch_metric_alarm.undelivered.arn }
         }
       }] : [],
     )
