@@ -381,8 +381,10 @@ def gateway(c: Console, site: dict, sites: dict, zone: str) -> list[dict]:
     if zone in BREAK_GLASS_FROM and any(v["type"] == "WIREGUARD" for v in c.every("vpn/servers")):
         out.append(policy(c, "Allow Break-glass", "ALLOW", src, side(c, "Gateway", port=ports(BREAK_GLASS_PORT)),
                           scope("UDP")))
-    if zone == "Workloads":
-        out.append(policy(c, "Allow Gateway BGP", "ALLOW", src, side(c, "Gateway", port=ports(179)), scope("TCP")))
+    listening = sorted({r for router in site["routers"].values() for g in router["peer_groups"] for r in g["ranges"]})
+    if zone == "Workloads" and listening:
+        out.append(policy(c, "Allow Gateway BGP", "ALLOW", side(c, zone, addresses=listening),
+                          side(c, "Gateway", port=ports(179)), scope("TCP")))
     if zone == "Appliances":
         unifi = side(c, zone, networks=["Network"])
         out += [
