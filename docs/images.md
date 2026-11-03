@@ -86,8 +86,8 @@ to make the VM someone new. Its host key can be read before you trust it, throug
 and everything you add is yours.
 
 ```
-uv run homelab image derive debian-13-amd64-vm.qcow2 web.qcow2 --playbook web.yml
-uv run homelab image derive debian-13-amd64-vm.qcow2 web.qcow2 --script web.sh
+uv run homelab image derive debian-13-amd64-vm debian-13-amd64-vm.qcow2 web.qcow2 --playbook web.yml
+uv run homelab image derive debian-13-amd64-vm debian-13-amd64-vm.qcow2 web.qcow2 --script web.sh
 ```
 
 A playbook runs from its own directory, against the VM as host `build`, reached as `debian`; a

@@ -1,4 +1,9 @@
 ---
+image_roles:
+  - homelab.debian.network
+  - homelab.linux.cloud_init
+  - homelab.linux.guest_agent
+
 # grub-only; /etc/kernel/cmdline and the ESP's umask do each instead
 deb13cis_rule_1_3_1_2: false
 deb13cis_rule_1_4_2: false

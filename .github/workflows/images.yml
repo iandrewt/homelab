@@ -27,11 +27,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # A tag, image/<profile>/<version>, builds and releases that profile; anything else builds them all
+  # A tag, image/<profile>/<version>, builds and releases that profile; anything else builds them all,
+  # each on a runner of its own architecture
   plan:
     runs-on: ubuntu-26.04
     outputs:
-      profiles: ${{ steps.plan.outputs.profiles }}
+      builds: ${{ steps.plan.outputs.builds }}
       version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -40,30 +41,37 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/image/* ]]; then
             tag=${GITHUB_REF_NAME#image/}
-            test -f "images/${tag%/*}/mkosi.conf"
-            echo "profiles=[\"${tag%/*}\"]" >> "$GITHUB_OUTPUT"
+            profiles=${tag%/*}
             echo "version=${tag##*/}" >> "$GITHUB_OUTPUT"
           else
-            echo "profiles=$(ls images/*/mkosi.conf | cut -d/ -f2 | jq -Rcn '[inputs]')" >> "$GITHUB_OUTPUT"
+            profiles=$(ls images/*/mkosi.conf | cut -d/ -f2)
             echo "version=dev" >> "$GITHUB_OUTPUT"
           fi
+          for profile in $profiles; do
+            case $(sed -n 's/^Architecture=//p' "images/$profile/mkosi.conf") in
+              x86-64) runner=ubuntu-26.04 ;;
+              arm64) runner=ubuntu-24.04-arm ;;
+            esac
+            jq -cn --arg profile "$profile" --arg runner "$runner" '{$profile, $runner}'
+          done | jq -cs '"builds=\(.)"' -r >> "$GITHUB_OUTPUT"
 
   build:
     name: ${{ matrix.profile }}
     needs: plan
-    runs-on: ubuntu-26.04
-    timeout-minutes: 120
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        profile: ${{ fromJSON(needs.plan.outputs.profiles) }}
+        include: ${{ fromJSON(needs.plan.outputs.builds) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
         with:
           enable-cache: true
-      # The bake and the test boot it under KVM, through the builder; the runner must offer it
-      - run: ls -l /dev/kvm
+      # The bake and the test boot it under KVM where the runner offers it, emulated where it doesn't
+      - run: ls -l /dev/kvm || echo "no KVM here"
+
       - run: |
           uv run ansible-galaxy collection install -r ansible/requirements.yml
           uv run ansible-galaxy role install -p ansible/roles \
@@ -74,9 +82,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: ${{ matrix.profile }}
-          path: |
-            ~/.cache/homelab/images/${{ matrix.profile }}/${{ matrix.profile }}.qcow2
-            ~/.cache/homelab/images/${{ matrix.profile }}/${{ matrix.profile }}.packages
+          path: ~/.cache/homelab/images/${{ matrix.profile }}/${{ matrix.profile }}.*
           retention-days: 1
 
   # Signed keylessly, as the fleet is: SHA256SUMS's signature names this workflow, and the sums the rest
@@ -88,7 +94,7 @@ jobs:
       contents: write
       id-token: write
     env:
-      PROFILE: ${{ fromJSON(needs.plan.outputs.profiles)[0] }}
+      PROFILE: ${{ fromJSON(needs.plan.outputs.builds)[0].profile }}
       VERSION: ${{ needs.plan.outputs.version }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -98,7 +104,9 @@ jobs:
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
       - run: |
           set -euo pipefail
-          for suffix in qcow2 packages; do mv "$PROFILE.$suffix" "$PROFILE-$VERSION.$suffix"; done
+          for file in "$PROFILE".*; do mv "$file" "$PROFILE-$VERSION.${file#"$PROFILE".}"; done
+          # A raw image, to write to a card, goes compressed
+          if [ -f "$PROFILE-$VERSION.raw" ]; then xz --threads=0 "$PROFILE-$VERSION.raw"; fi
           sha256sum "$PROFILE-$VERSION".* > SHA256SUMS
           cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \

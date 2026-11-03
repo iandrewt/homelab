@@ -32,6 +32,7 @@
         key: >-
           image_{{ (image_release.content | b64decode).splitlines() | select('match', 'IMAGE_ID=')
                    | first | regex_replace('^IMAGE_ID=', '') | replace('-', '_') }}
+        parents: images
       when: image_release.content is defined
 
 - name: Debian
@@ -42,10 +43,13 @@
     - homelab.linux.sshd
     - homelab.linux.host
 
-- name: Built from debian-13-amd64-vm
-  hosts: image_debian_13_amd64_vm
+- name: Built from an image
+  hosts: images
   become: true
-  roles:
-    - homelab.debian.network
-    - homelab.linux.cloud_init
-    - homelab.linux.guest_agent
+  tasks:
+    # Its group_vars, image_<profile>.yml, say what else an image's hosts take
+    - name: The image's own roles
+      ansible.builtin.include_role:
+        name: "{{ item }}"
+      loop: "{{ image_roles }}"
+      tags: [always]

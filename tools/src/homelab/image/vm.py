@@ -1,10 +1,13 @@
 """A disk booted in qemu inside the builder, reached over SSH: how a build bakes and a test checks."""
 
 import json
+import os
+import platform
 import socket
 import subprocess
 import time
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -12,10 +15,40 @@ import yaml
 from ..bootstrap.shell import BootstrapError, run
 from ..render import seed
 from . import builder
+from .profile import Profile
 
-OVMF = "/usr/share/OVMF/OVMF_CODE_4M.secboot.fd"
+
+@dataclass(frozen=True)
+class Machine:
+    qemu: str
+    machine: str
+    # As uname names this architecture, for whether the host can run it under KVM
+    native: str
+    firmware: tuple[str, ...] = ()
+
+
+MACHINES = {
+    "x86-64": Machine("qemu-system-x86_64", "q35", "x86_64", firmware=(
+        "-machine", "q35,smm=on", "-global", "driver=cfi.pflash01,property=secure,value=on",
+        "-drive", "if=pflash,format=raw,unit=0,readonly=on,file=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd",
+        "-drive", "if=pflash,format=raw,unit=1,file=/work/vars.fd")),
+    "arm64": Machine("qemu-system-aarch64", "virt", "aarch64"),
+}
 # No keys enrolled, as a Proxmox EFI disk without pre-enrolled ones: the image enrolls its own
 OVMF_SETUP_MODE = "/usr/share/OVMF/OVMF_VARS_4M.fd"
+
+# Into the partition whose FAT filesystem is labelled CIDATA, as a card is seeded
+SEED_PARTITION = """
+set -eu
+for start in $(sfdisk --json "$1" | python3 -c 'import json, sys
+for p in json.load(sys.stdin)["partitiontable"]["partitions"]: print(p["start"])'); do
+  if mlabel -s -i "$1@@$((start * 512))" :: 2>/dev/null | grep -qx ' Volume label is CIDATA *'; then
+    exec mcopy -o -i "$1@@$((start * 512))" /work/seed/meta-data /work/seed/user-data ::/
+  fi
+done
+echo "no partition of $1 is labelled CIDATA" >&2
+exit 1
+"""
 
 # A throwaway VM's host key is never pinned; IdentitiesOnly, since CIS's MaxAuthTries is less than
 # an agent's keys
@@ -35,10 +68,15 @@ with socket.socket(socket.AF_UNIX) as s:
 
 
 class Vm:
-    """One boot of a disk in work/, with a throwaway seed whose key the default user takes."""
+    """One boot of a profile's disk in work/, with a throwaway seed whose key the default user takes."""
 
-    def __init__(self, work: Path, hostname: str, mounts: dict[Path, str] | None = None) -> None:
+    def __init__(self, work: Path, hostname: str, profile: Profile, mounts: dict[Path, str] | None = None) -> None:
         self.work = work
+        self.profile = profile
+        self.machine = MACHINES[profile.architecture]
+        self.kvm = platform.machine() == self.machine.native and os.path.exists("/dev/kvm")
+        # Emulated, everything takes longer
+        self.patience = 1 if self.kvm else 6
         self.mounts = {work: "/work", **(mounts or {})}
         self.name = f"homelab-image-{uuid.uuid4().hex[:12]}"
         self.key = work / "ssh-key"
@@ -56,31 +94,34 @@ class Vm:
             hostname, None, ssh_keys=[self.key.with_suffix(".pub").read_text().strip()],
             instance_id=self.name))
         (documents / "user-data").write_text("")
-        builder.run_in({self.work: "/work"}, "xorriso", "-as", "mkisofs", "-quiet", "-output",
-                       "/work/seed.iso", "-volid", "cidata", "-joliet", "-rock", "/work/seed")
+        if self.profile.seed == "drive":
+            builder.run_in({self.work: "/work"}, "xorriso", "-as", "mkisofs", "-quiet", "-output",
+                           "/work/seed.iso", "-volid", "cidata", "-joliet", "-rock", "/work/seed")
 
-    def start(self, disk: str, *, kernel: str | None = None, initrd: str | None = None,
-              append: str | None = None, vars_from: str | None = None) -> None:
-        """Boots work/<disk>, a .raw or .qcow2: by its kernel and initrd if given, else through
-        Secure Boot firmware whose variable store starts as a copy of `vars_from`."""
+    def start(self, disk: str, *, kernel: str | None = None, initrd: str | None = None) -> None:
+        """Boots work/<disk>, a .raw or .qcow2: by its kernel and initrd if given, with the profile's
+        command line, else through Secure Boot firmware with an empty key store."""
+        if self.profile.seed == "partition":
+            builder.run_in({self.work: "/work"}, "sh", "-c", SEED_PARTITION, "seed", f"/work/{disk}")
         if kernel:
-            boot = ["-machine", "q35", "-kernel", f"/work/{kernel}", "-initrd", f"/work/{initrd}",
-                    "-append", append or ""]
+            boot = ["-machine", self.machine.machine, "-kernel", f"/work/{kernel}", "-initrd", f"/work/{initrd}",
+                    "-append", self.profile.cmdline]
+        elif self.machine.firmware:
+            builder.run_in({self.work: "/work"}, "cp", OVMF_SETUP_MODE, "/work/vars.fd")
+            boot = list(self.machine.firmware)
         else:
-            builder.run_in({self.work: "/work"}, "cp", vars_from or OVMF_SETUP_MODE, "/work/vars.fd")
-            boot = ["-machine", "q35,smm=on", "-global", "driver=cfi.pflash01,property=secure,value=on",
-                    "-drive", f"if=pflash,format=raw,unit=0,readonly=on,file={OVMF}",
-                    "-drive", "if=pflash,format=raw,unit=1,file=/work/vars.fd"]
+            raise BootstrapError(f"{self.profile.architecture} boots by its kernel here: no firmware for it")
+        seed_drive = ["-drive", "file=/work/seed.iso,format=raw,if=virtio,readonly=on"] if self.profile.seed == "drive" else []
+        accel = ["-accel", "kvm", "-cpu", "host"] if self.kvm else ["-accel", "tcg,thread=multi", "-cpu", "max"]
         builder.run_in(
-            self.mounts, "qemu-system-x86_64", "-enable-kvm", "-cpu", "host", "-m", "2048",
-            "-smp", "2", *boot,
+            self.mounts, self.machine.qemu, *accel, "-m", "2048", "-smp", str(min(os.cpu_count() or 2, 4)), *boot,
             "-drive", f"file=/work/{disk},format={Path(disk).suffix.lstrip('.')},if=virtio,discard=unmap",
-            "-drive", "file=/work/seed.iso,media=cdrom,readonly=on",
+            *seed_drive,
             "-netdev", "user,id=net,hostfwd=tcp::2222-:22", "-device", "virtio-net-pci,netdev=net",
             "-chardev", "socket,id=qga,path=/work/qga.sock,server=on,wait=off",
             "-device", "virtio-serial", "-device", "virtserialport,chardev=qga,name=org.qemu.guest_agent.0",
             "-display", "none", "-serial", "file:/work/serial.log",
-            detach=self.name, devices=("/dev/kvm",), ports=(f"127.0.0.1:{self.port}:2222",))
+            detach=self.name, devices=("/dev/kvm",) if self.kvm else (), ports=(f"127.0.0.1:{self.port}:2222",))
 
     @property
     def ssh_args(self) -> list[str]:
@@ -106,6 +147,7 @@ class Vm:
         self.wait_until_stopped()
 
     def wait_for_ssh(self, timeout: int = 300) -> None:
+        timeout *= self.patience
         deadline = time.monotonic() + timeout
         while subprocess.run(["ssh", *self.ssh_args, "debian@127.0.0.1", "true"],
                              capture_output=True, check=False).returncode:
@@ -114,6 +156,7 @@ class Vm:
             time.sleep(5)
 
     def wait_until_stopped(self, timeout: int = 300) -> None:
+        timeout *= self.patience
         try:
             subprocess.run(["docker", "wait", self.name], capture_output=True, timeout=timeout, check=True)
         except subprocess.TimeoutExpired:

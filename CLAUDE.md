@@ -404,7 +404,7 @@ uv run homelab bootstrap pi --device /dev/sdX --hostname ratatoskr --site alfhei
 uv run homelab bootstrap proxmox --host yggdrasil   # its answer inside its cell's newest ISO
 uv run homelab image build debian-13-amd64-vm          # baked and sealed, into ~/.cache/homelab/images
 uv run homelab image test debian-13-amd64-vm           # boots it twice, as new VMs, and checks its contract
-uv run homelab image derive <base>.qcow2 <yours>.qcow2 --playbook <yml>   # docs/images.md
+uv run homelab image derive <profile> <base> <yours> --playbook <yml>   # docs/images.md
 
 cd ansible/network && uv run ansible-playbook site.yml --limit <host>   # or ansible/platform
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan   # workspace alf-pve-01
