@@ -35,6 +35,12 @@ hardening_cis:
   deb13cis_rule_6_1_1_2_2: false  # No journal receiver yet
   deb13cis_rule_6_1_1_2_3: false  # ...so nothing for journal-upload to send to
 
+  # A buffer until logs ship off the host; the rest of /var/log's partition is other logs'
+  deb13cis_journald_systemmaxuse: 256M
+  deb13cis_journald_systemkeepfree: 128M
+  deb13cis_journald_runtimemaxuse: 64M
+  deb13cis_journald_runtimekeepfree: 64M
+
   deb13cis_time_pool:
     - name: au.pool.ntp.org
       pool_options: iburst maxsources 4
