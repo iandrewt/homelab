@@ -73,6 +73,7 @@ def _boot(base: Profile, image: Path, out: Path, check: bool) -> tuple[tuple[str
             vm.start(disk, kernel="vmlinuz", initrd="initrd")
         vm.wait_for_ssh()
         cloud_init = vm.ssh("cloud-init status --wait --long || true")
+        vm.ssh("systemctl is-system-running --wait >/dev/null || true")
         host_key = vm.ssh("ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub").split()[1]
         identity = (host_key, vm.ssh("cat /etc/machine-id").strip())
         return identity, (_contract(base, vm, host_key, cloud_init) if check else [])

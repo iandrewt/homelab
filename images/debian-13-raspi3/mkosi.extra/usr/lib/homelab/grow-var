@@ -1,7 +1,8 @@
 #!/bin/sh
-# Grows the partition labelled var to the end of its disk, before /var mounts and grows its
-# filesystem to match (x-systemd.growfs). growpart exits 1, NOCHANGE, once it fills the disk.
+# While mounted: grown before, an MBR partition drops out mid-boot and takes what waits on it.
+# growpart exits 1, NOCHANGE, once it fills the disk.
 set -eu
-part=$(readlink -f /dev/disk/by-label/var)
+part=$(findmnt --noheadings --output SOURCE /var)
 disk=/dev/$(lsblk --noheadings --output PKNAME "$part")
 growpart "$disk" "$(cat "/sys/class/block/${part#/dev/}/partition")" || [ $? -eq 1 ]
+resize2fs "$part"
