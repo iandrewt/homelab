@@ -37,9 +37,9 @@
       ansible.builtin.command: docker exec linux-test-{{ item }} systemctl is-system-running --wait
       register: booted
       until: booted.stdout in ['running', 'degraded']
-      retries: 60
+      retries: 120
       delay: 5
-      failed_when: false
+      failed_when: booted.stdout not in ['running', 'degraded']
       changed_when: false
       loop: "{{ families.keys() }}"
 
