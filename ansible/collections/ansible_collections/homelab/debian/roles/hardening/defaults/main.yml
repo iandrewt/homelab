@@ -57,3 +57,6 @@ hardening_unattended_upgrade_origins:
   - "origin=Debian,codename=${distro_codename}-security,label=Debian-Security"
 # Added to the above, so a group can allow one more origin without restating them
 hardening_unattended_upgrade_extra_origins: []
+
+# trixie's auditctl can't load CIS's arm64 rules (linux-audit/audit-userspace#496), forky's can
+hardening_audit_from_forky: "{{ ansible_facts['architecture'] == 'aarch64' }}"

@@ -1,0 +1,69 @@
+#!/bin/sh
+# Lays the tree out on MBR, the only table a Pi 3's boot ROM reads: the firmware partition first,
+# root, CIS's partitions in an extended one, and /var last so it grows. The same partitions as
+# repart.d gives the other profiles, which repart can't make here.
+set -eu
+tree=$1 disk=$2
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+
+# Label:mount point:MiB, in the order they're numbered; each logical one sits 1 MiB after its EBR
+primary="CIDATA:/boot/firmware:512 root:/:4096"
+logical="home:/home:1024 var-tmp:/var/tmp:1024 var-log:/var/log:2048 var-log-audit:/var/log/audit:1024"
+last="var:/var:2048"
+mounts="/boot/firmware /home /var /var/tmp /var/log /var/log/audit"
+
+field() { echo "$1" | cut -d: -f"$2"; }
+
+# Its own directory per filesystem: the mount point's contents, less what's mounted below it
+stage() {
+  label=$(field "$1" 1) dir=$(field "$1" 2)
+  below=""
+  for m in $mounts; do
+    rel=${m#"${dir%/}"/}
+    if [ "$m" != "$dir" ] && [ "$rel" != "$m" ]; then below="$below $rel"; fi
+  done
+  mkdir -p "$work/fs/$label" "$tree$dir"
+  # shellcheck disable=SC2046
+  rsync --archive --hard-links --acls --xattrs $(for rel in $below; do echo "--exclude=/$rel/**"; done) \
+    "$tree$dir/" "$work/fs/$label/"
+  for rel in $below; do mkdir -p "$work/fs/$label/$rel"; done
+}
+
+# The table, in MiB, then sectors
+at=1 n=1
+for p in $primary; do
+  echo "$disk$n : start=$((at * 2048)), size=$(($(field "$p" 3) * 2048)), type=$([ $n = 1 ] && echo c || echo 83)"
+  at=$((at + $(field "$p" 3))) n=$((n + 1))
+done > "$work/table"
+extended=$at
+for p in $logical; do at=$((at + 1 + $(field "$p" 3))); done
+echo "${disk}3 : start=$((extended * 2048)), size=$(((at - extended) * 2048)), type=5" >> "$work/table"
+echo "${disk}4 : start=$((at * 2048)), size=$(($(field "$last" 3) * 2048)), type=83" >> "$work/table"
+end=$((at + $(field "$last" 3)))
+at=$((extended + 1)) n=5
+for p in $logical; do
+  echo "$disk$n : start=$((at * 2048)), size=$(($(field "$p" 3) * 2048)), type=83" >> "$work/table"
+  at=$((at + $(field "$p" 3) + 1)) n=$((n + 1))
+done
+
+truncate --size "${end}M" "$disk"
+printf 'label: dos\nunit: sectors\n\n%s\n' "$(cat "$work/table")" | sfdisk --quiet "$disk"
+
+# Each filesystem by its partition's number, as the table above numbers them
+n=1
+for p in $primary $last $logical; do
+  [ $n = 3 ] && n=4
+  label=$(field "$p" 1) size=$(field "$p" 3)
+  stage "$p"
+  if [ "$label" = CIDATA ]; then
+    mkfs.vfat -F 32 -n CIDATA -C "$work/$label.img" $((size * 1024)) >/dev/null
+    if [ -n "$(ls -A "$work/fs/$label")" ]; then mcopy -s -i "$work/$label.img" "$work/fs/$label"/* ::/; fi
+  else
+    mkfs.ext4 -q -L "$label" -d "$work/fs/$label" "$work/$label.img" "${size}M"
+  fi
+  start=$(sfdisk --dump "$disk" | sed -n "s|^$disk$n : start= *\([0-9]*\),.*|\1|p")
+  dd if="$work/$label.img" of="$disk" bs=4M oflag=seek_bytes seek=$((start * 512)) conv=notrunc,sparse status=none
+  rm -rf "$work/$label.img" "$work/fs/$label"
+  n=$((n + 1))
+done

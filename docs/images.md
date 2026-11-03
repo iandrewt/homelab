@@ -1,35 +1,41 @@
 # Images
 
-Platform's base images are hardened Debian, built from [`images/`](../images), for VMs on
-Proxmox. This is what one gives a VM, what booting one takes, and how to make an image of your
-own from one.
+Platform's base images are hardened Debian, built from [`images/`](../images), one profile per
+kind of machine. This is what one gives a host, what booting one takes, and how to make an image
+of your own from one.
+
+| Profile | For | Kernel | Boots through | Its seed |
+| --- | --- | --- | --- | --- |
+| [`debian-13-amd64-vm`](../images/debian-13-amd64-vm) | a VM on Proxmox | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys | a drive labelled `cidata` |
+| [`debian-13-raspi3`](../images/debian-13-raspi3) | a Raspberry Pi 3B | Debian's arm64 kernel | `raspi-firmware` | its own partition, labelled `CIDATA` |
 
 ## What's in one
 
-`debian-13-amd64-vm` is Debian 13 with its cloud kernel, the packages in its
-[`mkosi.conf`](../images/debian-13-amd64-vm/mkosi.conf), and:
+Debian 13, the packages in its profile's `mkosi.conf`, and:
 
 - **CIS Debian 13**, levels 1 and 2, with the exceptions in
   [`homelab.debian.hardening`'s defaults](../ansible/collections/ansible_collections/homelab/debian/roles/hardening/defaults/main.yml)
-  and [its profile's](../ansible/baseline/group_vars/image_debian_13_amd64_vm.yml).
+  and its profile's, in [`ansible/baseline/group_vars`](../ansible/baseline/group_vars).
 - **Key-only SSH**, as the default user, `debian`, who has passwordless sudo.
 - **Unattended upgrades** from Debian's security archive and point releases. A new kernel waits
   for your reboot.
-- **The QEMU guest agent**, allowing only what a Proxmox node calls of it, and reading files
-  ([its list](../ansible/collections/ansible_collections/homelab/linux/roles/guest_agent/defaults/main.yml)).
+- **On a VM, the QEMU guest agent**, allowing only what a Proxmox node calls of it, and reading
+  files ([its list](../ansible/collections/ansible_collections/homelab/linux/roles/guest_agent/defaults/main.yml)).
 - **DHCPv4 and SLAAC**, taking the lease's search domains.
 - **UTC.** A schedule meant in local time names its zone: `OnCalendar=*-*-* 03:00 Australia/Sydney`.
-- **Its firewall is Proxmox's**, the VM's own. nftables inside it is yours to add;
+- **A VM's firewall is Proxmox's**, the VM's own. nftables inside it is yours to add;
   [`homelab.linux.host_firewall`](../ansible/collections/ansible_collections/homelab/linux/roles/host_firewall)
-  is one way.
+  is one way, and metal's.
 - **`/usr/lib/homelab/image-release`**: which image it is (`IMAGE_ID`, `IMAGE_VERSION`), the
   commit that built it (`BUILD_ID`), and the versions of the collections that hardened it.
 
-Its disk is laid out for CIS, by [these definitions](../images/debian-13-amd64-vm/mkosi.extra/usr/lib/repart.d):
+Its disk is laid out for CIS, the same on every profile: on GPT by repart's
+[definitions](../images/debian-13-amd64-vm/mkosi.extra/usr/lib/repart.d), and on a Pi's MBR by
+its [layout](../images/debian-13-raspi3/layout).
 
 | Mount | Size | Options |
 | --- | --- | --- |
-| `/efi` | 512 MiB | |
+| `/efi`, or a Pi's `/boot/firmware` | 512 MiB | |
 | `/` | 4 GiB | |
 | `/home` | 1 GiB | `nodev,nosuid` |
 | `/var/tmp` | 1 GiB | `nodev,nosuid,noexec` |
@@ -37,7 +43,7 @@ Its disk is laid out for CIS, by [these definitions](../images/debian-13-amd64-v
 | `/var/log/audit` | 1 GiB | `nodev,nosuid,noexec` |
 | `/var` | the rest of the disk | `nodev,nosuid` |
 
-**`/var` grows to fill whatever disk the VM is given**, on its first boot. Everything else is
+**`/var` grows to fill whatever disk it's given**, on its first boot. Everything else is
 fixed, `/opt` and `/srv` included: data belongs in `/var/lib`, or on a disk of its own.
 
 ## Getting one
@@ -60,6 +66,8 @@ debian-13-amd64-vm` to check it.
 
 ## Booting one
 
+### On Proxmox
+
 **Give it an EFI disk with an empty key store** (in Proxmox, `pre-enrolled-keys=0`). Its first
 boot finds the firmware in setup mode and enrolls [Platform's keys and Debian's
 CA](../images/secure-boot), then resets; from then on it boots with Secure Boot enforcing, through
@@ -79,6 +87,18 @@ public-keys:
 **A new `instance-id` is a new instance**: new SSH host keys, a new machine ID. Change it only
 to make the VM someone new. Its host key can be read before you trust it, through Proxmox's API
 (`agent/file-read` of `/etc/ssh/ssh_host_ed25519_key.pub`), since the guest agent allows reading.
+
+### On a Raspberry Pi 3B
+
+**Write it to a card**, from its release, which ships it raw and compressed:
+
+```
+xz --decompress --stdout debian-13-raspi3-2026.11.0.raw.xz | sudo dd of=/dev/sdX bs=4M conv=fsync
+```
+
+**Put its seed on the card's partition labelled `CIDATA`**, the firmware partition: the same
+`meta-data` and `user-data` as above, as files. `raspi-firmware` boots it from the same partition,
+and `/var` grows to the end of the card on its first boot.
 
 ## An image of your own
 

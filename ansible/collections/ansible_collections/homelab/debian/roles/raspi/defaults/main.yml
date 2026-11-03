@@ -1,0 +1,9 @@
+---
+# raspi-firmware writes cmdline.txt and config.txt from these at every kernel and initramfs update
+raspi_root: LABEL=root
+raspi_consoles: ttyAMA0,115200 tty1
+raspi_cmdline: lsm=landlock,lockdown,yama,apparmor,bpf audit=1 audit_backlog_limit=8192
+# Appended to config.txt
+raspi_config: |
+  dtoverlay=disable-wifi
+  dtoverlay=disable-bt

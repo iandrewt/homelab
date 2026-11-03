@@ -1,0 +1,40 @@
+---
+# auditctl before 4.0.5 can't load CIS's `-F perm=` rules on arm64, and trixie ships 4.0.2
+# (linux-audit/audit-userspace#496). Pinned first, so forky can offer nothing but audit.
+- name: Pin forky to the audit source package alone
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/audit-from-forky
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Package: src:audit
+      Pin: release n=forky
+      Pin-Priority: 990
+
+      Package: *
+      Pin: release n=forky
+      Pin-Priority: -1
+
+- name: Add forky
+  register: hardening_forky
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/forky.sources
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: http://deb.debian.org/debian/
+      Suites: forky
+      Components: main
+      Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp
+
+# latest: an installed 4.0.2 only moves up to the pinned candidate if asked to
+- name: Install audit from forky
+  ansible.builtin.apt:  # noqa: package-latest
+    name:
+      - auditd
+      - audispd-plugins
+    state: latest
+    update_cache: "{{ hardening_forky is changed }}"

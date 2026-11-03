@@ -30,7 +30,8 @@
     mode: "0644"
     content: |
       Unattended-Upgrade::Origins-Pattern {
-      {% for origin in hardening_unattended_upgrade_origins + hardening_unattended_upgrade_extra_origins %}
+      {% for origin in hardening_unattended_upgrade_origins + hardening_unattended_upgrade_extra_origins
+                       + (['origin=Debian,codename=forky,label=Debian'] if hardening_audit_from_forky else []) %}
           "{{ origin }}";
       {% endfor %}
       };

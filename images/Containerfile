@@ -20,7 +20,8 @@ RUN printf '%s\n' \
  && apt-get -o Acquire::Check-Valid-Until=false update \
  && apt-get install -y --no-install-recommends \
       apt ca-certificates dosfstools e2fsprogs efitools git mtools openssl ovmf python3 python3-pefile \
-      qemu-system-x86 qemu-utils systemd systemd-repart uuid-runtime xorriso zstd \
+      fdisk qemu-system-arm qemu-system-x86 qemu-utils rsync systemd systemd-repart uuid-runtime xorriso \
+      zstd \
  && rm -rf /var/lib/apt/lists/*
 
 # v27.1: trixie's mkosi has no Snapshot=

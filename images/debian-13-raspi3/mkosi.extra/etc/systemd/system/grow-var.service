@@ -1,0 +1,10 @@
+[Unit]
+Description=Grow /var's partition to the end of its disk
+DefaultDependencies=no
+BindsTo=dev-disk-by\x2dlabel-var.device
+After=dev-disk-by\x2dlabel-var.device
+Before=var.mount
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/homelab/grow-var

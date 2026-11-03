@@ -1,0 +1,7 @@
+---
+# What a kernel upgrade runs, which writes the latest kernel, initrd, cmdline.txt and config.txt
+- name: Rewrite the firmware partition
+  ansible.builtin.command: /etc/kernel/postinst.d/z50-raspi-firmware
+  environment:
+    DEB_MAINT_PARAMS: configure
+  changed_when: true

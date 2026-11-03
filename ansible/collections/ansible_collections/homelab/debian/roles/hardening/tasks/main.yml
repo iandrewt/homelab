@@ -1,4 +1,9 @@
 ---
+- name: Audit from forky, on arm64
+  ansible.builtin.import_tasks: audit.yml
+  when: hardening_audit_from_forky
+  tags: [cis]
+
 - name: CIS Debian 13
   ansible.builtin.import_tasks: cis.yml
   tags: [cis]

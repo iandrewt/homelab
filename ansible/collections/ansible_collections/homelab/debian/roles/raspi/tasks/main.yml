@@ -1,0 +1,33 @@
+---
+- name: Install the Pi's firmware
+  ansible.builtin.apt:
+    name: raspi-firmware
+
+- name: Name the root and the consoles
+  ansible.builtin.copy:
+    dest: /etc/default/raspi-firmware
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      ROOTPART={{ raspi_root }}
+      CONSOLES="{{ raspi_consoles }}"
+  notify: Rewrite the firmware partition
+
+- name: Add the kernel's parameters
+  ansible.builtin.copy:
+    dest: /etc/default/raspi-extra-cmdline
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ raspi_cmdline }}\n"
+  notify: Rewrite the firmware partition
+
+- name: Add to config.txt
+  ansible.builtin.copy:
+    dest: /etc/default/raspi-firmware-custom
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ raspi_config }}"
+  notify: Rewrite the firmware partition
