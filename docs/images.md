@@ -1,14 +1,14 @@
 # Images
 
-Platform's base images are hardened Debian, built from [`images/`](../images), one profile per
+Platform's base images are hardened Debian, built from [`images/`](../images), one image per
 kind of machine. This is what one gives a host, what booting one takes, and how to make an image
 of your own from one.
 
-| Profile | For | Kernel | Boots through | Its seed |
+| Image | For | Kernel | Boots through | Its seed |
 | --- | --- | --- | --- | --- |
-| [`debian-13-amd64-vm`](../images/debian-13-amd64-vm) | a VM on Proxmox | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys | a drive labelled `cidata` |
-| [`debian-13-raspi3`](../images/debian-13-raspi3) | a Raspberry Pi 3B | Debian's arm64 kernel | `raspi-firmware` | its own partition, labelled `CIDATA` |
-| [`ymir-amd64-vm`](../images/ymir-amd64-vm), not yet released | a Platform appliance VM | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys, from a signed UKI | a drive labelled `cidata`, whose `user-data` is systemd credentials |
+| [`debian-13-amd64-vm`](../images/mkosi.conf.d/mutable-vm) | a VM on Proxmox | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys | a drive labelled `cidata` |
+| [`debian-13-raspi3`](../images/mkosi.conf.d/mutable-raspi3.conf) | a Raspberry Pi 3B | Debian's arm64 kernel | `raspi-firmware` | its own partition, labelled `CIDATA` |
+| [`ymir-amd64-vm`](../images/mkosi.conf.d/ymir-vm.conf), not yet released | a Platform appliance VM | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys, from a signed UKI | a drive labelled `cidata`, whose `user-data` is systemd credentials |
 
 **`ymir-amd64-vm` is image-based**: its `/usr`, and the `/etc` it starts from, are one signed,
 verity-checked image, updated whole and A/B by systemd-sysupdate, rolled back if a version can't
@@ -28,20 +28,24 @@ io.systemd.credential:ssh.authorized_keys.debian=ssh-ed25519 AAAA...
 `ssh.authorized_keys.debian` lets you in, once. Any other credential reaches what imports it
 after udev has found the drive: `tmpfiles.extra` and `network.*`, but not `sysusers.extra`. A value with a newline is
 `io.systemd.credential.binary:<name>=<base64>`. The rest of this page is the package-managed
-profiles'.
+images'.
 
 ## What's in one
 
-Debian 13, the packages in its profile's `mkosi.conf`, and:
+Debian 13, as [its distribution](../images/mkosi.conf.d/debian) has it, baked once per
+architecture and shared by every image of it, with the image's family and target laid over:
 
 - **CIS Debian 13**, levels 1 and 2, with the exceptions in
-  [`homelab.debian.hardening`'s defaults](../ansible/collections/ansible_collections/homelab/debian/roles/hardening/defaults/main.yml)
-  and its profile's, in [`ansible/baseline/group_vars`](../ansible/baseline/group_vars).
+  [`homelab.debian.hardening`'s defaults](../ansible/collections/ansible_collections/homelab/debian/roles/hardening/defaults/main.yml),
+  every image's in [`images.yml`](../ansible/baseline/group_vars/images.yml), and its
+  architecture's and its own beside it.
+- **AIDE**, checking its files daily by a timer, reporting to the journal; on amd64, since a
+  Pi's card can't afford its scan. No MTA, and no cron.
 - **Key-only SSH**, as the default user, `debian`, who has passwordless sudo.
 - **Unattended upgrades** from Debian's security archive and point releases. A new kernel waits
   for your reboot.
 - **On a VM, the QEMU guest agent**, allowing only what a Proxmox node calls of it, and reading
-  files ([its list](../ansible/collections/ansible_collections/homelab/linux/roles/guest_agent/defaults/main.yml)).
+  files ([its list](../images/mkosi.profiles/vm/mkosi.extra/etc/qemu/qemu-ga.conf)).
 - **DHCPv4 and SLAAC**, taking the lease's search domains.
 - **UTC.** A schedule meant in local time names its zone: `OnCalendar=*-*-* 03:00 Australia/Sydney`.
 - **A VM's firewall is Proxmox's**, the VM's own. nftables inside it is yours to add;
@@ -50,9 +54,9 @@ Debian 13, the packages in its profile's `mkosi.conf`, and:
 - **`/usr/lib/homelab/image-release`**: which image it is (`IMAGE_ID`, `IMAGE_VERSION`), the
   commit that built it (`BUILD_ID`), and the versions of the collections that hardened it.
 
-Its disk is laid out for CIS, the same on every profile: on GPT by repart's
-[definitions](../images/debian-13-amd64-vm/mkosi.extra/usr/lib/repart.d), and on a Pi's MBR by
-its [layout](../images/debian-13-raspi3/layout).
+Its disk is laid out for CIS, the same on every image: on GPT by repart's
+[definitions](../images/mkosi.conf.d/mutable-vm/mkosi.extra/usr/lib/repart.d), and on a Pi's MBR by
+its [layout](../images/mkosi.profiles/raspi3/layout).
 
 | Mount | Size | Options |
 | --- | --- | --- |
@@ -69,7 +73,7 @@ fixed, `/opt` and `/srv` included: data belongs in `/var/lib`, or on a disk of i
 
 ## Getting one
 
-Each is a release of this repo, tagged `image/<profile>/<version>`: the image, its package
+Each is a release of this repo, tagged `image/<image>/<version>`: the image, its package
 manifest, and `SHA256SUMS`, signed keylessly by the workflow that built it. Check the signature
 names [`images.yml`](../.github/workflows/images.yml) at that tag, then the files against the sums:
 
@@ -132,7 +136,7 @@ uv run homelab image derive debian-13-amd64-vm debian-13-amd64-vm.qcow2 web.qcow
 ```
 
 A playbook runs from its own directory, against the VM as host `build`, reached as `debian`; a
-script runs on it as root. Then [the base's seal](../images/shared/usr/lib/homelab/seal) undoes
+script runs on it as root. Then [the base's seal](../images/mkosi.profiles/bake/mkosi.extra/usr/lib/homelab/seal) undoes
 what the boot did, so your image's every VM is a new instance, and `web.qcow2` is written.
 
 ```sh
@@ -150,10 +154,12 @@ printf 'IMAGE_ID=web\nIMAGE_VERSION=1\n' > /usr/lib/web/image-release
   [`homelab.debian`](../ansible/collections/ansible_collections/homelab/debian) and
   [`homelab.linux`](../ansible/collections/ansible_collections/homelab/linux) at the versions our
   release file names.
-- **Check it keeps the base's contract**: `uv run homelab image test debian-13-amd64-vm --image
+- **Check it keeps the base's contract**: `uv run homelab image test debian-13-amd64-vm --disk
   web.qcow2` boots it twice as new VMs, and checks what this page says.
-- **Another kernel or layout** is a profile of its own: copy one in `images/` and build it, with
-  `uv run homelab image build <profile>`.
+- **Another kernel or layout** is an image of its own: a target, a profile in
+  `images/mkosi.profiles/`; a file in `images/mkosi.conf.d/` matching it and a family, which names
+  the image; and its entry in `images/images.toml`. `uv run homelab image build <image>` builds it
+  over the bake its distribution and architecture share.
 
 `derive` is one way; anything that boots the disk with a `cidata` drive works, as long as
 `/usr/lib/homelab/seal` is the last thing it runs before powering off.

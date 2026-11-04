@@ -290,14 +290,21 @@ its `tests/linux.yml` proves it on each family it claims. Debian's own is `homel
 `hardening` and `network`. Every role takes plain variables, so tenants can use them too; the
 trees map NetBox onto them in their own vars. `hardening` sets CIS's settings as facts where the
 inventory sets none, since DEBIAN13-CIS's defaults outrank any other role's; a host overrides
-one with its own `deb13cis_*`. A host built from one of `images/` is grouped by it too (`IMAGE_ID`
-in `/usr/lib/homelab/image-release`), and its profile's settings are that group's vars. An image
-is baked by running `baseline.yml` against its build VM, with no NetBox or 1Password loaded.
-**An image-based profile** (`ymir`'s: a `bake/` recipe beside its own) bakes that tree the same way, then lays
-itself out over it with mkosi: a signed UKI, `/usr` on erofs under verity, its `/etc` a confext in
-`/usr` under the machine's own, updated A/B by sysupdate. Whatever systemd reads before tmpfiles
-restores `/etc` on first boot moves to `/usr`; `homelab image test` checks the first boot is
-hardened as the second is.
+one with its own `deb13cis_*`. A host built from one of `images/` is grouped by its bake and its
+image too, the bake from its facts and the image from `IMAGE_ID` in
+`/usr/lib/homelab/image-release`: `images.yml` is what every image shares, `bake_<distribution>_<major>_<architecture>` an architecture's, and `image_<image>` the
+image's own. **`images/` is one mkosi project**: the distribution in `mkosi.conf.d/<distribution>/`,
+each family (`mutable`, `ymir`) and target (`vm`, `raspi3`) a profile in `mkosi.profiles/`, and an
+image a pair of them, which a `mkosi.conf.d` file matching both names; `images.toml` holds only what
+mkosi has no setting for. **A distribution is baked once per architecture**: the `bake` profile,
+booted by `mkosi vm` with a login its credentials make, `baseline.yml` run against it with no
+NetBox or 1Password loaded, then sealed into a tar every image takes as `BaseTrees=`. A family and
+target lay themselves over it with mkosi alone, adding what CIS doesn't touch or taking away what
+they don't want, and run no Ansible of their own. A mutable image is a tree laid out on its
+target's disk; **ymir** is laid out as a signed image: a UKI, `/usr` on erofs under verity, its
+`/etc` a confext in `/usr` under the machine's own, updated A/B by sysupdate, with systemd from
+forky. Whatever systemd reads before tmpfiles restores `/etc` on first boot moves to `/usr`;
+`homelab image test` checks the first boot is hardened as the second is.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,
@@ -366,7 +373,7 @@ types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
 
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
-images/       Platform's base images: a recipe per profile, built in one pinned container; ymir/, what the image-based family shares
+images/       Platform's base images: one mkosi project, its families and targets profiles laid over a bake per architecture
 ansible/      a tree per team (network/, platform/), the homelab.linux and homelab.debian collections, and the roles, plugins and baseline they share
 tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
 kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
@@ -413,9 +420,10 @@ uv run pytest
 uv run homelab bootstrap pi --device /dev/sdX --hostname ratatoskr --site alfheim \
   --ssh-key-ref op://...
 uv run homelab bootstrap proxmox --host yggdrasil   # its answer inside its cell's newest ISO
-uv run homelab image build debian-13-amd64-vm          # baked and sealed, into ~/.cache/homelab/images
+uv run homelab image bake x86-64                       # what every image of the architecture lays over
+uv run homelab image build debian-13-amd64-vm          # over its bake, baking it if it isn't current
 uv run homelab image test debian-13-amd64-vm           # boots it twice, as new VMs, and checks its contract
-uv run homelab image derive <profile> <base> <yours> --playbook <yml>   # docs/images.md
+uv run homelab image derive <image> <base> <yours> --playbook <yml>   # docs/images.md
 
 cd ansible/network && uv run ansible-playbook site.yml --limit <host>   # or ansible/platform
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan   # workspace alf-pve-01
@@ -466,7 +474,7 @@ trailer and never a `Claude-Session` one. **A PR of our own lands by fast-forwar
 locally** once CI passes, so its signed commits reach `main` unchanged (GitHub's rebase rewrites
 them unsigned); Dependabot's are squashed.
 
-**An image is released by a signed tag**, `image/<profile>/<YYYY.MM.N>` on `main`: `images.yml`
+**An image is released by a signed tag**, `image/<image>/<YYYY.MM.N>` on `main`: `images.yml`
 builds and tests it at that commit, and publishes it with its package manifest and `SHA256SUMS`,
 signed keylessly by the workflow (`docs/images.md` says how to check one).
 
