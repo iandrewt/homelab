@@ -10,6 +10,14 @@
   loop_control:
     label: "{{ item.key }}"
 
+# First, so CIS's own install finds it there
+- name: Install AIDE without the MTA it recommends
+  ansible.builtin.apt:
+    name: [aide, aide-common]
+    install_recommends: false
+    update_cache: true
+  when: not hardening_aide_mail and deb13cis_config_aide | default(true)
+
 # Included, so only a run selecting it loads its `always` tasks
 - name: CIS Debian 13
   ansible.builtin.include_role:

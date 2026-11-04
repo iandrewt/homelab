@@ -1,0 +1,10 @@
+---
+# arm64 has no chown, lchown, create_module or query_module, which these two don't filter
+# out - and auditctl stops at the first bad rule, so every rule after it goes unloaded
+deb13cis_rule_6_2_3_19: false
+deb13cis_rule_6_2_3_34: false
+
+# AIDE's nightly scan of a whole card, on a Pi, arm64's one target
+deb13cis_config_aide: false
+deb13cis_rule_6_3_2: false
+deb13cis_rule_6_3_3: false

@@ -57,6 +57,9 @@ hardening_cis:
   deb13cis_auditd_admin_space_left_action: syslog
   deb13cis_auditd_space_left_action: syslog
 
+# Whether AIDE takes the MTA it recommends, for a report its timer could send to the journal instead
+hardening_aide_mail: true
+
 # Unattended upgrades, for a host whose packages are upgraded in place
 hardening_upgrades: true
 hardening_unattended_upgrade_origins:

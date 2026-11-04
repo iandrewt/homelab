@@ -1,0 +1,26 @@
+---
+# What every image shares, baked once per distribution and architecture: an image's group,
+# image_<image>, is a child of its bake's, bake_<distribution>_<version>_<architecture>, this one's
+image_roles:
+  - homelab.debian.network
+
+# grub-only: an image's command line is kernel-install's, its UKI's or its firmware's
+deb13cis_rule_1_3_1_2: false
+deb13cis_rule_1_4_2: false
+deb13cis_rule_6_2_1_3: false
+deb13cis_rule_6_2_1_4: false
+
+# Timers, not cron
+deb13cis_rule_2_4_1_1: false
+deb13cis_rule_2_4_1_2: false
+deb13cis_rule_2_4_1_3: false
+deb13cis_rule_2_4_1_4: false
+deb13cis_rule_2_4_1_5: false
+deb13cis_rule_2_4_1_6: false
+deb13cis_rule_2_4_1_7: false
+deb13cis_rule_2_4_1_8: false
+deb13cis_rule_2_4_1_9: false
+
+# AIDE's report goes to the journal by its timer, so it takes no MTA
+deb13cis_aide_scan: timer
+hardening_aide_mail: false

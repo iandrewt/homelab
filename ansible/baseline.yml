@@ -27,13 +27,26 @@
       register: image_release
       failed_when: false
 
-    - name: Group by image
-      ansible.builtin.group_by:
-        key: >-
-          image_{{ (image_release.content | b64decode).splitlines() | select('match', 'IMAGE_ID=')
-                   | first | regex_replace('^IMAGE_ID=', '') | replace('-', '_') }}
-        parents: images
-      when: image_release.content is defined
+    # The bake is in `images` by its inventory; a host built from an image, by its release file
+    - name: Group by the bake an image was laid over, and the image it was built as
+      when: image_release.content is defined or 'images' in group_names
+      vars:
+        bake: >-
+          bake_{{ ansible_facts['distribution'] | lower }}_{{ ansible_facts['distribution_major_version'] }}_{{
+          ansible_facts['architecture'] }}
+      block:
+        - name: Group by bake
+          ansible.builtin.group_by:
+            key: "{{ bake }}"
+            parents: images
+
+        - name: Group by image
+          ansible.builtin.group_by:
+            key: >-
+              image_{{ (image_release.content | b64decode).splitlines() | select('match', 'IMAGE_ID=')
+                       | first | regex_replace('^IMAGE_ID=', '') | replace('-', '_') }}
+            parents: "{{ bake }}"
+          when: image_release.content is defined
 
 - name: Debian
   hosts: debian
