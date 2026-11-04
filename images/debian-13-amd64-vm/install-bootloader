@@ -1,8 +1,0 @@
-#!/bin/sh
-# The image's one bootloader install; every kernel after it goes through Debian's kernel-install hook
-set -eu
-bootctl install --entry-token=os-id --no-variables
-for kernel in /boot/vmlinuz-*; do
-  version=${kernel#/boot/vmlinuz-}
-  kernel-install add "$version" "$kernel" "/boot/initrd.img-$version"
-done

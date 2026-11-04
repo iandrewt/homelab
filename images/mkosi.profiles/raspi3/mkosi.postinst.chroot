@@ -1,0 +1,4 @@
+#!/bin/sh
+# raspi-firmware wrote the firmware partition at install, before its settings were here
+set -eu
+DEB_MAINT_PARAMS=configure /etc/kernel/postinst.d/z50-raspi-firmware

@@ -1,0 +1,9 @@
+#!/bin/sh
+# MBR, the only table a Pi 3's boot ROM reads, which repart can't make: the tree laid out on a card's
+# partitions, with the kernel and initrd beside it for booting it in qemu
+set -eu
+tree="$OUTPUTDIR/${IMAGE_ID}_${IMAGE_VERSION}"
+cp "$tree"/boot/vmlinuz-* "$tree.vmlinuz"
+cp "$tree"/boot/initrd.img-* "$tree.initrd"
+"$SRCDIR/mkosi.profiles/raspi3/layout" "$tree" "$tree.raw"
+rm -rf "$tree"

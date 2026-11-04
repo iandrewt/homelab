@@ -1,0 +1,34 @@
+# What mkosi has no setting for: the profiles each released image is built with, for which architecture,
+# and how the boot test boots it in qemu
+
+[debian-13-amd64-vm]
+profiles = ["mutable", "vm"]
+architecture = "x86-64"
+# Through UEFI with Secure Boot, from the bootloader its build installs
+firmware = true
+# Where its seed is: "drive", a cidata volume of its own, as Proxmox attaches one
+seed = "drive"
+# What a release ships
+format = "qcow2"
+
+[debian-13-raspi3]
+profiles = ["mutable", "raspi3"]
+architecture = "arm64"
+# By its kernel and initrd: qemu has no Raspberry Pi firmware
+firmware = false
+# Its own firmware partition, labelled CIDATA
+seed = "partition"
+format = "raw"
+# qemu's virt machine names its serial console ttyAMA0; on the Pi, raspi-firmware writes cmdline.txt
+cmdline = "root=LABEL=root ro console=ttyAMA0 lsm=landlock,lockdown,yama,apparmor,bpf audit=1 audit_backlog_limit=8192"
+
+[ymir-amd64-vm]
+profiles = ["ymir", "vm"]
+architecture = "x86-64"
+firmware = true
+seed = "drive"
+# Its user-data is systemd credentials, which the image reads itself
+cloud_init = false
+format = "qcow2"
+# Its disks are sealed to one
+tpm = true

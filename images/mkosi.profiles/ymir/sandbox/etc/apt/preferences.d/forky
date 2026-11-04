@@ -1,0 +1,8 @@
+# systemd from forky, and nothing else: a dependency that would drag more of it in fails the build
+Package: *
+Pin: release n=forky
+Pin-Priority: -1
+
+Package: src:systemd efibootmgr libefiboot1t64 libefivar1t64
+Pin: release n=forky
+Pin-Priority: 500

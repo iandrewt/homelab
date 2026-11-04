@@ -1,4 +1,4 @@
-"""Platform's base images: each profile in images/ built in the one pinned container."""
+"""Platform's base images: each one images/images.toml names, built by mkosi in the one pinned container."""
 
 from . import build, derive, keys, test
 

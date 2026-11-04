@@ -1,8 +1,0 @@
-# How the build and the boot test boot it in qemu, beyond what its mkosi.conf says
-
-# Through UEFI with Secure Boot, once the bake has installed its bootloader
-firmware = true
-# Where NoCloud finds its seed: "drive", a cidata volume of its own, as Proxmox attaches one
-seed = "drive"
-# What a release ships
-format = "qcow2"

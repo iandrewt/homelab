@@ -1,0 +1,18 @@
+[Transfer]
+ProtectVersion=%A
+
+[Source]
+Type=url-file
+Path=https://images.invalid/%M/
+MatchPattern=%M_@v.efi
+
+[Target]
+Type=regular-file
+Path=/EFI/Linux
+PathRelativeTo=boot
+MatchPattern=%M_@v+@l-@d.efi %M_@v+@l.efi %M_@v.efi
+# Not read-only, which systemd-boot takes to mean it mustn't count this entry's tries
+Mode=0644
+TriesLeft=3
+TriesDone=0
+InstancesMax=2

@@ -1,0 +1,5 @@
+#!/bin/sh
+# What a release ships, and Proxmox imports
+set -eu
+raw="$OUTPUTDIR/${IMAGE_ID}_${IMAGE_VERSION}.raw"
+qemu-img convert -O qcow2 -c "$raw" "${raw%.raw}.qcow2"

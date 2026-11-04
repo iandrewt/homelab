@@ -1,48 +1,57 @@
-"""A profile's image: its tree, laid out, booted and baked by the baseline, then sealed; an image-based one
-is then laid out as its image, over the baked tree."""
+"""An image: its distribution's tree, baked by the baseline once per architecture, then built by mkosi
+with the image's family and target over it, as a tree on its disk or as a signed image."""
 
+import hashlib
+import json
 import os
-import shutil
+import random
 import subprocess
+import time
+import uuid
 from pathlib import Path
 
 import yaml
 
-from ..bootstrap.shell import run, say
-from . import builder, profile
-from .profile import Profile
-from .vm import Vm
+from ..bootstrap.shell import BootstrapError, run, say
+from . import builder, images as catalog
+from .images import Bake, Image
+from .vm import SSH_OPTIONS, VSOCK_PROXY
 
-REPART = "mkosi.extra/usr/lib/repart.d"
-# The baked tree, booted as one root filesystem
-BAKE_DISK = "8G"
+# What a bake is a function of, so a change to any bakes again
+BAKE_INPUTS = ("images/mkosi.conf", "images/mkosi.conf.d/debian", "images/mkosi.profiles/bake",
+               "ansible/baseline.yml", "ansible/baseline", "ansible/collections", "ansible/roles/DEBIAN13-CIS",
+               "ansible/requirements.yml")
+
+# A login nothing in the bake's tree makes, which the seal removes with whatever else a credential made
+BAKE_LOGIN = """\
+d /home/debian 0700 debian debian -
+d /home/debian/.ssh 0700 debian debian -
+f /home/debian/.ssh/authorized_keys 0600 debian debian - {key}\\n
+f /etc/sudoers.d/90-credentials 0440 root root - debian ALL=(ALL) NOPASSWD:ALL\\n
+"""
+
+# One root session: the login the seal removes is gone before the tar starts, and journald stops writing
+SEAL_AND_TAR = ("sudo sh -c '/usr/lib/homelab/seal >&2"
+                " && systemctl stop systemd-journald.socket systemd-journald-dev-log.socket"
+                " systemd-journald-audit.socket systemd-journald.service"
+                " && tar --create --numeric-owner --xattrs --acls --one-file-system --directory / .'")
 
 # Until a release signs with KMS: a build's own, which its test VMs enroll
 TEST_KEYS = """
 set -eu
 mkdir -p /out/keys/tree/usr/lib/systemd /out/keys/gnupg
 chmod 700 /out/keys/gnupg
-openssl req -quiet -new -x509 -newkey rsa:2048 -nodes -sha256 -days 3650 \
+openssl req -quiet -new -x509 -newkey rsa:2048 -nodes -sha256 -days 3650 \\
   -subj "/CN=homelab image test/" -keyout /out/keys/db.key -out /out/keys/db.crt 2>/dev/null
 export GNUPGHOME=/out/keys/gnupg
 gpg --batch --quiet --passphrase '' --quick-gen-key 'homelab image test updates' ed25519 sign never
-gpg --export > /out/keys/tree/usr/lib/systemd/import-pubring.gpg
-"""
-
-# The VM's container can still hold the disk's loop device for a moment after it's gone
-EXTRACT = """
-rm -rf /out/baked
-mkdir -p /mnt/baked /out/baked
-for attempt in 1 2 3 4 5; do mount -o loop,ro /out/work/disk.raw /mnt/baked && break; sleep 3; done
-cp -a /mnt/baked/. /out/baked/
-umount /mnt/baked
+gpg --export > /out/keys/tree/usr/lib/systemd/import-pubring.pgp
 """
 
 # What sysupdate reads: each version's UKI and /usr partitions, and their sums, signed
 UPDATES = """
 mkdir -p /out/updates
-cd /out/stage2
-mv *.efi *.usr-*.*.raw /out/updates/
+mv /cache/output/{name}_{version}.efi /cache/output/{name}_{version}.usr-*.raw /out/updates/
 cd /out/updates
 rm -f SHA256SUMS SHA256SUMS.gpg
 sha256sum -- *.efi *.raw > SHA256SUMS
@@ -52,164 +61,205 @@ GNUPGHOME=/out/keys/gnupg gpg --batch --quiet --yes --detach-sign --output SHA25
 
 def register(verbs) -> None:
     build = verbs.add_parser(
-        "build", help="build a profile's image",
-        description="Builds the tree with mkosi, lays it out, boots it to bake in the baseline, and seals "
-        f"it, into {builder.CACHE}/<profile>/<profile>.<format>, with its package manifest beside it.",
+        "build", help="build an image",
+        description="Bakes the image's distribution for its architecture, unless the bake is current, then "
+        f"builds the image over it with mkosi, into {builder.CACHE}/<image>/<image>.<format>, with its "
+        "package manifest beside it.",
     )
-    build.add_argument("profile", help="a directory in images/, e.g. debian-13-amd64-vm")
+    build.add_argument("image", help="an image in images/images.toml, e.g. debian-13-amd64-vm")
     build.add_argument("--version", default="dev", help="what its release file names it (default: dev)")
     build.set_defaults(run=_build)
+
+    bake = verbs.add_parser(
+        "bake", help="bake the distribution for an architecture",
+        description="Builds the bake with mkosi, boots it, runs the baseline, and seals it into "
+        f"{builder.OUTPUT}/bake_<architecture>.tar, which every image of the architecture lays over.",
+    )
+    bake.add_argument("architecture", help="as mkosi names it, e.g. x86-64")
+    bake.set_defaults(run=_bake_verb)
 
 
 def _build(args) -> int:
     images = builder.ensure()
-    image = profile.load(images, args.profile)
+    image = catalog.load(images, args.image)
+    bake(images, image.architecture)
     out = builder.CACHE / image.name
     out.mkdir(parents=True, exist_ok=True)
-
-    _tree_and_disk(images, image, out, args.version)
-    _bake(images.parent, image, out)
-    if image.bake:
+    if image.image_based:
         _keys(out)
         lay_out(images, image, out, args.version)
-        builder.run_in({out: "/out"}, "rm", "-rf", "/out/updates")
-        builder.run_in({out: "/out"}, "sh", "-ec", UPDATES)
-        disk = f"/out/stage2/{image.name}_{args.version}.raw"
-        builder.run_in({out: "/out"}, "sh", "-c", f"qemu-img convert -O qcow2 -c {disk} /out/{image.name}.qcow2"
-                       " && rm -rf /out/stage2")
-        _own(out)
+        builder.run_in({out: "/out", builder.CACHE: "/cache"}, "rm", "-rf", "/out/updates")
+        builder.run_in({out: "/out", builder.CACHE: "/cache"}, "sh", "-ec",
+                       UPDATES.format(name=image.name, version=args.version))
+    else:
+        say(f"building {image.name} over its bake")
+        _release(images.parent, image, out, args.version)
+        _clear(f"{image.name}_{args.version}")
+        builder.mkosi(images, *image.args, "--image-version", args.version, "--extra-tree", "/out/release:/",
+                      "build", mounts={out: "/out"})
+    _collect(image, out, args.version)
     say(f"built {out / f'{image.name}.{image.format}'}")
     return 0
 
 
-def _tree_and_disk(images: Path, image: Profile, out: Path, version: str) -> None:
-    mounts = {images: "/images:ro", out: "/out"}
-    kernel, initrd = image.kernel
+def _bake_verb(args) -> int:
+    bake(builder.ensure(), args.architecture, force=True)
+    return 0
+
+
+def bake(images: Path, architecture: str, force: bool = False) -> Path:
+    """The baked tar, baked again unless what it was baked from is unchanged."""
+    recipe = Bake(architecture)
+    tar = builder.OUTPUT / recipe.tar
+    stamp = tar.with_suffix(".inputs")
+    inputs = _fingerprint(images.parent, *BAKE_INPUTS)
+    if not force and tar.is_file() and stamp.is_file() and stamp.read_text() == inputs:
+        say(f"the {architecture} bake is current")
+        return tar
+    stamp.unlink(missing_ok=True)
+    say(f"building the {architecture} bake")
+    _clear(f"bake_{architecture}")
+    builder.mkosi(images, "--architecture", architecture, "--profile", "bake", "build")
+    work = builder.CACHE / f"bake-{architecture}"
+    if work.exists():
+        builder.run_in({builder.CACHE: "/cache"}, "rm", "-rf", f"/cache/{work.name}")
+    (work / "credentials").mkdir(parents=True)
+    key = work / "ssh-key"
+    run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", "bake", "-f", str(key))
+    (work / "credentials" / "sysusers.extra").write_text('u debian - "Debian" /home/debian /bin/bash\nm debian sudo\n')
+    (work / "credentials" / "tmpfiles.extra").write_text(
+        BAKE_LOGIN.format(key=key.with_suffix(".pub").read_text().strip()))
+    (work / "vsock-proxy").write_text(VSOCK_PROXY)
+
+    cid = random.randrange(1 << 16, 1 << 31)
+    name = f"homelab-bake-{uuid.uuid4().hex[:12]}"
+    ssh = ["ssh", "-i", str(key), *SSH_OPTIONS, "-o", f"ProxyCommand=python3 {work / 'vsock-proxy'} {cid}",
+           "debian@bake"]
+    say("booting it")
+    builder.mkosi(images, "--architecture", architecture, "--profile", "bake", "--vsock-cid", str(cid),
+                  "--credential", "/work/credentials", "vm", mounts={work: "/work"}, detach=name,
+                  devices=tuple(d for d in ("/dev/kvm", "/dev/vhost-vsock") if os.path.exists(d)))
     try:
-        say("building the tree")
-        builder.run_in(mounts, "mkosi", "--directory", f"/images/{image.tree.relative_to(images)}",
-                       "--output-dir", "/out", "--force", "build", privileged=True)
-        builder.run_in(mounts, "sh", "-c", "mkdir -p /out/tree/usr/lib/homelab"
-                       " && cat > /out/tree/usr/lib/homelab/image-release",
-                       input=_release(images.parent, image.name, version))
-        say("laying it out")
-        builder.run_in(mounts, "rm", "-f", "/out/disk.raw")
-        # repart where the recipe declares partitions it can make, else the recipe's own layout
-        if image.bake:
-            builder.run_in(mounts, "mkfs.ext4", "-q", "-L", "root", "-d", "/out/tree", "/out/disk.raw", BAKE_DISK)
-        elif (image.recipe / REPART).is_dir():
-            builder.run_in(mounts, "systemd-repart", "--empty=create", "--size=auto", "--offline=yes",
-                           "--dry-run=no", "--definitions=/out/tree/usr/lib/repart.d",
-                           "--copy-source=/out/tree", "/out/disk.raw")
-        else:
-            builder.run_in(mounts, f"/images/{image.name}/layout", "/out/tree", "/out/disk.raw", privileged=True)
-        # What booting it takes, before the tree goes
-        builder.run_in(mounts, "sh", "-c", f"cp /out/tree/{kernel} /out/vmlinuz"
-                       f" && cp /out/tree/{initrd} /out/initrd && rm -rf /out/tree /out/tree.vmlinuz")
-    finally:
-        _own(out)
-
-
-def _bake(root: Path, image: Profile, out: Path) -> None:
-    work = out / "work"
-    _clear(out, work)
-    work.mkdir()
-    for name in ("vmlinuz", "initrd"):
-        shutil.copy(out / name, work / name)
-    run("cp", "--sparse=always", str(out / "disk.raw"), str(work / "disk.raw"))
-
-    vm = Vm(work, "build", image)
-    try:
-        say("booting it")
-        vm.start("disk.raw", kernel="vmlinuz", initrd="initrd")
-        vm.wait_for_ssh()
-        if image.cloud_init:
-            vm.ssh("cloud-init status --wait >/dev/null || true")
-        vm.ssh(f"sudo tee {image.sources} >/dev/null"
-               " && echo 'Acquire::Check-Valid-Until \"false\";' | sudo tee /etc/apt/apt.conf.d/99snapshot >/dev/null",
-               input=image.snapshot_sources)
+        _wait_for(ssh, name)
 
         say("baking in the baseline")
-        _baseline(root, vm)
+        _baseline(images.parent, work, ssh)
 
-        say("installing the bootloader, and sealing")
-        if (image.recipe / "install-bootloader").exists():
-            vm.ssh("sudo sh -s", input=(image.recipe / "install-bootloader").read_text())
-        vm.ssh(f"sudo tee {image.sources} >/dev/null && sudo rm /etc/apt/apt.conf.d/99snapshot",
-               input=(image.tree / "mkosi.extra" / image.sources.lstrip("/")).read_text())
-        (out / f"{image.name}.packages").write_text(vm.ssh("dpkg-query --show --showformat '${Package} ${Version}\\n'"))
-        vm.seal()
+        say("sealing it")
+        (work / "packages").write_text(run(*ssh, "dpkg-query --show --showformat '${Package} ${Version}\\n'",
+                                           capture=True))
+        partial = tar.with_suffix(".partial")
+        with open(partial, "wb") as stream:
+            sealed = subprocess.run([*ssh, SEAL_AND_TAR], stdout=stream, check=False)
+        # tar exits 1 for a file that changed as it was read, which the seal's last writes can be
+        if sealed.returncode not in (0, 1):
+            raise BootstrapError(f"sealing the {architecture} bake failed: see {work / 'serial.log'}")
+        partial.rename(tar)
     finally:
-        vm.remove()
-
-    if image.bake:
-        say("taking the baked tree out")
-        builder.run_in({out: "/out"}, "sh", "-ec", EXTRACT, privileged=True)
-        builder.run_in({out: "/out"}, "rm", "-f", "/out/disk.raw", "/out/vmlinuz", "/out/initrd")
-    elif image.format == "qcow2":
-        say("converting it")
-        builder.run_in({out: "/out"}, "qemu-img", "convert", "-O", "qcow2", "-c",
-                       "/out/work/disk.raw", f"/out/{image.name}.qcow2")
-    else:
-        builder.run_in({out: "/out"}, "mv", "/out/work/disk.raw", f"/out/{image.name}.raw")
-    _own(out)
-    _clear(out, work)
+        logs = subprocess.run(["docker", "logs", name], capture_output=True, text=True, check=False)
+        (work / "serial.log").write_text(logs.stdout + logs.stderr)
+        subprocess.run(["docker", "rm", "--force", name], capture_output=True, check=False)
+    stamp.write_text(inputs)
+    return tar
 
 
-def lay_out(images: Path, image: Profile, out: Path, version: str) -> None:
-    """The image, at a version, laid out over the baked tree, into out/stage2."""
-    say(f"laying it out, at {version}")
-    builder.run_in({out: "/out"}, "rm", "-rf", "/out/stage2")
+def _wait_for(ssh: list[str], container: str, timeout: int = 1800) -> None:
+    deadline = time.monotonic() + timeout
+    while subprocess.run([*ssh, "true"], capture_output=True, check=False).returncode:
+        running = subprocess.run(["docker", "inspect", "--format", "{{.State.Running}}", container],
+                                 capture_output=True, text=True, check=False).stdout.strip()
+        if running != "true":
+            raise BootstrapError(f"the bake's VM stopped: `docker logs {container}`")
+        if time.monotonic() > deadline:
+            raise BootstrapError(f"no SSH to the bake in {timeout}s: `docker logs {container}`")
+        time.sleep(5)
+
+
+def lay_out(images: Path, image: Image, out: Path, version: str) -> None:
+    """The image-based image, at a version, over its bake."""
+    say(f"building {image.name} over its bake, at {version}")
+    _release(images.parent, image, out, version)
     keys = {flag: f"/out/keys/{name}" for flag, name in (
         ("--secure-boot-key", "db.key"), ("--secure-boot-certificate", "db.crt"),
         # One key, as a release's: the kernel checks verity's signatures against db
         ("--verity-key", "db.key"), ("--verity-certificate", "db.crt"),
         ("--sign-expected-pcr-key", "db.key"), ("--sign-expected-pcr-certificate", "db.crt"))}
-    builder.run_in({images: "/images:ro", out: "/out"}, "mkosi", "--directory", f"/images/{image.name}",
-                   "--base-tree", "/out/baked", "--extra-tree", "/out/keys/tree:/", "--image-version", version,
-                   *(a for flag, path in keys.items() for a in (flag, path)),
-                   "--output-dir", "/out/stage2", "--force", "build", privileged=True)
+    _clear(f"{image.name}_{version}")
+    builder.mkosi(images, *image.args, "--image-version", version, "--extra-tree", "/out/keys/tree:/",
+                  "--extra-tree", "/out/release:/", *(a for flag, path in keys.items() for a in (flag, path)),
+                  "build", mounts={out: "/out"})
+
+
+def _collect(image: Image, out: Path, version: str) -> None:
+    """The image's artifacts under its own name, where a test, a derivation and a release look."""
+    built = f"{image.name}_{version}"
+    for suffix in (image.format, "vmlinuz", "initrd"):
+        if (builder.OUTPUT / f"{built}.{suffix}").exists():
+            builder.run_in({builder.CACHE: "/cache"}, "mv", f"/cache/output/{built}.{suffix}",
+                           f"/cache/{image.name}/{image.name}.{suffix}")
+    manifest = json.loads((builder.OUTPUT / f"{built}.manifest").read_text())
+    (out / f"{image.name}.packages").write_text("".join(
+        f"{p['name']} {p['version']}\n" for p in sorted(manifest["packages"], key=lambda p: p["name"])))
+    _own(out)
 
 
 def _keys(out: Path) -> None:
-    if not (out / "keys" / "db.crt").exists():
-        builder.run_in({out: "/out"}, "sh", "-c", TEST_KEYS)
+    if not (out / "keys" / "tree" / "usr" / "lib" / "systemd" / "import-pubring.pgp").exists():
+        builder.run_in({out: "/out"}, "sh", "-c", "rm -rf /out/keys\n" + TEST_KEYS)
 
 
-def _baseline(root: Path, vm: Vm) -> None:
+def _baseline(root: Path, work: Path, ssh: list[str]) -> None:
     """The baseline as the trees run it, with nothing of NetBox or 1Password loaded."""
     ansible = root / "ansible"
+    inventory = work / "inventory.yml"
+    inventory.write_text(yaml.safe_dump({"all": {"children": {"images": {"hosts": {"bake": {
+        "ansible_user": "debian", "ansible_ssh_private_key_file": ssh[2],
+        "ansible_ssh_common_args": " ".join(f"'{a}'" if " " in a else a for a in ssh[3:-1]),
+    }}}}}}))
     env = os.environ | {
         "ANSIBLE_ROLES_PATH": str(ansible / "roles"),
         "ANSIBLE_COLLECTIONS_PATH": f"{ansible / 'collections'}:{Path.home() / '.ansible/collections'}",
         "ANSIBLE_PIPELINING": "true",
         "ANSIBLE_INTERPRETER_PYTHON": "auto_silent",
     }
-    subprocess.run(["ansible-playbook", "-i", str(vm.inventory()), "-i", str(ansible / "baseline"),
-                    str(ansible / "baseline.yml")], cwd=vm.work, env=env, check=True)
+    subprocess.run(["ansible-playbook", "-i", str(inventory), "-i", str(ansible / "baseline"),
+                    str(ansible / "baseline.yml")], cwd=work, env=env, check=True)
 
 
-def _release(root: Path, name: str, version: str) -> str:
+def _release(root: Path, image: Image, out: Path, version: str) -> None:
     """What this image is, in os-release's format, for whatever re-asserts or derives from it."""
     git = ["git", "-C", str(root)]
     commit = run(*git, "rev-parse", "HEAD", capture=True).strip()
     dirty = run(*git, "status", "--porcelain", capture=True)
     collections = root / "ansible" / "collections" / "ansible_collections" / "homelab"
-    return "".join(f"{key}={value}\n" for key, value in {
-        "IMAGE_ID": name,
+    release = out / "release" / "usr" / "lib" / "homelab" / "image-release"
+    release.parent.mkdir(parents=True, exist_ok=True)
+    release.write_text("".join(f"{key}={value}\n" for key, value in {
+        "IMAGE_ID": image.name,
         "IMAGE_VERSION": version,
         "BUILD_ID": commit + ("-dirty" if dirty else ""),
         **{f"HOMELAB_{c.name.upper()}_VERSION": yaml.safe_load((c / "galaxy.yml").read_text())["version"]
            for c in sorted(collections.iterdir())},
-    }.items())
+    }.items()))
 
 
-# The builder runs as root, so what it leaves is handed back, or removed by it
+def _fingerprint(root: Path, *paths: str) -> str:
+    """Every file's path and content under the paths, hashed, as they are in the working tree."""
+    digest = hashlib.sha256()
+    for path in map(root.joinpath, paths):
+        for f in sorted(p for p in path.rglob("*") if p.is_file()) if path.is_dir() else [path]:
+            digest.update(str(f.relative_to(root)).encode() + b"\0" + f.read_bytes() + b"\0")
+    return digest.hexdigest()
+
+
+# mkosi's -f would remove its tools tree with them, which a build reuses
+def _clear(output: str) -> None:
+    builder.run_in({builder.OUTPUT: "/output"}, "find", "/output", "-maxdepth", "1", "-name", f"{output}*",
+                   "-exec", "rm", "-rf", "{}", "+")
+
+
+# The builder runs as root, so what it leaves is handed back
 def _own(out: Path) -> None:
-    builder.run_in({out: "/out"}, "find", "/out", "-maxdepth", "1", "-type", "f",
-                   "-exec", "chown", f"{os.getuid()}:{os.getgid()}", "{}", "+")
-
-
-def _clear(out: Path, work: Path) -> None:
-    if work.exists():
-        builder.run_in({out: "/out"}, "rm", "-rf", f"/out/{work.name}")
+    if out.exists():
+        builder.run_in({out: "/out"}, "find", "/out", "-maxdepth", "1", "-type", "f",
+                       "-exec", "chown", f"{os.getuid()}:{os.getgid()}", "{}", "+")

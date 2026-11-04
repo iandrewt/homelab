@@ -1,0 +1,8 @@
+LABEL=root           /               ext4  errors=remount-ro              0 1
+LABEL=ESP            /efi            vfat  umask=0077                     0 2
+LABEL=home           /home           ext4  nodev,nosuid                   0 2
+LABEL=var            /var            ext4  nodev,nosuid,x-systemd.growfs  0 2
+LABEL=var-tmp        /var/tmp        ext4  nodev,nosuid,noexec            0 2
+LABEL=var-log        /var/log        ext4  nodev,nosuid,noexec            0 2
+LABEL=var-log-audit  /var/log/audit  ext4  nodev,nosuid,noexec            0 2
+tmpfs                /dev/shm        tmpfs nodev,nosuid,noexec            0 0

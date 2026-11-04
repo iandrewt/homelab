@@ -1,0 +1,15 @@
+#!/bin/sh
+# The image's one bootloader install, into the /efi repart makes its ESP of; every kernel after it
+# goes through Debian's kernel-install hook
+set -eu
+# bootctl installs only to a file system's root, and its other checks are of a real ESP
+mount --bind /efi /efi
+trap 'umount /efi' EXIT
+export SYSTEMD_RELAX_ESP_CHECKS=1
+bootctl install --esp-path=/efi --entry-token=os-id --no-variables
+# The loader entry's paths are relative to the ESP's mount, which stat finds by a device the bind keeps
+export BOOT_MNT=/efi
+for kernel in /boot/vmlinuz-*; do
+  version=${kernel#/boot/vmlinuz-}
+  kernel-install add "$version" "$kernel" "/boot/initrd.img-$version"
+done

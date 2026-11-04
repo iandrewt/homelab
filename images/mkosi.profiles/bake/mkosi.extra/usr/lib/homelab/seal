@@ -1,0 +1,34 @@
+#!/bin/sh
+# Undoes what booting this image did, so that the next boot is a new instance's first
+set -eu
+
+# What this boot's credentials made is the boot's: users, and the files tmpfiles wrote for them
+credentials=/run/credentials/@system
+if [ -r "$credentials/sysusers.extra" ]; then
+  sed -n 's/^u \([^ ]*\) .*/\1/p' "$credentials/sysusers.extra" | while read -r user; do
+    userdel --force --remove "$user"
+  done
+fi
+if [ -r "$credentials/tmpfiles.extra" ]; then
+  sed -n 's/^f[+^]* \([^ ]*\) .*/\1/p' "$credentials/tmpfiles.extra" | xargs -r rm -f
+fi
+
+if command -v cloud-init >/dev/null; then
+  user=$(cloud-init query --format '{{ merged_cfg.system_info.default_user.name }}' 2>/dev/null || true)
+  if [ -n "$user" ] && id "$user" >/dev/null 2>&1; then
+    userdel --force --remove "$user"
+    rm -f "/etc/sudoers.d/90-cloud-init-users"
+  fi
+  cloud-init clean --logs --seed --machine-id
+else
+  echo uninitialized > /etc/machine-id
+fi
+rm -f /etc/ssh/ssh_host_* /etc/netplan/50-cloud-init.yaml /var/lib/systemd/random-seed /efi/loader/random-seed
+: > /etc/hostname
+
+apt-get clean
+rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+journalctl --rotate --quiet && journalctl --vacuum-time=1s --quiet
+find /var/log -path /var/log/journal -prune -o -type f -exec truncate --size=0 {} +
+
+fstrim --all
