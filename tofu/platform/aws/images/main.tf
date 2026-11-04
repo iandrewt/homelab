@@ -2,13 +2,8 @@ data "aws_caller_identity" "current" {}
 
 locals {
   repository = "iandrewt/homelab"
-  # What UEFI, the kernel's verity check and systemd-measure all verify
+  # What UEFI, the kernel's verity check, systemd-measure and OpenPGP all verify
   signing_algorithm = "RSASSA_PKCS1_V1_5_SHA_256"
-
-  keys = {
-    secure-boot = "Signs Platform's UKIs, systemd-boot, and the verity of its images and extensions, as db trusts"
-    pcr         = "Signs the PCR 11 values Platform's UKIs expect, which unlocking their disks is bound to"
-  }
 }
 
 # baseline's, in every member account
@@ -16,10 +11,9 @@ data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
-resource "aws_kms_key" "image" {
-  for_each = local.keys
-
-  description              = each.value
+# One key: whoever may sign with one could sign with any other, since a release signs with all at once
+resource "aws_kms_key" "signing" {
+  description              = "Signs Platform's UKIs, the verity of its images and extensions, the PCR 11 values they expect, and their update manifests"
   customer_master_key_spec = "RSA_2048"
   key_usage                = "SIGN_VERIFY"
   deletion_window_in_days  = 30
@@ -69,14 +63,22 @@ resource "aws_kms_key" "image" {
   }
 }
 
-resource "aws_kms_alias" "image" {
-  for_each = local.keys
-
-  name          = "alias/images-${each.key}"
-  target_key_id = aws_kms_key.image[each.key].key_id
+resource "aws_kms_alias" "signing" {
+  name          = "alias/images"
+  target_key_id = aws_kms_key.signing.key_id
 }
 
-# Only a release, which only someone who can push a tag makes
+moved {
+  from = aws_kms_key.image["secure-boot"]
+  to   = aws_kms_key.signing
+}
+
+moved {
+  from = aws_kms_alias.image["secure-boot"]
+  to   = aws_kms_alias.signing
+}
+
+# Only a job in the release environment, which takes an image/* tag and its reviewer's approval
 resource "aws_iam_role" "release" {
   name = "images-release"
 
@@ -87,8 +89,10 @@ resource "aws_iam_role" "release" {
       Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
       Action    = "sts:AssumeRoleWithWebIdentity"
       Condition = {
-        StringEquals = { "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com" }
-        StringLike   = { "token.actions.githubusercontent.com:sub" = "repo:${local.repository}:ref:refs/tags/image/*" }
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = "repo:${local.repository}:environment:release"
+        }
       }
     }]
   })

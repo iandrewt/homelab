@@ -3,7 +3,7 @@ output "release_role" {
   value       = aws_iam_role.release.arn
 }
 
-output "keys" {
-  description = "Each signing key, by its alias"
-  value       = { for name, alias in aws_kms_alias.image : alias.name => aws_kms_key.image[name].arn }
+output "key" {
+  description = "The signing key"
+  value       = aws_kms_alias.signing.arn
 }
