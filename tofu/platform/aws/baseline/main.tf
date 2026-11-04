@@ -62,3 +62,13 @@ check "no_default_vpcs" {
     error_message = "Default VPCs in ${join(", ", [for key, vpcs in data.aws_vpcs.default : key if length(vpcs.ids) > 0])}: apply with -replace on their terraform_data.delete_default_vpcs."
   }
 }
+
+# GitHub Actions' tokens, for a role of the account's own to trust; the provider alone grants nothing.
+# Not management's, where nothing runs.
+resource "aws_iam_openid_connect_provider" "github" {
+  for_each = setsubtract(local.accounts, ["Management"])
+  provider = aws.account[each.key]
+
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+}
