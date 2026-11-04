@@ -22,10 +22,8 @@ TEST_KEYS = """
 set -eu
 mkdir -p /out/keys/tree/usr/lib/systemd /out/keys/gnupg
 chmod 700 /out/keys/gnupg
-for key in db pcr; do
-  openssl req -quiet -new -x509 -newkey rsa:2048 -nodes -sha256 -days 3650 \
-    -subj "/CN=homelab image test $key/" -keyout /out/keys/$key.key -out /out/keys/$key.crt 2>/dev/null
-done
+openssl req -quiet -new -x509 -newkey rsa:2048 -nodes -sha256 -days 3650 \
+  -subj "/CN=homelab image test/" -keyout /out/keys/db.key -out /out/keys/db.crt 2>/dev/null
 export GNUPGHOME=/out/keys/gnupg
 gpg --batch --quiet --passphrase '' --quick-gen-key 'homelab image test updates' ed25519 sign never
 gpg --export > /out/keys/tree/usr/lib/systemd/import-pubring.gpg
@@ -164,9 +162,9 @@ def lay_out(images: Path, image: Profile, out: Path, version: str) -> None:
     builder.run_in({out: "/out"}, "rm", "-rf", "/out/stage2")
     keys = {flag: f"/out/keys/{name}" for flag, name in (
         ("--secure-boot-key", "db.key"), ("--secure-boot-certificate", "db.crt"),
-        # The kernel checks verity's signatures against db
+        # One key, as a release's: the kernel checks verity's signatures against db
         ("--verity-key", "db.key"), ("--verity-certificate", "db.crt"),
-        ("--sign-expected-pcr-key", "pcr.key"), ("--sign-expected-pcr-certificate", "pcr.crt"))}
+        ("--sign-expected-pcr-key", "db.key"), ("--sign-expected-pcr-certificate", "db.crt"))}
     builder.run_in({images: "/images:ro", out: "/out"}, "mkosi", "--directory", f"/images/{image.name}",
                    "--base-tree", "/out/baked", "--extra-tree", "/out/keys/tree:/", "--image-version", version,
                    *(a for flag, path in keys.items() for a in (flag, path)),
