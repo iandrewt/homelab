@@ -57,6 +57,8 @@ hardening_cis:
   deb13cis_auditd_admin_space_left_action: syslog
   deb13cis_auditd_space_left_action: syslog
 
+# Unattended upgrades, for a host whose packages are upgraded in place
+hardening_upgrades: true
 hardening_unattended_upgrade_origins:
   - "origin=Debian,codename=${distro_codename},label=Debian"
   - "origin=Debian,codename=${distro_codename},label=Debian-Security"

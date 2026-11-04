@@ -10,4 +10,5 @@
 
 - name: Upgrades
   ansible.builtin.import_tasks: upgrades.yml
+  when: hardening_upgrades
   tags: [upgrades]
