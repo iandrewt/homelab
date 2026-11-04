@@ -8,6 +8,27 @@ of your own from one.
 | --- | --- | --- | --- | --- |
 | [`debian-13-amd64-vm`](../images/debian-13-amd64-vm) | a VM on Proxmox | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys | a drive labelled `cidata` |
 | [`debian-13-raspi3`](../images/debian-13-raspi3) | a Raspberry Pi 3B | Debian's arm64 kernel | `raspi-firmware` | its own partition, labelled `CIDATA` |
+| [`ymir-amd64-vm`](../images/ymir-amd64-vm), not yet released | a Platform appliance VM | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys, from a signed UKI | a drive labelled `cidata`, whose `user-data` is systemd credentials |
+
+**`ymir-amd64-vm` is image-based**: its `/usr`, and the `/etc` it starts from, are one signed,
+verity-checked image, updated whole and A/B by systemd-sysupdate, rolled back if a version can't
+boot. A machine keeps only its own state, encrypted to its vTPM, and its writes to `/etc` override the
+image's. Nothing installs on it: what it runs comes as a signed system extension. It starts on a
+4 GB disk, and `/var` takes whatever more its disk is grown by.
+
+**ymir has no cloud-init.** Its seed's `user-data` is systemd credentials, one a line as SMBIOS
+type 11 carries them, and the image reads no other document:
+
+```
+io.systemd.credential:system.hostname=ratatoskr
+io.systemd.credential:ssh.authorized_keys.debian=ssh-ed25519 AAAA...
+```
+
+`system.hostname` names it, unless it has named itself in `/etc/hostname`, and
+`ssh.authorized_keys.debian` lets you in, once. Any other credential reaches what imports it
+after udev has found the drive: `tmpfiles.extra` and `network.*`, but not `sysusers.extra`. A value with a newline is
+`io.systemd.credential.binary:<name>=<base64>`. The rest of this page is the package-managed
+profiles'.
 
 ## What's in one
 

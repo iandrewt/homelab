@@ -272,9 +272,11 @@ node is open from boot until Flux applies the policies.
 ## Host networking
 
 Every host is **netplan → systemd-networkd, with systemd-resolved**, and every interface it has
-is in netplan. Roles write netplan and assume networkd; an OS's quirks belong to its bootstrap
-or its own role. Proxmox is the exception: ifupdown2, which `proxmox_node` writes from the
-node's NetBox interfaces, with a static `resolv.conf`.
+is in netplan, but for ymir's default, networkd's own in `/usr` (`89-ethernet.network`): on first
+boot netplan's generator runs before sysusers makes the group networkd reads its output as. Roles
+write netplan and assume networkd; an OS's quirks belong to its bootstrap or its own role.
+Proxmox is the exception: ifupdown2, which `proxmox_node` writes from the node's NetBox
+interfaces, with a static `resolv.conf`.
 
 **A host admits what its NetBox Services do**, through nftables (`homelab.linux.host_firewall`,
 from Network's tree, one host at a time, rolled back to the last ruleset unless Ansible can still
@@ -291,6 +293,11 @@ inventory sets none, since DEBIAN13-CIS's defaults outrank any other role's; a h
 one with its own `deb13cis_*`. A host built from one of `images/` is grouped by it too (`IMAGE_ID`
 in `/usr/lib/homelab/image-release`), and its profile's settings are that group's vars. An image
 is baked by running `baseline.yml` against its build VM, with no NetBox or 1Password loaded.
+**An image-based profile** (`ymir`'s: a `bake/` recipe beside its own) bakes that tree the same way, then lays
+itself out over it with mkosi: a signed UKI, `/usr` on erofs under verity, its `/etc` a confext in
+`/usr` under the machine's own, updated A/B by sysupdate. Whatever systemd reads before tmpfiles
+restores `/etc` on first boot moves to `/usr`; `homelab image test` checks the first boot is
+hardened as the second is.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,
@@ -319,6 +326,10 @@ systemd-resolved, and shadows `rpi-cloud-init-mods`' NM default with a file of t
   without it skips the whole seed silently.
 - `#cloud-config` must be the first line of a cloud-config we generate. user-data is copied
   through as bytes, since what reads it may not be cloud-init (Talos's machine config).
+- **ymir has no cloud-init**: its `user-data` is systemd credentials, a line each as SMBIOS
+  type 11 carries them (`io.systemd.credential:<name>=<value>`), which `seed-credentials` copies
+  into `/run/credstore` for `ImportCredential=`: `system.hostname`, and the `debian` user's key
+  as `ssh.authorized_keys.debian`. It reads no other document.
 - Raspberry Pi OS needs `users: [default]` in vendor-data, or `cc_ssh` drops the keys silently;
   `pi` already exists with `nologin`, so `runcmd` fixes its shell.
 
@@ -355,7 +366,7 @@ types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
 
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
-images/       Platform's base images: a recipe per profile, built in one pinned container
+images/       Platform's base images: a recipe per profile, built in one pinned container; ymir/, what the image-based family shares
 ansible/      a tree per team (network/, platform/), the homelab.linux and homelab.debian collections, and the roles, plugins and baseline they share
 tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
 kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
