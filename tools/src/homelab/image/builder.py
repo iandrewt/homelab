@@ -27,6 +27,9 @@ def run_in(mounts: dict[Path, str], *command: str, privileged: bool = False, use
            devices: tuple[str, ...] = (), ports: tuple[str, ...] = (), capture: bool = False) -> str:
     """Runs a command in the builder, returning its output if captured; `detach` names a container
     left running."""
+    # Docker would make a missing one as root, and nothing after could write beside it
+    for host in mounts:
+        host.mkdir(parents=True, exist_ok=True)
     return run("docker", "run", *(["--detach", "--name", detach] if detach else ["--rm"]),
                *(["--privileged"] if privileged else []), *(["--interactive"] if input else []),
                *(["--user", user] if user else []), *(["--workdir", workdir] if workdir else []),
