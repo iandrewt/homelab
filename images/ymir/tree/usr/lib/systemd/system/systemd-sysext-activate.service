@@ -1,0 +1,14 @@
+[Unit]
+Description=What merged system extensions bring: their users, and their services' enablement
+Documentation=https://github.com/flatcar/init/blob/flatcar-master/systemd/system/ensure-sysext.service
+DefaultDependencies=no
+After=systemd-sysext.service
+Before=systemd-tmpfiles-setup.service sysinit.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=systemd-sysusers
+ExecStart=systemctl daemon-reload
+# Extensions merge after the boot's jobs are queued, so what they enable is pulled in only by asking again
+ExecStart=systemctl restart --no-block sockets.target timers.target multi-user.target

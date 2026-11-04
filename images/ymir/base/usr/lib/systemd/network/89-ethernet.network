@@ -1,0 +1,10 @@
+# Not netplan's: on first boot its generator runs before sysusers makes the group networkd reads
+# its output as. A host's netplan, 10-netplan-*, matches first
+[Match]
+Type=ether
+Kind=!*
+
+[Network]
+DHCP=yes
+EmitLLDP=yes
+LinkLocalAddressing=ipv6

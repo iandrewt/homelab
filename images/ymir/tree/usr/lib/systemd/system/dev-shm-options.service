@@ -1,0 +1,10 @@
+[Unit]
+Description=CIS's options on /dev/shm
+DefaultDependencies=no
+Before=sysinit.target
+ConditionPathIsMountPoint=/dev/shm
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=mount -o remount,nosuid,nodev,noexec /dev/shm

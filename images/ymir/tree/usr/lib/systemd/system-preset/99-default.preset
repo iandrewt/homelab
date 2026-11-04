@@ -1,0 +1,2 @@
+# First boot presets an empty /etc; what's enabled is in /usr
+disable *

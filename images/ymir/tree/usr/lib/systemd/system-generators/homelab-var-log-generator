@@ -1,0 +1,58 @@
+#!/bin/sh
+# Mounts /var/log and /var/log/audit as systemd-gpt-auto-generator does /var: from root's disk alone, each found
+# by a type of our own and a UUID hashed from it and the machine-id, unlocked by the TPM
+set -eu
+[ -e /etc/initrd-release ] && exit 0
+out=$1
+
+# Before tmpfiles on first boot, /etc is empty, so nothing Debian's alternatives point at (awk) is there
+lsblk -nrpso NAME,TYPE "$(findmnt -nvo SOURCE /)" | while read -r name type; do [ "$type" = disk ] && echo "$name"; done > "$out/.root-disk"
+read -r disk < "$out/.root-disk"; rm "$out/.root-disk"
+seq=$(cat "/sys/class/block/${disk#/dev/}/diskseq")
+
+partition() { # type, where
+  uuid=$(systemd-id128 -u --app-specific="$1" machine-id)
+  for part in "$disk"?*; do
+    [ -e "/sys/class/block/${part#/dev/}/partition" ] || continue
+    [ "$(blkid -p -o value -s PART_ENTRY_UUID "$part")" = "$uuid" ] || continue
+    [ "$(blkid -p -o value -s PART_ENTRY_TYPE "$part")" = "$1" ] || continue
+    device=/dev/disk/by-diskseq/$seq-part$(cat "/sys/class/block/${part#/dev/}/partition")
+    name=$(echo "${2#/}" | tr / -)
+    crypt=systemd-cryptsetup@$(systemd-escape "$name").service
+    mount=$(systemd-escape -p --suffix=mount "$2")
+    dev=$(systemd-escape -p --suffix=device "$device")
+    cat > "$out/$crypt" <<UNIT
+[Unit]
+Description=Cryptography Setup for $2
+DefaultDependencies=no
+BindsTo=$dev
+After=$dev systemd-tpm2-setup-early.service cryptsetup-pre.target
+Before=cryptsetup.target umount.target
+Conflicts=umount.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/systemd/systemd-cryptsetup attach $name $device - tpm2-device=auto,headless
+ExecStop=/usr/lib/systemd/systemd-cryptsetup detach $name
+UNIT
+    cat > "$out/$mount" <<UNIT
+[Unit]
+Description=$2
+Requires=$crypt
+After=$crypt
+
+[Mount]
+What=/dev/mapper/$name
+Where=$2
+Type=ext4
+Options=nodev,nosuid,noexec
+UNIT
+    mkdir -p "$out/local-fs.target.requires"
+    ln -sf "../$mount" "$out/local-fs.target.requires/$mount"
+    return
+  done
+}
+
+partition c98f7196-934b-4ba4-a62c-61bd3de73120 /var/log
+partition 617125bd-b5b8-4756-ab68-15d5e666711a /var/log/audit

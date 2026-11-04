@@ -1,0 +1,14 @@
+[Unit]
+Description=Keep root's /var an empty mount point
+Documentation=man:systemd-gpt-auto-generator(8)
+# The generator won't mount /var over a directory with anything in it, and /var is then silently root's;
+# immutable, nothing can land there first
+DefaultDependencies=no
+After=initrd-root-fs.target
+Before=initrd-fs.target
+ConditionPathIsDirectory=/sysroot/var
+ConditionDirectoryNotEmpty=!/sysroot/var
+
+[Service]
+Type=oneshot
+ExecStart=chattr +i /sysroot/var
