@@ -50,7 +50,8 @@ def _derive(args) -> int:
                 shutil.copy(built / name, work / name)
             vm.start(disk, kernel="vmlinuz", initrd="initrd")
         vm.wait_for_ssh()
-        vm.ssh("cloud-init status --wait >/dev/null || true")
+        if base.cloud_init:
+            vm.ssh("cloud-init status --wait >/dev/null || true")
 
         say(f"provisioning it with {provisioner.name}")
         if args.playbook:

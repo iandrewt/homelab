@@ -3,6 +3,7 @@
 import json
 import os
 import platform
+import shlex
 import socket
 import subprocess
 import time
@@ -79,6 +80,8 @@ class Vm:
         self.patience = 1 if self.kvm else 6
         self.mounts = {work: "/work", **(mounts or {})}
         self.name = f"homelab-image-{uuid.uuid4().hex[:12]}"
+        # Its SMBIOS UUID, as Proxmox gives each VM one, which an image-based machine's ID is
+        self.uuid = str(uuid.uuid4())
         self.key = work / "ssh-key"
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
@@ -90,10 +93,10 @@ class Vm:
         run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", self.name, "-f", str(self.key))
         documents = self.work / "seed"
         documents.mkdir(exist_ok=True)
-        (documents / "meta-data").write_text(seed.meta_data(
-            hostname, None, ssh_keys=[self.key.with_suffix(".pub").read_text().strip()],
-            instance_id=self.name))
-        (documents / "user-data").write_text("")
+        key = self.key.with_suffix(".pub").read_text().strip()
+        (documents / "meta-data").write_text(seed.meta_data(hostname, None, ssh_keys=[key], instance_id=self.name))
+        (documents / "user-data").write_text("" if self.profile.cloud_init else seed.credentials(
+            {"system.hostname": hostname, "ssh.authorized_keys.debian": key}))
         if self.profile.seed == "drive":
             builder.run_in({self.work: "/work"}, "xorriso", "-as", "mkisofs", "-quiet", "-output",
                            "/work/seed.iso", "-volid", "cidata", "-joliet", "-rock", "/work/seed")
@@ -107,21 +110,33 @@ class Vm:
             boot = ["-machine", self.machine.machine, "-kernel", f"/work/{kernel}", "-initrd", f"/work/{initrd}",
                     "-append", self.profile.cmdline]
         elif self.machine.firmware:
-            builder.run_in({self.work: "/work"}, "cp", OVMF_SETUP_MODE, "/work/vars.fd")
+            # Kept when it's started again, as a VM's are when it's powered off
+            if not (self.work / "vars.fd").exists():
+                builder.run_in({self.work: "/work"}, "cp", OVMF_SETUP_MODE, "/work/vars.fd")
             boot = list(self.machine.firmware)
         else:
             raise BootstrapError(f"{self.profile.architecture} boots by its kernel here: no firmware for it")
         seed_drive = ["-drive", "file=/work/seed.iso,format=raw,if=virtio,readonly=on"] if self.profile.seed == "drive" else []
         accel = ["-accel", "kvm", "-cpu", "host"] if self.kvm else ["-accel", "tcg,thread=multi", "-cpu", "max"]
-        builder.run_in(
-            self.mounts, self.machine.qemu, *accel, "-m", "2048", "-smp", str(min(os.cpu_count() or 2, 4)), *boot,
+        tpm = ["-chardev", "socket,id=tpm,path=/work/tpm.sock", "-tpmdev", "emulator,id=tpm,chardev=tpm",
+               "-device", "tpm-tis,tpmdev=tpm"] if self.profile.tpm else []
+        qemu = [
+            self.machine.qemu, *accel, "-m", "2048", "-smp", str(min(os.cpu_count() or 2, 4)), *boot,
+            "-uuid", self.uuid,
             "-drive", f"file=/work/{disk},format={Path(disk).suffix.lstrip('.')},if=virtio,discard=unmap",
-            *seed_drive,
+            *seed_drive, *tpm,
             "-netdev", "user,id=net,hostfwd=tcp::2222-:22", "-device", "virtio-net-pci,netdev=net",
             "-chardev", "socket,id=qga,path=/work/qga.sock,server=on,wait=off",
             "-device", "virtio-serial", "-device", "virtserialport,chardev=qga,name=org.qemu.guest_agent.0",
             "-display", "none", "-serial", "file:/work/serial.log",
-            detach=self.name, devices=("/dev/kvm",) if self.kvm else (), ports=(f"127.0.0.1:{self.port}:2222",))
+        ]
+        if self.profile.tpm:
+            # Its state in work/, so it outlives a reboot as a VM's does
+            qemu = ["sh", "-c", "mkdir -p /work/tpm && rm -f /work/tpm.sock"
+                    " && swtpm socket --tpm2 --daemon --tpmstate dir=/work/tpm"
+                    " --ctrl type=unixio,path=/work/tpm.sock && exec " + shlex.join(qemu)]
+        builder.run_in(self.mounts, *qemu, detach=self.name, devices=("/dev/kvm",) if self.kvm else (),
+                       ports=(f"127.0.0.1:{self.port}:2222",))
 
     @property
     def ssh_args(self) -> list[str]:
@@ -145,6 +160,34 @@ class Vm:
         # Scheduled, so the seal's exit reaches us before the default user it removes is gone
         self.ssh("sudo sh -c '/usr/lib/homelab/seal && systemd-run --on-active=2 systemctl poweroff' >/dev/null")
         self.wait_until_stopped()
+
+    def reboot(self, timeout: int = 600) -> None:
+        """Reboots it, and waits until it's back from a boot of its own."""
+        before = self.ssh("cat /proc/sys/kernel/random/boot_id").strip()
+        subprocess.run(["ssh", *self.ssh_args, "debian@127.0.0.1", "sudo systemctl reboot"],
+                       capture_output=True, check=False)
+        timeout *= self.patience
+        deadline = time.monotonic() + timeout
+        while True:
+            time.sleep(5)
+            now = subprocess.run(["ssh", *self.ssh_args, "debian@127.0.0.1", "cat /proc/sys/kernel/random/boot_id"],
+                                 capture_output=True, text=True, check=False)
+            if now.returncode == 0 and now.stdout.strip() != before:
+                return
+            if time.monotonic() > deadline:
+                raise BootstrapError(f"not back in {timeout}s: see {self.work / 'serial.log'}")
+
+    def stop(self) -> None:
+        """Powers it off, leaving its disk, firmware variables and TPM to start it again with."""
+        subprocess.run(["ssh", *self.ssh_args, "debian@127.0.0.1", "sudo systemctl poweroff"],
+                       capture_output=True, check=False)
+        self.wait_until_stopped()
+        self.remove()
+
+    def serve(self, directory: str) -> str:
+        """Serves one of its container's directories over HTTP, and returns the URL the VM reaches it at."""
+        run("docker", "exec", "--detach", self.name, "python3", "-m", "http.server", "--directory", directory, "8000")
+        return "http://10.0.2.2:8000/"
 
     def wait_for_ssh(self, timeout: int = 300) -> None:
         timeout *= self.patience

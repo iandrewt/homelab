@@ -43,6 +43,11 @@ jobs:
             tag=${GITHUB_REF_NAME#image/}
             profiles=${tag%/*}
             echo "version=${tag##*/}" >> "$GITHUB_OUTPUT"
+            # Its build signs with keys of its own until it signs with KMS
+            if [ -d "images/$profiles/bake" ]; then
+              echo "::error::$profiles is image-based, and isn't released until it signs with KMS"
+              exit 1
+            fi
           else
             profiles=$(ls images/*/mkosi.conf | cut -d/ -f2)
             echo "version=dev" >> "$GITHUB_OUTPUT"

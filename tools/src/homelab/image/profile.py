@@ -34,6 +34,8 @@ KERNEL = {
 @dataclass(frozen=True)
 class Profile:
     recipe: Path
+    # Image-based: the tree the baseline bakes, which the recipe then lays out as an image
+    bake: Path | None
     distribution: str
     release: str
     architecture: str
@@ -42,12 +44,20 @@ class Profile:
     packages: frozenset[str]
     firmware: bool
     seed: str
+    # What reads the seed: cloud-init, or the image itself, taking user-data as systemd credentials
+    cloud_init: bool
     format: str
     cmdline: str
+    tpm: bool
 
     @property
     def name(self) -> str:
         return self.recipe.name
+
+    @property
+    def tree(self) -> Path:
+        """The recipe of the tree the bake boots: its own, or its bake stage's."""
+        return self.bake or self.recipe
 
     @property
     def sources(self) -> str:
@@ -68,7 +78,8 @@ def load(images: Path, name: str) -> Profile:
     recipe = images / name
     if not (recipe / "mkosi.conf").is_file() or not (recipe / "profile.toml").is_file():
         raise BootstrapError(f"{name!r} is not a profile in {images}")
-    conf = (recipe / "mkosi.conf").read_text()
+    bake = recipe / "bake" if (recipe / "bake" / "mkosi.conf").is_file() else None
+    conf = ((bake or recipe) / "mkosi.conf").read_text()
     boot = tomllib.loads((recipe / "profile.toml").read_text())
 
     def setting(key: str, default: str | None = None) -> str:
@@ -80,6 +91,7 @@ def load(images: Path, name: str) -> Profile:
     packages = re.search(r"^Packages=\n((?:[ \t]+\S+\n?)+)", conf, re.MULTILINE)
     return Profile(
         recipe=recipe,
+        bake=bake,
         distribution=setting("Distribution"),
         release=setting("Release"),
         architecture=setting("Architecture"),
@@ -88,6 +100,8 @@ def load(images: Path, name: str) -> Profile:
         packages=frozenset(packages.group(1).split()) if packages else frozenset(),
         firmware=boot["firmware"],
         seed=boot["seed"],
+        cloud_init=boot.get("cloud_init", True),
         format=boot["format"],
         cmdline=boot.get("cmdline") or (recipe / "mkosi.extra/etc/kernel/cmdline").read_text().strip(),
+        tpm=boot.get("tpm", False),
     )

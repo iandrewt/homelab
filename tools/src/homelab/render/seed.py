@@ -1,5 +1,6 @@
-"""cloud-init documents for hosts installed from media."""
+"""Seed documents: cloud-init's, for hosts installed from media, and the credentials an image reads itself."""
 
+import base64
 import uuid
 
 import yaml
@@ -22,6 +23,14 @@ def meta_data(hostname: str, region: str | None, *, ssh_keys=(), instance_id: st
         **({"region": region} if region else {}),
         "public-keys": list(ssh_keys),
     })
+
+
+def credentials(values: dict[str, str]) -> str:
+    """systemd credentials, a line each as SMBIOS type 11 carries them."""
+    return "".join(
+        f"io.systemd.credential:{name}={value}\n" if "\n" not in value
+        else f"io.systemd.credential.binary:{name}={base64.b64encode(value.encode()).decode()}\n"
+        for name, value in values.items())
 
 
 def cloud_config(payload: dict) -> str:

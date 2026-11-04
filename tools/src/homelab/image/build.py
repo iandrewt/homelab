@@ -1,4 +1,5 @@
-"""A profile's image: its tree, laid out, booted and baked by the baseline, then sealed."""
+"""A profile's image: its tree, laid out, booted and baked by the baseline, then sealed; an image-based one
+is then laid out as its image, over the baked tree."""
 
 import os
 import shutil
@@ -13,6 +14,42 @@ from .profile import Profile
 from .vm import Vm
 
 REPART = "mkosi.extra/usr/lib/repart.d"
+# The baked tree, booted as one root filesystem
+BAKE_DISK = "8G"
+
+# Until a release signs with KMS: a build's own, which its test VMs enroll
+TEST_KEYS = """
+set -eu
+mkdir -p /out/keys/tree/usr/lib/systemd /out/keys/gnupg
+chmod 700 /out/keys/gnupg
+for key in db pcr; do
+  openssl req -quiet -new -x509 -newkey rsa:2048 -nodes -sha256 -days 3650 \
+    -subj "/CN=homelab image test $key/" -keyout /out/keys/$key.key -out /out/keys/$key.crt 2>/dev/null
+done
+export GNUPGHOME=/out/keys/gnupg
+gpg --batch --quiet --passphrase '' --quick-gen-key 'homelab image test updates' ed25519 sign never
+gpg --export > /out/keys/tree/usr/lib/systemd/import-pubring.gpg
+"""
+
+# The VM's container can still hold the disk's loop device for a moment after it's gone
+EXTRACT = """
+rm -rf /out/baked
+mkdir -p /mnt/baked /out/baked
+for attempt in 1 2 3 4 5; do mount -o loop,ro /out/work/disk.raw /mnt/baked && break; sleep 3; done
+cp -a /mnt/baked/. /out/baked/
+umount /mnt/baked
+"""
+
+# What sysupdate reads: each version's UKI and /usr partitions, and their sums, signed
+UPDATES = """
+mkdir -p /out/updates
+cd /out/stage2
+mv *.efi *.usr-*.*.raw /out/updates/
+cd /out/updates
+rm -f SHA256SUMS SHA256SUMS.gpg
+sha256sum -- *.efi *.raw > SHA256SUMS
+GNUPGHOME=/out/keys/gnupg gpg --batch --quiet --yes --detach-sign --output SHA256SUMS.gpg SHA256SUMS
+"""
 
 
 def register(verbs) -> None:
@@ -34,6 +71,15 @@ def _build(args) -> int:
 
     _tree_and_disk(images, image, out, args.version)
     _bake(images.parent, image, out)
+    if image.bake:
+        _keys(out)
+        lay_out(images, image, out, args.version)
+        builder.run_in({out: "/out"}, "rm", "-rf", "/out/updates")
+        builder.run_in({out: "/out"}, "sh", "-ec", UPDATES)
+        disk = f"/out/stage2/{image.name}_{args.version}.raw"
+        builder.run_in({out: "/out"}, "sh", "-c", f"qemu-img convert -O qcow2 -c {disk} /out/{image.name}.qcow2"
+                       " && rm -rf /out/stage2")
+        _own(out)
     say(f"built {out / f'{image.name}.{image.format}'}")
     return 0
 
@@ -43,7 +89,7 @@ def _tree_and_disk(images: Path, image: Profile, out: Path, version: str) -> Non
     kernel, initrd = image.kernel
     try:
         say("building the tree")
-        builder.run_in(mounts, "mkosi", "--directory", f"/images/{image.name}",
+        builder.run_in(mounts, "mkosi", "--directory", f"/images/{image.tree.relative_to(images)}",
                        "--output-dir", "/out", "--force", "build", privileged=True)
         builder.run_in(mounts, "sh", "-c", "mkdir -p /out/tree/usr/lib/homelab"
                        " && cat > /out/tree/usr/lib/homelab/image-release",
@@ -51,7 +97,9 @@ def _tree_and_disk(images: Path, image: Profile, out: Path, version: str) -> Non
         say("laying it out")
         builder.run_in(mounts, "rm", "-f", "/out/disk.raw")
         # repart where the recipe declares partitions it can make, else the recipe's own layout
-        if (image.recipe / REPART).is_dir():
+        if image.bake:
+            builder.run_in(mounts, "mkfs.ext4", "-q", "-L", "root", "-d", "/out/tree", "/out/disk.raw", BAKE_DISK)
+        elif (image.recipe / REPART).is_dir():
             builder.run_in(mounts, "systemd-repart", "--empty=create", "--size=auto", "--offline=yes",
                            "--dry-run=no", "--definitions=/out/tree/usr/lib/repart.d",
                            "--copy-source=/out/tree", "/out/disk.raw")
@@ -77,7 +125,9 @@ def _bake(root: Path, image: Profile, out: Path) -> None:
         say("booting it")
         vm.start("disk.raw", kernel="vmlinuz", initrd="initrd")
         vm.wait_for_ssh()
-        vm.ssh(f"cloud-init status --wait >/dev/null; sudo tee {image.sources} >/dev/null"
+        if image.cloud_init:
+            vm.ssh("cloud-init status --wait >/dev/null || true")
+        vm.ssh(f"sudo tee {image.sources} >/dev/null"
                " && echo 'Acquire::Check-Valid-Until \"false\";' | sudo tee /etc/apt/apt.conf.d/99snapshot >/dev/null",
                input=image.snapshot_sources)
 
@@ -88,13 +138,17 @@ def _bake(root: Path, image: Profile, out: Path) -> None:
         if (image.recipe / "install-bootloader").exists():
             vm.ssh("sudo sh -s", input=(image.recipe / "install-bootloader").read_text())
         vm.ssh(f"sudo tee {image.sources} >/dev/null && sudo rm /etc/apt/apt.conf.d/99snapshot",
-               input=(image.recipe / "mkosi.extra" / image.sources.lstrip("/")).read_text())
+               input=(image.tree / "mkosi.extra" / image.sources.lstrip("/")).read_text())
         (out / f"{image.name}.packages").write_text(vm.ssh("dpkg-query --show --showformat '${Package} ${Version}\\n'"))
         vm.seal()
     finally:
         vm.remove()
 
-    if image.format == "qcow2":
+    if image.bake:
+        say("taking the baked tree out")
+        builder.run_in({out: "/out"}, "sh", "-ec", EXTRACT, privileged=True)
+        builder.run_in({out: "/out"}, "rm", "-f", "/out/disk.raw", "/out/vmlinuz", "/out/initrd")
+    elif image.format == "qcow2":
         say("converting it")
         builder.run_in({out: "/out"}, "qemu-img", "convert", "-O", "qcow2", "-c",
                        "/out/work/disk.raw", f"/out/{image.name}.qcow2")
@@ -102,6 +156,26 @@ def _bake(root: Path, image: Profile, out: Path) -> None:
         builder.run_in({out: "/out"}, "mv", "/out/work/disk.raw", f"/out/{image.name}.raw")
     _own(out)
     _clear(out, work)
+
+
+def lay_out(images: Path, image: Profile, out: Path, version: str) -> None:
+    """The image, at a version, laid out over the baked tree, into out/stage2."""
+    say(f"laying it out, at {version}")
+    builder.run_in({out: "/out"}, "rm", "-rf", "/out/stage2")
+    keys = {flag: f"/out/keys/{name}" for flag, name in (
+        ("--secure-boot-key", "db.key"), ("--secure-boot-certificate", "db.crt"),
+        # The kernel checks verity's signatures against db
+        ("--verity-key", "db.key"), ("--verity-certificate", "db.crt"),
+        ("--sign-expected-pcr-key", "pcr.key"), ("--sign-expected-pcr-certificate", "pcr.crt"))}
+    builder.run_in({images: "/images:ro", out: "/out"}, "mkosi", "--directory", f"/images/{image.name}",
+                   "--base-tree", "/out/baked", "--extra-tree", "/out/keys/tree:/", "--image-version", version,
+                   *(a for flag, path in keys.items() for a in (flag, path)),
+                   "--output-dir", "/out/stage2", "--force", "build", privileged=True)
+
+
+def _keys(out: Path) -> None:
+    if not (out / "keys" / "db.crt").exists():
+        builder.run_in({out: "/out"}, "sh", "-c", TEST_KEYS)
 
 
 def _baseline(root: Path, vm: Vm) -> None:
