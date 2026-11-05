@@ -30,11 +30,11 @@ f /home/debian/.ssh/authorized_keys 0600 debian debian - {key}\\n
 f /etc/sudoers.d/90-credentials 0440 root root - debian ALL=(ALL) NOPASSWD:ALL\\n
 """
 
-# One root session: the login the seal removes is gone before the tar starts, and journald stops writing
-SEAL_AND_TAR = ("sudo sh -c '/usr/lib/homelab/seal >&2"
-                " && systemctl stop systemd-journald.socket systemd-journald-dev-log.socket"
-                " systemd-journald-audit.socket systemd-journald.service"
-                " && tar --create --numeric-owner --xattrs --acls --one-file-system --directory / .'")
+# One root session: the login the seal removes is gone before the tar starts. Not the journal, which this
+# boot's journald still writes. A failed seal exits 2, since 1 is tar's for a file changed as it was read
+SEAL_AND_TAR = ("sudo sh -c '/usr/lib/homelab/seal >&2 || exit 2"
+                "; exec tar --create --numeric-owner --xattrs --acls --one-file-system"
+                " --exclude=\"./var/log/journal/*\" --directory / .'")
 
 # Until a release signs with KMS: a build's own, which its test VMs enroll
 TEST_KEYS = """
