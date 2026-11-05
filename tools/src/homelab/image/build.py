@@ -2,7 +2,6 @@
 with the image's family and target over it, as a tree on its disk or as a signed image."""
 
 import hashlib
-import json
 import os
 import random
 import subprocess
@@ -200,13 +199,10 @@ def lay_out(images: Path, image: Image, out: Path, version: str) -> None:
 def _collect(image: Image, out: Path, version: str) -> None:
     """The image's artifacts under its own name, where a test, a derivation and a release look."""
     built = f"{image.name}_{version}"
-    for suffix in (image.format, "vmlinuz", "initrd"):
+    for suffix in (image.format, "packages", "vmlinuz", "initrd"):
         if (builder.OUTPUT / f"{built}.{suffix}").exists():
             builder.run_in({builder.CACHE: "/cache"}, "mv", f"/cache/output/{built}.{suffix}",
                            f"/cache/{image.name}/{image.name}.{suffix}")
-    manifest = json.loads((builder.OUTPUT / f"{built}.manifest").read_text())
-    (out / f"{image.name}.packages").write_text("".join(
-        f"{p['name']} {p['version']}\n" for p in sorted(manifest["packages"], key=lambda p: p["name"])))
     _own(out)
 
 

@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+dpkg-query --admindir="$BUILDROOT/var/lib/dpkg" --show --showformat '${Package} ${Version}\n' \
+  > "$OUTPUTDIR/${IMAGE_ID}_${IMAGE_VERSION}.packages"
