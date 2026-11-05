@@ -17,10 +17,10 @@ from . import builder, images as catalog
 from .images import Bake, Image
 from .vm import SSH_OPTIONS, VSOCK_PROXY
 
-# What a bake is a function of, so a change to any bakes again
+# What a bake is a function of, so a change to any bakes again: as CI keys its cache, so a restored bake is
+# current. Not the CIS role as installed, which records when: homelab.debian pins its version
 BAKE_INPUTS = ("images/mkosi.conf", "images/mkosi.conf.d/debian", "images/mkosi.profiles/bake",
-               "ansible/baseline.yml", "ansible/baseline", "ansible/collections", "ansible/roles/DEBIAN13-CIS",
-               "ansible/requirements.yml")
+               "ansible/baseline.yml", "ansible/baseline", "ansible/collections", "ansible/requirements.yml")
 
 # A login nothing in the bake's tree makes, which the seal removes with whatever else a credential made
 BAKE_LOGIN = """\
