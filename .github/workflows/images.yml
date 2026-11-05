@@ -89,7 +89,10 @@ jobs:
       - id: cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
-          path: &bake-path ~/.cache/homelab/images/output/bake_${{ matrix.architecture }}.*
+          # The tar and its stamp alone: the bake's disk is sparse, and wouldn't be restored so
+          path: &bake-path |
+            ~/.cache/homelab/images/output/bake_${{ matrix.architecture }}.tar
+            ~/.cache/homelab/images/output/bake_${{ matrix.architecture }}.inputs
           key: &bake-key bake-${{ matrix.architecture }}-${{ matrix.inputs }}
           lookup-only: true
       - if: steps.cache.outputs.cache-hit != 'true'
@@ -126,8 +129,8 @@ jobs:
           enable-cache: true
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
-          path: ~/.cache/homelab/images/output/bake_${{ matrix.architecture }}.*
-          key: bake-${{ matrix.architecture }}-${{ matrix.inputs }}
+          path: *bake-path
+          key: *bake-key
           fail-on-cache-miss: true
       # The test boots it under KVM where the runner offers it, emulated where it doesn't
       - run: ls -l /dev/kvm || echo "no KVM here"
