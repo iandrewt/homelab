@@ -61,7 +61,7 @@ jobs:
                                  for p in entry["profiles"]):
                   sys.exit(f"::error::{image} is image-based, and isn't released until it signs with KMS")
               builds.append({"image": image, "architecture": entry["architecture"],
-                             "runner": runners[entry["architecture"]]})
+                             "runner": runners[entry["architecture"]], "format": entry["format"]})
           if not builds:
               sys.exit(f"::error::{wanted} is not an image in images/images.toml")
           # A bake's cache key is what homelab would bake it from, so a bake it restores is current
@@ -145,7 +145,10 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: ${{ matrix.image }}
-          path: ~/.cache/homelab/images/${{ matrix.image }}/${{ matrix.image }}.*
+          # What a release ships: the image as it's taken, and its packages
+          path: |
+            ~/.cache/homelab/images/${{ matrix.image }}/${{ matrix.image }}.${{ matrix.format }}
+            ~/.cache/homelab/images/${{ matrix.image }}/${{ matrix.image }}.packages
           retention-days: 1
 
   # Signed keylessly, as the fleet is: SHA256SUMS's signature names this workflow, and the sums the rest
