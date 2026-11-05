@@ -37,10 +37,13 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
+        with:
+          enable-cache: true
       - id: plan
         shell: python3 {0}
         run: |
-          import json, os, pathlib, sys, tomllib
+          import json, os, pathlib, subprocess, sys, tomllib
 
           catalog = tomllib.loads(pathlib.Path("images/images.toml").read_text())
           release = os.environ["GITHUB_REF"].startswith("refs/tags/image/")
@@ -61,7 +64,13 @@ jobs:
                              "runner": runners[entry["architecture"]]})
           if not builds:
               sys.exit(f"::error::{wanted} is not an image in images/images.toml")
-          bakes = [dict(b) for b in sorted({(("architecture", b["architecture"]), ("runner", b["runner"])) for b in builds})]
+          # A bake's cache key is what homelab would bake it from, so a bake it restores is current
+          inputs = {a: subprocess.run(["uv", "run", "homelab", "image", "bake", "--inputs", a], check=True,
+                                      capture_output=True, text=True).stdout.strip()
+                    for a in {b["architecture"] for b in builds}}
+          for b in builds:
+              b["inputs"] = inputs[b["architecture"]]
+          bakes = [{"architecture": a, "runner": runners[a], "inputs": inputs[a]} for a in sorted(inputs)]
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
               out.write(f"version={version}\nbuilds={json.dumps(builds)}\nbakes={json.dumps(bakes)}\n")
 
@@ -81,7 +90,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: &bake-path ~/.cache/homelab/images/output/bake_${{ matrix.architecture }}.*
-          key: &bake-key bake-${{ matrix.architecture }}-${{ hashFiles('images/mkosi.conf', 'images/mkosi.conf.d/debian/**', 'images/mkosi.profiles/bake/**', 'ansible/baseline.yml', 'ansible/baseline/**', 'ansible/collections/**', 'ansible/requirements.yml') }}
+          key: &bake-key bake-${{ matrix.architecture }}-${{ matrix.inputs }}
           lookup-only: true
       - if: steps.cache.outputs.cache-hit != 'true'
         uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884  # v10.3.0
@@ -118,7 +127,7 @@ jobs:
       - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/homelab/images/output/bake_${{ matrix.architecture }}.*
-          key: bake-${{ matrix.architecture }}-${{ hashFiles('images/mkosi.conf', 'images/mkosi.conf.d/debian/**', 'images/mkosi.profiles/bake/**', 'ansible/baseline.yml', 'ansible/baseline/**', 'ansible/collections/**', 'ansible/requirements.yml') }}
+          key: bake-${{ matrix.architecture }}-${{ matrix.inputs }}
           fail-on-cache-miss: true
       # The test boots it under KVM where the runner offers it, emulated where it doesn't
       - run: ls -l /dev/kvm || echo "no KVM here"

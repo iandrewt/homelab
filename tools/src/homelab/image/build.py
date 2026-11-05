@@ -14,12 +14,13 @@ import ansible_mitogen
 import yaml
 
 from ..bootstrap.shell import BootstrapError, run, say
+from ..repo import Repo
 from . import builder, images as catalog
 from .images import Bake, Image
 from .vm import SSH_OPTIONS, VSOCK_PROXY
 
-# What a bake is a function of, so a change to any bakes again: as CI keys its cache, so a restored bake is
-# current. Not the CIS role as installed, which records when: homelab.debian pins its version
+# What a bake is a function of, so a change to any bakes again, and what CI keys its cache by. Not the CIS
+# role as installed, which records when: homelab.debian pins its version
 BAKE_INPUTS = ("images/mkosi.conf", "images/mkosi.conf.d/debian", "images/mkosi.profiles/bake",
                "ansible/baseline.yml", "ansible/baseline", "ansible/collections", "ansible/requirements.yml")
 
@@ -77,6 +78,8 @@ def register(verbs) -> None:
         f"{builder.OUTPUT}/bake_<architecture>.tar, which every image of the architecture lays over.",
     )
     bake.add_argument("architecture", help="as mkosi names it, e.g. x86-64")
+    bake.add_argument("--inputs", action="store_true",
+                      help="print the hash of what it would be baked from, which CI keys its cache by, and bake nothing")
     bake.set_defaults(run=_bake_verb)
 
 
@@ -104,6 +107,9 @@ def _build(args) -> int:
 
 
 def _bake_verb(args) -> int:
+    if args.inputs:
+        print(_fingerprint(Repo.discover().root, *BAKE_INPUTS))
+        return 0
     bake(builder.ensure(), args.architecture, force=True)
     return 0
 
