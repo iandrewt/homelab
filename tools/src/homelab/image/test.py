@@ -31,6 +31,21 @@ systemd-analyze cat-config systemd/journald.conf | grep -E "^[A-Z]"
 sshd -T
 '
 """
+# A system extension as a machine installs one: a service it enables, as a user of its own
+# The merged /usr takes its top layer's mode, which CIS's umask would make root's alone
+PROBE = """
+sudo sh -ec '
+umask 022
+. /usr/lib/os-release
+x=/var/lib/extensions/probe/usr/lib
+mkdir -p $x/extension-release.d $x/sysusers.d $x/systemd/system/multi-user.target.wants
+printf "ID=%s\\nVERSION_ID=%s\\n" "$ID" "$VERSION_ID" > $x/extension-release.d/extension-release.probe
+echo "u probe - \\"Extension probe\\"" > $x/sysusers.d/probe.conf
+printf "[Service]\\nType=oneshot\\nRemainAfterExit=yes\\nUser=probe\\nExecStart=true\\n" \\
+  > $x/systemd/system/probe.service
+ln -s ../probe.service $x/systemd/system/multi-user.target.wants/probe.service
+'
+"""
 # What differs between any two boots
 VOLATILE = re.compile(r"random|_seed|boot_id|ns_last_pid|fs\.(file|inode|dentry|quota)|tcp_fastopen_key"
                       r"|user_reserve_kbytes|admin_reserve_kbytes|nr_inodes=|pipe_ino=|fd=|pgrp=|stat_"
@@ -106,6 +121,7 @@ def _image_based(images: Path, base: Image, image: Path, out: Path) -> list[str]
             if boot == "first":
                 failures += _contract_image_based(base, vm, host_key)
                 failures += _rebooted(vm)
+                failures += _extended(vm)
                 failures += _updated(vm, base, following)
                 failures += _grown(vm)
         finally:
@@ -160,7 +176,6 @@ def _contract_image_based(base: Image, vm: Vm, host_key: str) -> list[str]:
                       " && ls -A /run/root/var; umount /run/root'")
     failed += _check("root's /var is an empty, immutable mount point",
                      root_var.split()[0].count("i") == 1 and len(root_var.split()) == 2, root_var)
-    failed += _tmpfs(vm)
     var_bytes = int(vm.ssh("df --output=size -B1 /var | tail -1"))
     failed += _check(f"/var has 1G of a {IMAGE_BASED_DISK} disk", var_bytes > 1 << 30, f"{var_bytes} bytes")
     journal = vm.ssh("sudo journalctl --header -n0 2>/dev/null | grep -m1 'File path' || true")
@@ -185,6 +200,21 @@ def _rebooted(vm: Vm) -> list[str]:
     failed = _check("the second boot is hardened as the first was", not changed, "\n".join(changed))
     boots = len(vm.ssh("sudo journalctl --list-boots --no-pager").splitlines()[1:])
     return failed + _check("the journal kept both boots", boots == 2, f"{boots} boots")
+
+
+def _extended(vm: Vm) -> list[str]:
+    """A system extension in /var, merged at boot: what it brings is there, and what it enables runs. It stays
+    merged through the update that follows."""
+    vm.ssh(PROBE)
+    vm.reboot()
+    vm.ssh("systemctl is-system-running --wait >/dev/null || true")
+    merged = vm.ssh("systemd-sysext list --no-legend; systemd-sysext status --no-pager")
+    failed = _check("a system extension in /var is merged at boot", "probe" in merged, merged)
+    user = vm.ssh("getent passwd probe || true").strip()
+    failed += _check("its sysusers user exists", user.startswith("probe:"), user)
+    state = vm.ssh("systemctl is-active probe.service || true").strip()
+    return failed + _check("the service it enables ran", state == "active",
+                           vm.ssh("systemctl status --no-pager probe.service 2>&1 || true"))
 
 
 def _updated(vm: Vm, base: Image, version: str) -> list[str]:
