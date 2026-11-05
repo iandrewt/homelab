@@ -317,8 +317,8 @@ def _tmpfs(vm: Vm) -> list[str]:
 def _secure_boot(vm: Vm) -> list[str]:
     status = vm.ssh("sudo bootctl status 2>/dev/null")
     failed = _check("Secure Boot enforces, in user mode", "Secure Boot: enabled (user)" in status, status)
-    for var, holds in {"PK": "homelab Secure Boot PK", "KEK": "homelab Secure Boot KEK",
-                       "db": "Debian Secure Boot CA"}.items():
+    for var, holds in (("PK", "homelab Secure Boot PK"), ("KEK", "homelab Secure Boot KEK"),
+                       ("db", "Debian Secure Boot CA"), ("db", "homelab images db")):
         found = vm.ssh(f"sudo grep -c '{holds}' /sys/firmware/efi/efivars/{var}-* || true").strip()
         failed += _check(f"{var} enrolled from the image holds {holds}", found == "1", found)
     return failed
