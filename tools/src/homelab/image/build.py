@@ -10,6 +10,7 @@ import time
 import uuid
 from pathlib import Path
 
+import ansible_mitogen
 import yaml
 
 from ..bootstrap.shell import BootstrapError, run, say
@@ -215,12 +216,17 @@ def _baseline(root: Path, work: Path, ssh: list[str]) -> None:
     inventory.write_text(yaml.safe_dump({"all": {"children": {"images": {"hosts": {"bake": {
         "ansible_user": "debian", "ansible_ssh_private_key_file": ssh[2],
         "ansible_ssh_common_args": " ".join(f"'{a}'" if " " in a else a for a in ssh[3:-1]),
+        # Its key is this boot's, which the seal removes; Mitogen checks it itself, whatever ssh is told
+        "ansible_host_key_checking": False,
     }}}}}}))
     env = os.environ | {
         "ANSIBLE_ROLES_PATH": str(ansible / "roles"),
         "ANSIBLE_COLLECTIONS_PATH": f"{ansible / 'collections'}:{Path.home() / '.ansible/collections'}",
         "ANSIBLE_PIPELINING": "true",
         "ANSIBLE_INTERPRETER_PYTHON": "auto_silent",
+        # One interpreter on the guest for the whole run: an emulated one spends most of a task starting Python
+        "ANSIBLE_STRATEGY_PLUGINS": str(Path(ansible_mitogen.__file__).parent / "plugins" / "strategy"),
+        "ANSIBLE_STRATEGY": "mitogen_linear",
     }
     subprocess.run(["ansible-playbook", "-i", str(inventory), "-i", str(ansible / "baseline"),
                     str(ansible / "baseline.yml")], cwd=work, env=env, check=True)
