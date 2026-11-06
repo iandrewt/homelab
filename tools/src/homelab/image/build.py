@@ -14,7 +14,7 @@ import yaml
 
 from ..bootstrap.shell import BootstrapError, run, say
 from ..repo import Repo
-from . import builder, images as catalog
+from . import builder, images as catalog, signing
 from .images import Bake, Image
 from .vm import SSH_OPTIONS, VSOCK_PROXY
 
@@ -51,9 +51,9 @@ gpg --export > /out/keys/tree/usr/lib/systemd/import-pubring.pgp
 
 # What sysupdate reads: each version's UKI and /usr partitions, and their sums, signed
 UPDATES = """
-mkdir -p /out/updates
-mv /cache/output/{name}_{version}.efi /cache/output/{name}_{version}.usr-*.raw /out/updates/
-cd /out/updates
+mkdir -p {into}
+mv /cache/output/{name}_{version}.efi /cache/output/{name}_{version}.usr-*.raw {into}/
+cd {into}
 rm -f SHA256SUMS SHA256SUMS.gpg
 sha256sum -- *.efi *.raw > SHA256SUMS
 GNUPGHOME=/out/keys/gnupg gpg --batch --quiet --yes --detach-sign --output SHA256SUMS.gpg SHA256SUMS
@@ -69,6 +69,7 @@ def register(verbs) -> None:
     )
     build.add_argument("image", help="an image in images/images.toml, e.g. debian-13-amd64-vm")
     build.add_argument("--version", default="dev", help="what its release file names it (default: dev)")
+    add_sign(build)
     build.set_defaults(run=_build)
 
     bake = verbs.add_parser(
@@ -89,11 +90,10 @@ def _build(args) -> int:
     out = builder.CACHE / image.name
     out.mkdir(parents=True, exist_ok=True)
     if image.image_based:
-        _keys(out)
-        lay_out(images, image, out, args.version)
+        work = signer(images, image, args.sign, out)
+        lay_out(images, image, out, args.version, work)
         builder.run_in({out: "/out", builder.CACHE: "/cache"}, "rm", "-rf", "/out/updates")
-        builder.run_in({out: "/out", builder.CACHE: "/cache"}, "sh", "-ec",
-                       UPDATES.format(name=image.name, version=args.version))
+        updates(image, out, args.version, work)
     else:
         say(f"building {image.name} over its bake")
         _release(images.parent, image, out, args.version)
@@ -103,6 +103,29 @@ def _build(args) -> int:
     _collect(image, out, args.version)
     say(f"built {out / f'{image.name}.{image.format}'}")
     return 0
+
+
+def add_sign(parser) -> None:
+    parser.add_argument("--sign", choices=("test", "kms"), default="test",
+                        help="an image-based image's keys: a build's own (default), or the release key in KMS, "
+                        "with AWS's credentials in the environment")
+
+
+def signer(images: Path, image: Image, sign: str, out: Path) -> Path | None:
+    """The keys an image-based build signs with, made: its own in out, or the release key's module."""
+    if sign == "test":
+        _keys(out)
+        return None
+    work = signing.prepare(images, image.architecture, builder.CACHE / "signing")
+    builder.run_in({out: "/out", **signing.mounts(work)}, "sh", "-c", signing.KEYS, env=signing.env())
+    return work
+
+
+def updates(image: Image, out: Path, version: str, work: Path | None, into: str = "/out/updates") -> None:
+    """A version's UKI and /usr partitions where sysupdate reads them, their sums signed."""
+    builder.run_in({out: "/out", builder.CACHE: "/cache", **(signing.mounts(work) if work else {})},
+                   "sh", "-ec", UPDATES.format(name=image.name, version=version, into=into),
+                   env=signing.env() if work else None)
 
 
 def _bake_verb(args) -> int:
@@ -181,19 +204,23 @@ def _wait_for(ssh: list[str], container: str, timeout: int = 1800) -> None:
         time.sleep(5)
 
 
-def lay_out(images: Path, image: Image, out: Path, version: str) -> None:
-    """The image-based image, at a version, over its bake."""
+def lay_out(images: Path, image: Image, out: Path, version: str, work: Path | None = None) -> None:
+    """The image-based image, at a version, over its bake, signed by the release key if `work` is its
+    module's."""
     say(f"building {image.name} over its bake, at {version}")
     _release(images.parent, image, out, version)
-    keys = {flag: f"/out/keys/{name}" for flag, name in (
-        ("--secure-boot-key", "db.key"), ("--secure-boot-certificate", "db.crt"),
-        # One key, as a release's: the kernel checks verity's signatures against db
-        ("--verity-key", "db.key"), ("--verity-certificate", "db.crt"),
-        ("--sign-expected-pcr-key", "db.key"), ("--sign-expected-pcr-certificate", "db.crt"))}
+    if work:
+        keys = signing.mkosi_args(image.architecture)
+    else:
+        keys = [a for flag, name in (
+            ("--secure-boot-key", "db.key"), ("--secure-boot-certificate", "db.crt"),
+            # One key, as a release's: the kernel checks verity's signatures against db
+            ("--verity-key", "db.key"), ("--verity-certificate", "db.crt"),
+            ("--sign-expected-pcr-key", "db.key"), ("--sign-expected-pcr-certificate", "db.crt"))
+            for a in (flag, f"/out/keys/{name}")]
     _clear(f"{image.name}_{version}")
     builder.mkosi(images, *image.args, "--image-version", version, "--extra-tree", "/out/keys/tree:/",
-                  "--extra-tree", "/out/release:/", *(a for flag, path in keys.items() for a in (flag, path)),
-                  "build", mounts={out: "/out"})
+                  "--extra-tree", "/out/release:/", *keys, "build", mounts={out: "/out"}, signing=work)
 
 
 def _collect(image: Image, out: Path, version: str) -> None:
@@ -207,7 +234,8 @@ def _collect(image: Image, out: Path, version: str) -> None:
 
 
 def _keys(out: Path) -> None:
-    if not (out / "keys" / "tree" / "usr" / "lib" / "systemd" / "import-pubring.pgp").exists():
+    # A release's leave no db.key, and sign only with KMS
+    if not all((out / "keys" / p).exists() for p in ("db.key", "tree/usr/lib/systemd/import-pubring.pgp")):
         builder.run_in({out: "/out"}, "sh", "-c", "rm -rf /out/keys\n" + TEST_KEYS)
 
 

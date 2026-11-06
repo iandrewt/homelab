@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from ..bootstrap.shell import BootstrapError, run, say
-from . import build, builder, images as catalog
+from . import build, builder, images as catalog, signing
 from .images import Image
 from .vm import Vm
 
@@ -63,6 +63,7 @@ def register(verbs) -> None:
     test.add_argument("--disk", type=Path,
                       help="an image derived from this one, instead of its own build; "
                       "one that boots by its kernel boots the build's")
+    build.add_sign(test)
     test.set_defaults(run=_test)
 
 
@@ -75,7 +76,7 @@ def _test(args) -> int:
         raise BootstrapError(f"no image at {image}: `homelab image build {base.name}`")
     out.mkdir(parents=True, exist_ok=True)
     if base.image_based:
-        return _report(args.image, _image_based(images, base, image, out))
+        return _report(args.image, _image_based(images, base, image, out, args.sign))
 
     failures = []
     identities = []
@@ -95,13 +96,15 @@ def _report(name: str, failures: list[str]) -> int:
     return 1 if failures else 0
 
 
-def _image_based(images: Path, base: Image, image: Path, out: Path) -> list[str]:
+def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -> list[str]:
     """Two new VMs: the first checked, rebooted to compare its hardening, and updated A/B to a next version."""
     version, = {re.sub(rf"^{base.name}_(.*)\.efi$", r"\1", p.name) for p in (out / "updates").glob("*.efi")}
     following = f"{version}.1"
-    build.lay_out(images, base, out, following)
-    builder.run_in({out: "/out", builder.CACHE: "/cache"}, "sh", "-ec", "rm -rf /out/next\ncp -a /out/updates /out/next\n"
-                   + build.UPDATES.format(name=base.name, version=following).replace("/out/updates", "/out/next"))
+    # The build's keys, in out, sign its next version too
+    work = signing.prepare(images, base.architecture, builder.CACHE / "signing") if sign == "kms" else None
+    build.lay_out(images, base, out, following, work)
+    builder.run_in({out: "/out"}, "sh", "-ec", "rm -rf /out/next\ncp -a /out/updates /out/next")
+    build.updates(base, out, following, work, into="/out/next")
 
     failures = []
     identities = []
