@@ -91,6 +91,8 @@ def mkosi_args(architecture: str) -> list[str]:
     args = ["--secure-boot-auto-enroll", "no", "--extra-tree", "/cache/project/secure-boot/auto:/efi/loader/keys/auto",
             "--environment", f"PKCS11_PROVIDER_MODULE=/usr/lib/{triplet}/pkcs11/p11-kit-client.so",
             "--environment", f"P11_KIT_SERVER_ADDRESS=unix:path={SOCKET}"]
+    if os.environ.get("RUNNER_DEBUG") == "1":
+        args += ["--environment", "P11_KIT_DEBUG=all", "--environment", "PKCS11_PROVIDER_DEBUG=file:/dev/stderr,level:2"]
     for key in ("secure-boot", "verity", "sign-expected-pcr"):
         args += [f"--{key}-key", URI, f"--{key}-key-source", "provider:pkcs11",
                  f"--{key}-certificate", "/cache/project/secure-boot/db.crt"]
@@ -102,5 +104,7 @@ def mounts(work: Path) -> dict[Path, str]:
 
 
 def env() -> dict[str, str]:
-    """What the module reads in the builder: AWS's credentials, and where its config is."""
-    return {**{name: os.environ[name] for name in ENV if name in os.environ}, "XDG_CONFIG_HOME": DIR}
+    """What the module reads in the builder: AWS's credentials, and where its config is. A job re-run with
+    debug logging has the module's and p11-kit's log too."""
+    debug = {"AWS_KMS_PKCS11_DEBUG": "stderr", "P11_KIT_DEBUG": "all"} if os.environ.get("RUNNER_DEBUG") == "1" else {}
+    return {**{name: os.environ[name] for name in ENV if name in os.environ}, "XDG_CONFIG_HOME": DIR, **debug}
