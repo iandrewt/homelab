@@ -476,7 +476,11 @@ them unsigned); Dependabot's are squashed.
 
 **An image is released by a signed tag**, `image/<image>/<YYYY.MM.N>` on `main`: `images.yml`
 builds and tests it at that commit, and publishes it with its package manifest and `SHA256SUMS`,
-signed keylessly by the workflow (`docs/images.md` says how to check one).
+signed keylessly by the workflow (`docs/images.md` says how to check one). An image-based one is signed by the release key,
+`alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`): mkosi's
+signing tools have no network, so its PKCS#11 module runs behind `p11-kit server`, which `mkosi box`
+starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, issued by KEK
+(`homelab image db`).
 
 **`internal/design/` can lag the code.** Verify against it before citing one.
 
