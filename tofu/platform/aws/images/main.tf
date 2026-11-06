@@ -1,7 +1,9 @@
 data "aws_caller_identity" "current" {}
 
 locals {
-  repository = "iandrewt/homelab"
+  # As the repository's immutable subject claim names it, the owner and repository by ID too, so a renamed
+  # or recreated one can't take the role
+  repository = "iandrewt@12795256/homelab@1394808425"
   # What UEFI, the kernel's verity check, systemd-measure and OpenPGP all verify
   signing_algorithm = "RSASSA_PKCS1_V1_5_SHA_256"
 }
