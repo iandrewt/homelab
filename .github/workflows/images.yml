@@ -56,12 +56,12 @@ jobs:
           for image, entry in catalog.items():
               if wanted and image != wanted:
                   continue
-              # Its build signs with keys of its own until it signs with KMS
-              if release and any("\nVerity=signed" in pathlib.Path(f"images/mkosi.profiles/{p}/mkosi.conf").read_text()
-                                 for p in entry["profiles"]):
-                  sys.exit(f"::error::{image} is image-based, and isn't released until it signs with KMS")
+              # An image-based release signs with the release key in KMS; any other build, with its own
+              signed = release and any("\nVerity=signed" in pathlib.Path(f"images/mkosi.profiles/{p}/mkosi.conf").read_text()
+                                       for p in entry["profiles"])
               builds.append({"image": image, "architecture": entry["architecture"],
-                             "runner": runners[entry["architecture"]], "format": entry["format"]})
+                             "runner": runners[entry["architecture"]], "format": entry["format"],
+                             "sign": "kms" if signed else "test"})
           if not builds:
               sys.exit(f"::error::{wanted} is not an image in images/images.toml")
           # A bake's cache key is what homelab would bake it from, so a bake it restores is current
@@ -118,6 +118,11 @@ jobs:
     needs: [plan, bake]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    # Only a job in the release environment can assume the role that signs with the release key
+    environment: ${{ matrix.sign == 'kms' && 'release' || '' }}
+    permissions:
+      contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -139,8 +144,19 @@ jobs:
           uv run ansible-galaxy collection install -r ansible/requirements.yml
           uv run ansible-galaxy role install -p ansible/roles \
             -r ansible/collections/ansible_collections/homelab/debian/requirements.yml
-      - run: uv run homelab image build "${{ matrix.image }}" --version "${{ needs.plan.outputs.version }}"
-      - run: uv run homelab image test "${{ matrix.image }}"
+      - if: matrix.sign == 'kms'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+        with:
+          role-to-assume: ${{ vars.IMAGES_RELEASE_ROLE }}
+          aws-region: ${{ vars.IMAGES_REGION }}
+      - env:
+          HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
+        run: |
+          uv run homelab image build "${{ matrix.image }}" --version "${{ needs.plan.outputs.version }}" \
+            --sign "${{ matrix.sign }}"
+      - env:
+          HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
+        run: uv run homelab image test "${{ matrix.image }}" --sign "${{ matrix.sign }}"
       - if: startsWith(github.ref, 'refs/tags/image/')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
