@@ -210,7 +210,7 @@ def lay_out(images: Path, image: Image, out: Path, version: str, work: Path | No
     say(f"building {image.name} over its bake, at {version}")
     _release(images.parent, image, out, version)
     if work:
-        keys = signing.mkosi_args(image.architecture)
+        keys = signing.mkosi_args()
     else:
         keys = [a for flag, name in (
             ("--secure-boot-key", "db.key"), ("--secure-boot-certificate", "db.crt"),

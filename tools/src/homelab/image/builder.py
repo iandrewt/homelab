@@ -51,7 +51,7 @@ def mkosi(images: Path, *args: str, mounts: dict[Path, str] | None = None, detac
     beside the verb, the last argument."""
     for path in (OUTPUT, CACHE / "mkosi", CACHE / "packages"):
         path.mkdir(parents=True, exist_ok=True)
-    run_in({images: "/images:ro", CACHE: "/cache"}, "rsync", "--archive", "--delete", "--exclude", "/mkosi.tools*",
+    run_in({images: "/images:ro", CACHE: "/cache"}, "rsync", "--archive", "--delete", "--exclude", "/mkosi.tools", "--exclude", "/mkosi.tools.manifest",
            "/images/", "/cache/project/")
     command = ["mkosi", "-C", "/cache/project", "--output-directory", "/cache/output",
                "--cache-directory", "/cache/mkosi", "--package-cache-directory", "/cache/packages", *args]

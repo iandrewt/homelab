@@ -1,8 +1,9 @@
 """A release's signatures, by the key in KMS only a release may use, through aws-kms-pkcs11.
 
 mkosi's signing tools run without network, so the module runs behind p11-kit's server, which `mkosi box`
-starts in the tools tree: the tools load p11-kit's client of the same release, through the /run their
-sandbox binds."""
+starts in the tools tree: the tools load p11-kit's client of the same release, on the /run their sandbox
+binds, by two variables ymir's configs pass by name, the initrd's too: mkosi validates every image's keys,
+and Environment= isn't passed to a subimage."""
 
 import hashlib
 import json
@@ -33,6 +34,8 @@ mkdir -p {os.path.dirname(SOCKET)}
   --name {SOCKET} 'pkcs11:token=images' &
 for i in $(seq 600); do [ -S {SOCKET} ] && break; sleep 1; done
 [ -S {SOCKET} ]
+multiarch=$(python3 -c 'import sysconfig; print(sysconfig.get_config_var("MULTIARCH"))')
+export PKCS11_PROVIDER_MODULE=/usr/lib/$multiarch/pkcs11/p11-kit-client.so P11_KIT_SERVER_ADDRESS=unix:path={SOCKET}
 exec "$@" "$verb"
 """
 
@@ -85,14 +88,9 @@ def prepare(images: Path, architecture: str, work: Path) -> Path:
     return work
 
 
-def mkosi_args(architecture: str) -> list[str]:
+def mkosi_args() -> list[str]:
     """Every key the release's, and the keys it enrolls ours rather than ones mkosi makes of its certificate."""
-    triplet = {"x86-64": "x86_64-linux-gnu", "arm64": "aarch64-linux-gnu"}[architecture]
-    args = ["--secure-boot-auto-enroll", "no", "--extra-tree", "/cache/project/secure-boot/auto:/efi/loader/keys/auto",
-            "--environment", f"PKCS11_PROVIDER_MODULE=/usr/lib/{triplet}/pkcs11/p11-kit-client.so",
-            "--environment", f"P11_KIT_SERVER_ADDRESS=unix:path={SOCKET}"]
-    if os.environ.get("RUNNER_DEBUG") == "1":
-        args += ["--environment", "P11_KIT_DEBUG=all", "--environment", "PKCS11_PROVIDER_DEBUG=file:/dev/stderr,level:2"]
+    args = ["--secure-boot-auto-enroll", "no", "--extra-tree", "/cache/project/secure-boot/auto:/efi/loader/keys/auto"]
     for key in ("secure-boot", "verity", "sign-expected-pcr"):
         args += [f"--{key}-key", URI, f"--{key}-key-source", "provider:pkcs11",
                  f"--{key}-certificate", "/cache/project/secure-boot/db.crt"]
