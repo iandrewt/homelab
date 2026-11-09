@@ -6,6 +6,15 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.66"
     }
+    onepassword = {
+      source  = "1Password/onepassword"
+      version = "~> 3.3"
+    }
+    # 6.0, which alone reads aggregates; the other layers stay on 5.8 until it settles
+    netbox = {
+      source  = "e-breuninger/netbox"
+      version = "6.0.0"
+    }
   }
 
   backend "s3" {
@@ -48,4 +57,31 @@ provider "aws" {
   default_tags {
     tags = { managed-by = "opentofu", layer = "platform/aws/images" }
   }
+}
+
+# CloudFront's WAF and certificates
+provider "aws" {
+  alias   = "global"
+  region  = "us-east-1"
+  profile = "homelab-platform"
+
+  default_tags {
+    tags = { managed-by = "opentofu", layer = "platform/aws/images" }
+  }
+}
+
+provider "onepassword" {}
+
+data "onepassword_vault" "platform" {
+  name = "Platform"
+}
+
+ephemeral "onepassword_item" "netbox" {
+  vault = data.onepassword_vault.platform.uuid
+  title = "NetBox API Token - Tofu"
+}
+
+provider "netbox" {
+  server_url = ephemeral.onepassword_item.netbox.hostname
+  api_token  = ephemeral.onepassword_item.netbox.credential
 }
