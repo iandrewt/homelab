@@ -45,6 +45,7 @@ locals {
     "outposts:List*",
     "payments:*",
     "pricing:*",
+    "pricingplanmanager:*",
     "purchase-orders:*",
     "rds:Describe*",
     "route53-recovery-cluster:*",
