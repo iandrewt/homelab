@@ -170,7 +170,8 @@ resource "aws_cloudfront_distribution" "updates" {
 
 resource "aws_wafv2_ip_set" "sites" {
   for_each = { IPV4 = 4, IPV6 = 6 }
-  provider = aws.global
+  # CloudFront's, wherever the rest is
+  region = "us-east-1"
 
   name               = "images-sites-${lower(each.key)}"
   scope              = "CLOUDFRONT"
@@ -180,7 +181,7 @@ resource "aws_wafv2_ip_set" "sites" {
 
 # The plan requires one; it admits the sites alone
 resource "aws_wafv2_web_acl" "updates" {
-  provider = aws.global
+  region = "us-east-1"
 
   name  = "images-updates"
   scope = "CLOUDFRONT"

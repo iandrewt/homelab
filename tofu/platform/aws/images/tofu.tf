@@ -59,17 +59,6 @@ provider "aws" {
   }
 }
 
-# CloudFront's WAF and certificates
-provider "aws" {
-  alias   = "global"
-  region  = "us-east-1"
-  profile = "homelab-platform"
-
-  default_tags {
-    tags = { managed-by = "opentofu", layer = "platform/aws/images" }
-  }
-}
-
 provider "onepassword" {}
 
 data "onepassword_vault" "platform" {
