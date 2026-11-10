@@ -7,6 +7,8 @@ import os
 import re
 import subprocess
 import tempfile
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from ..bootstrap.shell import BootstrapError, run, say
@@ -45,7 +47,28 @@ def register(verbs) -> None:
     promote.set_defaults(run=_promote)
 
 
-def merge(old: str, new: str, image: str, keep: int = KEEP) -> tuple[str, list[str]]:
+@dataclass(frozen=True)
+class Channel:
+    """What a release adds its files to, under a prefix of the bucket, and how their names hold its version."""
+    prefix: str
+    # A file's name, its version the first group
+    name: str
+    # What a release's version looks like
+    version: str
+
+    def version_of(self, name: str) -> str:
+        if not (match := re.fullmatch(self.name, name)):
+            raise BootstrapError(f"{name} isn't a file of {self.prefix}'s")
+        if not re.fullmatch(self.version, match[1]):
+            raise BootstrapError(f"{self.prefix} holds releases, versioned as {self.version}, not {match[1]}")
+        return match[1]
+
+
+def image_channel(image: str) -> Channel:
+    return Channel(image, rf"{re.escape(image)}_(.+?)\.(?:efi|usr-.*)", r"\d+(\.\d+)*")
+
+
+def merge(old: str, new: str, channel: Channel, keep: int = KEEP) -> tuple[str, list[str]]:
     """A channel's sums with new's added, its newest `keep` versions kept, and the files it no longer holds."""
     lines = {}
     for line in (old + new).splitlines():
@@ -53,22 +76,14 @@ def merge(old: str, new: str, image: str, keep: int = KEEP) -> tuple[str, list[s
             lines[line.split(maxsplit=1)[1].lstrip("*")] = line
     versions: dict[str, list[str]] = {}
     for name in lines:
-        versions.setdefault(version_of(name, image), []).append(name)
+        versions.setdefault(channel.version_of(name), []).append(name)
     newest = sorted(versions, key=_order, reverse=True)
     sums = "".join(f"{lines[name]}\n" for version in sorted(newest[:keep], key=_order) for name in sorted(versions[version]))
     return sums, sorted(name for version in newest[keep:] for name in versions[version])
 
 
-def version_of(name: str, image: str) -> str:
-    if not (match := re.match(rf"{re.escape(image)}_(.+?)\.(efi$|usr-)", name)):
-        raise BootstrapError(f"{name} isn't a file of {image}'s")
-    return match[1]
-
-
 def _order(version: str) -> tuple[int, ...]:
-    if not re.fullmatch(r"\d+(\.\d+)*", version):
-        raise BootstrapError(f"a channel holds releases, versioned YYYY.MM.N, not {version}")
-    return tuple(int(part) for part in version.split("."))
+    return tuple(int(part) for part in re.split(r"[.-]", version))
 
 
 def _publish(args) -> int:
@@ -77,7 +92,7 @@ def _publish(args) -> int:
     out = builder.CACHE / image.name
     sums = (out / "updates" / "SHA256SUMS").read_text()
     work = signing.prepare(images, builder.CACHE / "signing")
-    _update(image, out, work, "canary", sums, {name: str(out / "updates" / name) for name in _names(sums)})
+    publish(image_channel(image.name), out, work, sums, out / "updates")
     return 0
 
 
@@ -85,21 +100,30 @@ def _promote(args) -> int:
     images = builder.ensure()
     image = _image_based(images, args.image)
     out = builder.CACHE / image.name
-    canary = f"s3://{_bucket()}/{image.name}/canary"
-    sums = "".join(f"{line}\n" for line in _read(f"{canary}/SHA256SUMS").splitlines()
-                   if line.strip() and version_of(line.split(maxsplit=1)[1], image.name) == args.version)
-    if not sums:
-        raise BootstrapError(f"canary has no {image.name} {args.version}")
     # A promotion builds nothing, so it makes the release key's keyring itself
-    work = build.signer(images, image, "kms", out)
-    _update(image, out, work, "stable", sums, {name: f"{canary}/{name}" for name in _names(sums)})
+    promote(image_channel(image.name), args.version, out, lambda: build.signer(images, image, "kms", out))
     return 0
 
 
-def _update(image: Image, out: Path, work: Path, channel: str, sums: str, sources: dict[str, str]) -> None:
-    """Adds sums' files to a channel, from sources local or in the bucket, and prunes what it no longer holds.
-    The files go first and the sums last, so a client never reads sums whose files aren't there."""
-    prefix = f"s3://{_bucket()}/{image.name}/{channel}"
+def publish(channel: Channel, out: Path, work: Path, sums: str, files: Path) -> None:
+    """A release's files, beside their sums in files, added to the channel's canary."""
+    _update(channel, out, work, "canary", sums, {name: str(files / name) for name in _names(sums)})
+
+
+def promote(channel: Channel, version: str, out: Path, signer: Callable[[], Path]) -> None:
+    """A version canary holds, copied to stable, its sums signed by the keyring signer makes."""
+    canary = f"s3://{_bucket()}/{channel.prefix}/canary"
+    sums = "".join(f"{line}\n" for line in _read(f"{canary}/SHA256SUMS").splitlines()
+                   if line.strip() and channel.version_of(line.split(maxsplit=1)[1]) == version)
+    if not sums:
+        raise BootstrapError(f"{channel.prefix}'s canary has no {version}")
+    _update(channel, out, signer(), "stable", sums, {name: f"{canary}/{name}" for name in _names(sums)})
+
+
+def _update(channel: Channel, out: Path, work: Path, ring: str, sums: str, sources: dict[str, str]) -> None:
+    """Adds sums' files to one of a channel's rings, from sources local or in the bucket, and prunes what it no
+    longer holds. The files go first and the sums last, so a client never reads sums whose files aren't there."""
+    prefix = f"s3://{_bucket()}/{channel.prefix}/{ring}"
     with tempfile.TemporaryDirectory(dir=builder.CACHE) as tmp:
         work_dir = Path(tmp)
         old = _read(f"{prefix}/SHA256SUMS")
@@ -108,10 +132,10 @@ def _update(image: Image, out: Path, work: Path, channel: str, sums: str, source
                 raise BootstrapError(f"{prefix}/SHA256SUMS.gpg is missing, so the channel's sums can't be checked")
             (work_dir / "old").write_text(old)
             (work_dir / "old.gpg").write_bytes(signature)
-        merged, pruned = merge(old, sums, image.name)
+        merged, pruned = merge(old, sums, channel)
         (work_dir / "SHA256SUMS").write_text(merged)
         builder.run_in({work_dir: "/work", out: "/out", **signing.mounts(work)}, "sh", "-c", SIGN, env=signing.env())
-        say(f"publishing {', '.join(sorted({version_of(n, image.name) for n in sources}))} to {prefix}")
+        say(f"publishing {', '.join(sorted({channel.version_of(n) for n in sources}))} to {prefix}")
         for name, source in sources.items():
             # Not the source's tags, the CLI's default for a copy within the bucket, which the release role may not read
             props = ["--copy-props", "metadata-directive"] if source.startswith("s3://") else []
@@ -121,7 +145,7 @@ def _update(image: Image, out: Path, work: Path, channel: str, sums: str, source
         for name in pruned:
             run("aws", "s3", "rm", "--only-show-errors", f"{prefix}/{name}")
         if pruned:
-            say(f"pruned {', '.join(sorted({version_of(n, image.name) for n in pruned}))} from {prefix}")
+            say(f"pruned {', '.join(sorted({channel.version_of(n) for n in pruned}))} from {prefix}")
 
 
 def _read(uri: str, binary: bool = False) -> str | bytes:
