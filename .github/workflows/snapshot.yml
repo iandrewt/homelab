@@ -1,0 +1,48 @@
+name: snapshot
+
+# The images' Debian snapshot, bumped weekly: a PR you merge by hand, so its images build when you dispatch
+# them at its branch. A PR opened with GITHUB_TOKEN starts no workflow of its own.
+on:
+  schedule:
+    - cron: "0 18 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    runs-on: ubuntu-slim
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      CONF: images/mkosi.conf.d/debian/mkosi.conf
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - run: |
+          set -euo pipefail
+          pinned=$(sed -n 's/^Snapshot=//p' "$CONF")
+          latest=$(curl -sSf "https://snapshot.debian.org/mr/timestamp/?archive=debian&after=$pinned" \
+            | jq -r '.result.debian | last // empty')
+          if [ -z "$latest" ] || [ "$latest" = "$pinned" ]; then
+            echo "$pinned is the latest snapshot"
+            exit 0
+          fi
+          branch="snapshot/$latest"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "$branch is already open"
+            exit 0
+          fi
+          sed -i "s/^Snapshot=.*/Snapshot=$latest/" "$CONF"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -q -am "chore(images): Debian snapshot $latest"
+          git push -q origin "$branch"
+          gh pr create --base main --head "$branch" --title "chore(images): Debian snapshot $latest" --body \
+            "Every image's packages from Debian's snapshot of $latest, not $pinned: both architectures bake again.
+
+          Its images build when you dispatch them: \`gh workflow run images.yml --ref $branch\`. It lands by squash."
