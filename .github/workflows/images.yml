@@ -3,7 +3,7 @@ name: images
 on:
   push:
     branches: [main]
-    tags: ["image/**"]
+    tags: ["image/**", "extension/**"]
     paths: &paths
       - images/**
       - ansible/baseline.yml
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       promote:
-        description: Promote this tag's release from canary to stable, building nothing
+        description: Promote this tag's release, an image's or an extension's, from canary to stable, building nothing
         type: boolean
         default: false
 
@@ -33,35 +33,70 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # A tag, image/<image>/<version>, builds and releases that image; anything else builds every image in
-  # images.toml, each on a runner of its own architecture, over the one bake its architecture shares
+  # A tag, image/<image>/<version>, builds and releases that image, and extension/<extension>/<version> that
+  # extension, at the version its lock holds. Anything else builds every image in images.toml, unless all it
+  # changes is extensions', and checks each extension's lock still resolves over the images as it lays them
+  # out, each on a runner of its image's architecture, over the one bake its architecture shares
   plan:
     if: ${{ !inputs.promote }}
     runs-on: ubuntu-slim
     outputs:
       bakes: ${{ steps.plan.outputs.bakes }}
       builds: ${{ steps.plan.outputs.builds }}
+      locks: ${{ steps.plan.outputs.locks }}
+      extensions: ${{ steps.plan.outputs.extensions }}
       version: ${{ steps.plan.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           enable-cache: true
       - id: plan
         shell: python3 {0}
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          import json, os, pathlib, subprocess, sys, tomllib
+          import json, os, pathlib, re, subprocess, sys, tomllib
 
           catalog = tomllib.loads(pathlib.Path("images/images.toml").read_text())
-          release = os.environ["GITHUB_REF"].startswith("refs/tags/image/")
-          if release:
-              wanted, _, version = os.environ["GITHUB_REF_NAME"].removeprefix("image/").rpartition("/")
-          else:
-              wanted, version = None, "dev"
+          extensions = tomllib.loads(pathlib.Path("images/extensions.toml").read_text())
+          lock = tomllib.loads(pathlib.Path("images/extensions.lock").read_text())
+          ref, name = os.environ["GITHUB_REF"], os.environ["GITHUB_REF_NAME"]
           runners = {"x86-64": "ubuntu-26.04", "arm64": "ubuntu-24.04-arm"}
+          release = ref.startswith("refs/tags/image/")
+          wanted, version = None, "dev"
+          if release:
+              wanted, _, version = name.removeprefix("image/").rpartition("/")
+          locks, released = [], []
+          if ref.startswith("refs/tags/extension/"):
+              extension, _, version = name.removeprefix("extension/").rpartition("/")
+              if extension not in extensions:
+                  sys.exit(f"::error::{extension} is not an extension in images/extensions.toml")
+              if lock.get(extension, {}).get("version") != version:
+                  sys.exit(f"::error::the lock holds {extension} {lock.get(extension, {}).get('version')}, not {version}")
+              released = [{"extension": extension, "image": image} for image in extensions[extension]["images"]]
+          elif not ref.startswith("refs/tags/"):
+              locks = [{"image": image} for image in sorted({i for e in extensions.values() for i in e["images"]})]
+
+          # What only extensions read, which no image is built from: on: paths is what any is
+          only_theirs = re.compile(r"images/(extensions\.lock|vendors/.*|mkosi\.profiles/(%s)/.*)$"
+                                   r"|tools/src/homelab/image/extension\.py$" % "|".join(map(re.escape, [*extensions, "sysext"])))
+          inputs_of_images = re.compile(r"(images/|ansible/baseline|ansible/collections/|ansible/requirements\.yml$"
+                                        r"|tools/src/homelab/image/|tools/src/homelab/render/seed\.py$|pyproject\.toml$"
+                                        r"|uv\.lock$|\.github/workflows/images\.yml$)")
+          base = os.environ.get("BASE", "")
+          changed = None
+          if not ref.startswith("refs/tags/") and base and set(base) != {"0"}:
+              changed = [p for p in subprocess.run(["git", "diff", "--name-only", base, "HEAD"], check=True,
+                                                   capture_output=True, text=True).stdout.split()
+                         if inputs_of_images.match(p)]
+          extensions_alone = bool(changed) and all(only_theirs.match(p) for p in changed)
+
           builds = []
           for image, entry in catalog.items():
-              if wanted and image != wanted:
+              if (wanted and image != wanted) or released or extensions_alone:
                   continue
               # An image-based release signs with the release key in KMS; any other build, with its own
               signed = release and any("\nVerity=signed" in pathlib.Path(f"images/mkosi.profiles/{p}/mkosi.conf").read_text()
@@ -69,17 +104,22 @@ jobs:
               builds.append({"image": image, "architecture": entry["architecture"],
                              "runner": runners[entry["architecture"]], "format": entry["format"],
                              "sign": "kms" if signed else "test"})
-          if not builds:
+          if wanted and not builds:
               sys.exit(f"::error::{wanted} is not an image in images/images.toml")
+          for job in locks + released:
+              entry = catalog[job["image"]]
+              job.update(architecture=entry["architecture"], runner=runners[entry["architecture"]], format=entry["format"])
           # A bake's cache key is what homelab would bake it from, so a bake it restores is current
           inputs = {a: subprocess.run(["uv", "run", "homelab", "image", "bake", "--inputs", a], check=True,
                                       capture_output=True, text=True).stdout.strip()
-                    for a in {b["architecture"] for b in builds}}
-          for b in builds:
-              b["inputs"] = inputs[b["architecture"]]
+                    for a in {job["architecture"] for job in builds + locks + released}}
+          for job in builds + locks + released:
+              job["inputs"] = inputs[job["architecture"]]
           bakes = [{"architecture": a, "runner": runners[a], "inputs": inputs[a]} for a in sorted(inputs)]
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"version={version}\nbuilds={json.dumps(builds)}\nbakes={json.dumps(bakes)}\n")
+              for key, value in {"version": version, "builds": json.dumps(builds), "bakes": json.dumps(bakes),
+                                 "locks": json.dumps(locks), "extensions": json.dumps(released)}.items():
+                  out.write(f"{key}={value}\n")
 
   # Cached by what a bake is a function of, so a change to a family or target doesn't bake again
   bake:
@@ -135,6 +175,7 @@ jobs:
   build:
     name: ${{ matrix.image }}
     needs: [plan, bake]
+    if: needs.plan.outputs.builds != '[]'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     # Only a job in the release environment can assume the role that signs with the release key
@@ -228,10 +269,133 @@ jobs:
             --notes "Built from $GITHUB_SHA: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/images.md" \
             "$IMAGE-$VERSION".* SHA256SUMS SHA256SUMS.sigstore.json
 
-  # `gh workflow run images.yml --ref image/<image>/<version> -f promote=true`: at the tag, so in the release
-  # environment, with the release key
+  # A lock that no longer resolves fails here, before it reaches main: `homelab image extension lock` locks
+  # it again, at its next version, which its tag releases
+  lock:
+    name: lock over ${{ matrix.image }}
+    needs: [plan, bake]
+    if: needs.plan.outputs.locks != '[]'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.locks) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: *bake-path
+          key: *bake-key
+          fail-on-cache-miss: true
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: *packages-path
+          key: *packages-key
+          restore-keys: *packages-older
+      - run: uv run homelab image extension lock --check --image "${{ matrix.image }}"
+
+  # An extension's release: built over each of its images, tested on the newest release of the image, as its
+  # machines run it, and published to the image's canary channel for it
+  extension:
+    name: ${{ matrix.extension }} over ${{ matrix.image }}
+    needs: [plan, bake]
+    if: needs.plan.outputs.extensions != '[]'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.extensions) }}
+    env:
+      EXTENSION: ${{ matrix.extension }}
+      IMAGE: ${{ matrix.image }}
+      HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: *bake-path
+          key: *bake-key
+          fail-on-cache-miss: true
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: *packages-path
+          key: *packages-key
+          restore-keys: *packages-older
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+        with:
+          role-to-assume: ${{ vars.IMAGES_RELEASE_ROLE }}
+          aws-region: ${{ vars.IMAGES_REGION }}
+      - run: uv run homelab image extension build "$EXTENSION" --image "$IMAGE" --sign kms
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' \
+            | grep "^image/$IMAGE/" | sort -V | tail -1)
+          echo "testing on $tag"
+          mkdir -p ~/.cache/homelab/images/"$IMAGE"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$IMAGE-*.${{ matrix.format }}" \
+            --output ~/.cache/homelab/images/"$IMAGE/$IMAGE.${{ matrix.format }}"
+      - run: ls -l /dev/kvm || echo "no KVM here"
+      - run: uv run homelab image extension test "$IMAGE" "$EXTENSION"
+      - env:
+          IMAGES_BUCKET: ${{ vars.IMAGES_BUCKET }}
+        run: uv run homelab image extension publish "$EXTENSION" --image "$IMAGE"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: ${{ matrix.extension }}-${{ matrix.image }}
+          path: |
+            ~/.cache/homelab/images/${{ matrix.image }}/extensions/${{ matrix.extension }}/*.raw
+            ~/.cache/homelab/images/${{ matrix.image }}/extensions/${{ matrix.extension }}/*.packages
+          retention-days: 1
+
+  extension-release:
+    if: startsWith(github.ref, 'refs/tags/extension/')
+    needs: [plan, extension]
+    runs-on: ubuntu-slim
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      EXTENSION: ${{ fromJSON(needs.plan.outputs.extensions)[0].extension }}
+      VERSION: ${{ needs.plan.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          pattern: ${{ env.EXTENSION }}-*
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+      - run: |
+          set -euo pipefail
+          for dir in "$EXTENSION"-*/; do
+            image="${dir%/}"; image="${image#"$EXTENSION"-}"
+            for file in "${dir}${EXTENSION}_${VERSION}".*; do
+              mv "$file" "$EXTENSION-$VERSION-$image.${file##*.}"
+            done
+          done
+          sha256sum "$EXTENSION-$VERSION"-* > SHA256SUMS
+          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "$EXTENSION $VERSION" \
+            --notes "Built from $GITHUB_SHA: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/images.md" \
+            "$EXTENSION-$VERSION"-* SHA256SUMS SHA256SUMS.sigstore.json
+
+  # `gh workflow run images.yml --ref <image|extension>/<name>/<version> -f promote=true`: at the tag, so in
+  # the release environment, with the release key
   promote:
-    if: inputs.promote && startsWith(github.ref, 'refs/tags/image/')
+    if: inputs.promote && (startsWith(github.ref, 'refs/tags/image/') || startsWith(github.ref, 'refs/tags/extension/'))
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     environment: release
@@ -251,5 +415,9 @@ jobs:
           HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
           IMAGES_BUCKET: ${{ vars.IMAGES_BUCKET }}
         run: |
-          release="${GITHUB_REF_NAME#image/}"
-          uv run homelab image promote "${release%/*}" "${release##*/}"
+          kind="${GITHUB_REF_NAME%%/*}" release="${GITHUB_REF_NAME#*/}"
+          if [ "$kind" = extension ]; then
+            uv run homelab image extension promote "${release%/*}" "${release##*/}"
+          else
+            uv run homelab image promote "${release%/*}" "${release##*/}"
+          fi
