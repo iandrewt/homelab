@@ -296,7 +296,11 @@ image too, the bake from its facts and the image from `IMAGE_ID` in
 image's own. **`images/` is one mkosi project**: the distribution in `mkosi.conf.d/<distribution>/`,
 each family (`mutable`, `ymir`) and target (`vm`, `raspi3`) a profile in `mkosi.profiles/`, and an
 image a pair of them, which a `mkosi.conf.d` file matching both names; `images.toml` holds only what
-mkosi has no setting for. **A distribution is baked once per architecture**: the `bake` profile,
+mkosi has no setting for. **Every package a build takes is Debian's snapshot's** (`Snapshot=` in
+`mkosi.conf.d/debian/`, a bake input), the tools tree's too; a source mkosi doesn't make (ymir's forky,
+the bake's apt while the baseline runs) is rewritten to the snapshot, or refused, since apt falls back to
+the live archive without a word. The snapshot workflow opens its weekly bump as a PR, whose images
+build when dispatched at its branch, and the kernel is the bake's, so it moves with the snapshot. **A distribution is baked once per architecture**: the `bake` profile,
 booted by `mkosi vm` with a login its credentials make, `baseline.yml` run against it with no
 NetBox or 1Password loaded, then sealed into a tar every image takes as `BaseTrees=`. A family and
 target lay themselves over it with mkosi alone, adding what CIS doesn't touch or taking away what

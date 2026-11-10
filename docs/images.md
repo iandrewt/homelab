@@ -40,7 +40,9 @@ images'.
 ## What's in one
 
 Debian 13, as [its distribution](../images/mkosi.conf.d/debian) has it, baked once per
-architecture and shared by every image of it, with the image's family and target laid over:
+architecture and shared by every image of it, with the image's family and target laid over. Every
+package is from one of Debian's snapshots, its `Snapshot=`, bumped weekly, so a release is what its
+commit says; its `.packages` lists them. Installed, its apt is plain `deb.debian.org`:
 
 - **CIS Debian 13**, levels 1 and 2, with the exceptions in
   [`homelab.debian.hardening`'s defaults](../ansible/collections/ansible_collections/homelab/debian/roles/hardening/defaults/main.yml),
