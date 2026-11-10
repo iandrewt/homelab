@@ -14,7 +14,7 @@ import yaml
 
 from ..bootstrap.shell import BootstrapError, run, say
 from ..repo import Repo
-from . import builder, images as catalog, signing
+from . import builder, images as catalog, signing, snapshot
 from .images import Bake, Image
 from .vm import SSH_OPTIONS, VSOCK_PROXY
 
@@ -99,7 +99,7 @@ def _build(args) -> int:
         _release(images.parent, image, out, args.version)
         _clear(f"{image.name}_{args.version}")
         builder.mkosi(images, *image.args, "--image-version", args.version, "--extra-tree", "/out/release:/",
-                      "build", mounts={out: "/out"})
+                      *snapshot.sandbox(image, out), "build", mounts={out: "/out"})
     _collect(image, out, args.version)
     say(f"built {out / f'{image.name}.{image.format}'}")
     return 0
@@ -170,6 +170,7 @@ def bake(images: Path, architecture: str, force: bool = False) -> Path:
                   devices=tuple(d for d in ("/dev/kvm", "/dev/vhost-vsock") if os.path.exists(d)))
     try:
         _wait_for(ssh, name)
+        _pin_apt(images, architecture, ssh)
 
         say("baking in the baseline")
         _baseline(images.parent, work, ssh)
@@ -190,6 +191,23 @@ def bake(images: Path, architecture: str, force: bool = False) -> Path:
         subprocess.run(["docker", "rm", "--force", name], capture_output=True, check=False)
     stamp.write_text(inputs)
     return tar
+
+
+# Where the seal puts the image's own sources back from
+SHIPPED_SOURCES = "/run/homelab/sources"
+
+
+def _pin_apt(images: Path, architecture: str, ssh: list[str]) -> None:
+    """The bake's apt at the snapshot while the baseline installs, so its packages are pinned too."""
+    if not (pin := catalog.summary(images, "--architecture", architecture, "--profile", "bake")["Snapshot"]):
+        return
+    say(f"pinning the bake's apt at {pin}")
+    for name in run(*ssh, "ls /etc/apt/sources.list.d", capture=True).split():
+        if name.endswith(".sources"):
+            path = f"/etc/apt/sources.list.d/{name}"
+            shipped = run(*ssh, f"cat {path}", capture=True)
+            run(*ssh, f"sudo sh -ec 'mkdir -p {SHIPPED_SOURCES}; mv {path} {SHIPPED_SOURCES}/; cat > {path}'",
+                input=snapshot.pinned(shipped, pin))
 
 
 def _wait_for(ssh: list[str], container: str, timeout: int = 1800) -> None:
@@ -220,6 +238,7 @@ def lay_out(images: Path, image: Image, out: Path, version: str, work: Path | No
             for a in (flag, f"/out/keys/{name}")]
     if url := os.environ.get("IMAGES_UPDATE_URL"):
         keys += ["--environment", f"IMAGES_UPDATE_URL={url}"]
+    keys += snapshot.sandbox(image, out)
     _clear(f"{image.name}_{version}")
     builder.mkosi(images, *image.args, "--image-version", version, "--extra-tree", "/out/keys/tree:/",
                   "--extra-tree", "/out/release:/", *keys, "build", mounts={out: "/out"}, signing=work)

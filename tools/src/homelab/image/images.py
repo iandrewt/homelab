@@ -34,6 +34,9 @@ class Image:
     extra_trees: tuple[Path, ...]
     boot: Boot
     format: str
+    # Debian's, at which every package the build takes is pinned
+    snapshot: str | None = None
+    sandbox_trees: tuple[Path, ...] = ()
 
     @property
     def sources(self) -> str:
@@ -84,4 +87,7 @@ def load(images: Path, name: str) -> Image:
                   cloud_init=entry.get("cloud_init", True), cmdline=entry.get("cmdline", ""),
                   tpm=entry.get("tpm", False)),
         format=entry["format"],
+        snapshot=config["Snapshot"],
+        sandbox_trees=tuple(images / Path(t["Source"]).relative_to("/images") for t in config["SandboxTrees"]
+                            if t["Source"].startswith("/images/")),
     )

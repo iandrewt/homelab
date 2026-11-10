@@ -2,6 +2,11 @@
 # Undoes what booting this image did, so that the next boot is a new instance's first
 set -eu
 
+# The bake's apt followed the build's snapshot: the image keeps the sources it shipped with
+if [ -d /run/homelab/sources ]; then
+  cp -a /run/homelab/sources/. /etc/apt/sources.list.d/
+fi
+
 # What this boot's credentials made is the boot's: users, and the files tmpfiles wrote for them
 credentials=/run/credentials/@system
 if [ -r "$credentials/sysusers.extra" ]; then
