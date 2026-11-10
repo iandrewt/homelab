@@ -1,6 +1,7 @@
 """The contract an image keeps with whatever boots it, checked by booting it twice as new VMs."""
 
 import base64
+import os
 import re
 import shutil
 import sys
@@ -101,7 +102,7 @@ def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -
     version, = {re.sub(rf"^{base.name}_(.*)\.efi$", r"\1", p.name) for p in (out / "updates").glob("*.efi")}
     following = f"{version}.1"
     # The build's keys, in out, sign its next version too
-    work = signing.prepare(images, base.architecture, builder.CACHE / "signing") if sign == "kms" else None
+    work = signing.prepare(images, builder.CACHE / "signing") if sign == "kms" else None
     build.lay_out(images, base, out, following, work)
     builder.run_in({out: "/out"}, "sh", "-ec", "rm -rf /out/next\ncp -a /out/updates /out/next")
     build.updates(base, out, following, work, into="/out/next")
@@ -186,6 +187,9 @@ def _contract_image_based(base: Image, vm: Vm, host_key: str) -> list[str]:
 
     release = vm.ssh("cat /usr/lib/homelab/image-release")
     failed += _check("the release file names the image", f"IMAGE_ID={base.name}\n" in release, release)
+    url = os.environ.get("IMAGES_UPDATE_URL") or "https://images.invalid"
+    paths = set(vm.ssh("grep -h '^Path=http' /usr/lib/sysupdate.d/*.transfer").split())
+    failed += _check(f"sysupdate reads {url}'s stable channel", paths == {f"Path={url}/%M/stable/"}, str(paths))
     if "qemu-guest-agent" in base.packages:
         failed += _agent(vm, host_key)
     return failed

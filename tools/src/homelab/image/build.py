@@ -116,7 +116,7 @@ def signer(images: Path, image: Image, sign: str, out: Path) -> Path | None:
     if sign == "test":
         _keys(out)
         return None
-    work = signing.prepare(images, image.architecture, builder.CACHE / "signing")
+    work = signing.prepare(images, builder.CACHE / "signing")
     builder.run_in({out: "/out", **signing.mounts(work)}, "sh", "-c", signing.KEYS, env=signing.env())
     return work
 
@@ -218,6 +218,8 @@ def lay_out(images: Path, image: Image, out: Path, version: str, work: Path | No
             ("--verity-key", "db.key"), ("--verity-certificate", "db.crt"),
             ("--sign-expected-pcr-key", "db.key"), ("--sign-expected-pcr-certificate", "db.crt"))
             for a in (flag, f"/out/keys/{name}")]
+    if url := os.environ.get("IMAGES_UPDATE_URL"):
+        keys += ["--environment", f"IMAGES_UPDATE_URL={url}"]
     _clear(f"{image.name}_{version}")
     builder.mkosi(images, *image.args, "--image-version", version, "--extra-tree", "/out/keys/tree:/",
                   "--extra-tree", "/out/release:/", *keys, "build", mounts={out: "/out"}, signing=work)

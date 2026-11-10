@@ -3,7 +3,7 @@ ProtectVersion=%A
 
 [Source]
 Type=url-file
-Path=https://images.invalid/%M/
+Path=https://images.invalid/%M/stable/
 MatchPattern=%M_@v.usr-%a-verity.@u.raw
 
 [Target]
