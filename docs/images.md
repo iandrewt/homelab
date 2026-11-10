@@ -18,6 +18,11 @@ image's. Nothing installs on it: what it runs comes as a signed system extension
 sums are signed by Platform's release key, which only a release can use, and which db trusts by
 [its certificate](../images/secure-boot/db.crt).
 
+**It updates from Platform's update service**, which admits the sites' public addresses alone: each
+release goes to a `canary` channel, and is promoted to `stable`, which a machine follows. A machine
+following canary says so in `/etc/sysupdate.d/`, a copy of each `/usr/lib/sysupdate.d/*.transfer`
+with `stable` in its `Path=` changed to `canary`.
+
 **ymir has no cloud-init.** Its seed's `user-data` is systemd credentials, one a line as SMBIOS
 type 11 carries them, and the image reads no other document:
 

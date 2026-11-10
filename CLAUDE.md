@@ -480,7 +480,11 @@ signed keylessly by the workflow (`docs/images.md` says how to check one). An im
 `alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`): mkosi's
 signing tools have no network, so its PKCS#11 module runs behind `p11-kit server`, which `mkosi box`
 starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, issued by KEK
-(`homelab image db`).
+(`homelab image db`). Its release publishes its update files to the `canary` channel
+of the update bucket (`homelab image publish`), behind CloudFront on the Free flat-rate plan, whose WAF
+admits every site's public aggregates from NetBox; promoting to `stable` is `gh workflow run images.yml
+--ref image/<image>/<version> -f promote=true`. Each channel keeps five versions, its `SHA256SUMS`
+checked against the release key before anything's added.
 
 **`internal/design/` can lag the code.** Verify against it before citing one.
 
