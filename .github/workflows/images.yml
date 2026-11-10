@@ -361,10 +361,11 @@ jobs:
             ~/.cache/homelab/images/${{ matrix.image }}/extensions/${{ matrix.extension }}/*.packages
           retention-days: 1
 
+  # Not on the slim runner, which lacks the envsubst cosign's installer runs
   extension-release:
     if: startsWith(github.ref, 'refs/tags/extension/')
     needs: [plan, extension]
-    runs-on: ubuntu-slim
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
       id-token: write
