@@ -51,7 +51,7 @@ ln -s ../probe.service $x/systemd/system/multi-user.target.wants/probe.service
 VOLATILE = re.compile(r"random|_seed|boot_id|ns_last_pid|fs\.(file|inode|dentry|quota)|tcp_fastopen_key"
                       r"|user_reserve_kbytes|admin_reserve_kbytes|nr_inodes=|pipe_ino=|fd=|pgrp=|stat_"
                       # What the kernel sizes by the memory it finds at boot
-                      r"|threads-max|max_\w+_namespaces")
+                      r"|threads-max|max_\w+_namespaces|(tcp|udp)_mem")
 
 
 def register(verbs) -> None:
