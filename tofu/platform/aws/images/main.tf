@@ -80,7 +80,7 @@ moved {
   to   = aws_kms_alias.signing
 }
 
-# Only a job in the release environment, which takes an image/* tag and its reviewer's approval
+# Only a job in the release environment, which takes an image/* or extension/* tag and its reviewer's approval
 resource "aws_iam_role" "release" {
   name = "images-release"
 
