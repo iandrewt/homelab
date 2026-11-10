@@ -113,7 +113,9 @@ def _update(image: Image, out: Path, work: Path, channel: str, sums: str, source
         builder.run_in({work_dir: "/work", out: "/out", **signing.mounts(work)}, "sh", "-c", SIGN, env=signing.env())
         say(f"publishing {', '.join(sorted({version_of(n, image.name) for n in sources}))} to {prefix}")
         for name, source in sources.items():
-            run("aws", "s3", "cp", "--only-show-errors", source, f"{prefix}/{name}")
+            # Not the source's tags, the CLI's default for a copy within the bucket, which the release role may not read
+            props = ["--copy-props", "metadata-directive"] if source.startswith("s3://") else []
+            run("aws", "s3", "cp", "--only-show-errors", *props, source, f"{prefix}/{name}")
         for name in ("SHA256SUMS.gpg", "SHA256SUMS"):
             run("aws", "s3", "cp", "--only-show-errors", str(work_dir / name), f"{prefix}/{name}")
         for name in pruned:
