@@ -35,7 +35,56 @@ io.systemd.credential:ssh.authorized_keys.debian=ssh-ed25519 AAAA...
 `ssh.authorized_keys.debian` lets you in, once. Any other credential reaches what imports it
 after udev has found the drive: `tmpfiles.extra` and `network.*`, but not `sysusers.extra`. A value with a newline is
 `io.systemd.credential.binary:<name>=<base64>`. The rest of this page is the package-managed
-images'.
+images', but for [its system extensions](#system-extensions).
+
+## System extensions
+
+What a ymir machine runs comes as a system extension: one workload's packages, built over the
+image's `/usr` and holding only what they add, its verity signed by the release key.
+[`images/extensions.toml`](../images/extensions.toml) lists them, and the images each is built over:
+
+| Extension | Packages | From |
+| --- | --- | --- |
+| `pdns` | PowerDNS Authoritative, with LMDB | `repo.powerdns.com`, the 5.1 train |
+| `pdns-recursor` | PowerDNS Recursor | `repo.powerdns.com`, the 5.4 train |
+| `dnsdist` | dnsdist | `repo.powerdns.com`, the 2.1 train |
+| `frr` | FRR | `deb.frrouting.org`, the 10.7 train |
+| `haproxy` | HAProxy | Debian, at the image's snapshot |
+
+**Each is a sysupdate component, disabled until a machine takes it**, and then updated on its own
+version, from the same update service as the image:
+
+```
+sudo /usr/lib/systemd/systemd-sysupdate enable-component pdns-recursor
+sudo /usr/lib/systemd/systemd-sysupdate --component=pdns-recursor update
+```
+
+It's merged at the next boot (or `systemd-sysext refresh`) into `/usr`, under
+`/var/lib/extensions/<extension>.raw.v/`, and only if db trusts its signature. **Merged isn't
+running**: what a package's scripts would write in `/etc` and `/var` isn't there. Its users come
+with it as `sysusers.d`, but its default configuration doesn't, and nothing is enabled until the
+machine writes its own configuration and enables the unit.
+
+**A version is upstream's and a rebuild count**, `5.4.9-2`, as Arch's `pkgrel`. It's rebuilt
+only when [`images/extensions.lock`](../images/extensions.lock) moves: what apt would add over the
+image, every bundled library at its version, and the hash of what its build reads. What it takes
+from the base moves with the base, whose ABI Debian holds within a release, and an extension names
+the release it was built for (`ID=debian`, `VERSION_ID=13`), so systemd refuses it on another. A
+library it bundles is a copy, which only a rebuild updates.
+
+Each is released by a tag, `extension/<extension>/<version>`, as an image is: tested on the
+image's newest release, published to `canary`, promoted to `stable` by a dispatch at its tag. Its
+release on GitHub holds each image's extension and package list, and `SHA256SUMS`, signed as an
+image's. Adding one is a profile in `images/mkosi.profiles/<extension>/` (its packages, and its
+vendor's source signed by a key in `images/vendors/`), its entry in `images/extensions.toml`, and
+`uv run homelab image extension lock`. Its component reaches machines with the image's next
+release.
+
+```
+uv run homelab image extension lock --check   # whether any would be rebuilt
+uv run homelab image extension build pdns-recursor
+uv run homelab image extension test ymir-amd64-vm   # boots the image's build, takes each, checks it links
+```
 
 ## What's in one
 

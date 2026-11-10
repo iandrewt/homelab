@@ -1,0 +1,5 @@
+Types: deb
+URIs: http://repo.powerdns.com/debian
+Suites: trixie-auth-51
+Components: main
+Signed-By: /etc/apt/keyrings/powerdns.asc

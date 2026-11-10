@@ -56,6 +56,11 @@ class Image:
         raise BootstrapError(f"no extra tree of {self.name} holds {path}")
 
 
+def extensions(images: Path) -> dict:
+    """images/extensions.toml: each system extension's images, and the package its version follows."""
+    return tomllib.loads((images / "extensions.toml").read_text())
+
+
 def summary(images: Path, *args: str) -> dict:
     """mkosi's own view of a configuration's main image."""
     found = json.loads(builder.run_in(

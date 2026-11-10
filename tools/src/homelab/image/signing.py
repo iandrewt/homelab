@@ -92,11 +92,18 @@ def prepare(images: Path, work: Path) -> Path:
 
 def mkosi_args() -> list[str]:
     """Every key the release's, and the keys it enrolls ours rather than ones mkosi makes of its certificate."""
-    args = ["--secure-boot-auto-enroll", "no", "--extra-tree", "/cache/project/secure-boot/auto:/efi/loader/keys/auto"]
-    for key in ("secure-boot", "verity", "sign-expected-pcr"):
-        args += [f"--{key}-key", URI, f"--{key}-key-source", "provider:pkcs11",
-                 f"--{key}-certificate", "/cache/project/secure-boot/db.crt"]
-    return args
+    return ["--secure-boot-auto-enroll", "no", "--extra-tree", "/cache/project/secure-boot/auto:/efi/loader/keys/auto",
+            *_keys("secure-boot", "verity", "sign-expected-pcr")]
+
+
+def verity_args() -> list[str]:
+    """The release key for verity alone, as a system extension is signed."""
+    return _keys("verity")
+
+
+def _keys(*kinds: str) -> list[str]:
+    return [a for key in kinds for a in (f"--{key}-key", URI, f"--{key}-key-source", "provider:pkcs11",
+                                         f"--{key}-certificate", "/cache/project/secure-boot/db.crt")]
 
 
 def mounts(work: Path) -> dict[Path, str]:

@@ -1,6 +1,6 @@
 """Platform's base images: each one images/images.toml names, built by mkosi in the one pinned container."""
 
-from . import build, derive, keys, publish, test
+from . import build, derive, extension, keys, publish, test
 
 
 def register(subparsers) -> None:
@@ -8,6 +8,7 @@ def register(subparsers) -> None:
     verbs = image.add_subparsers(dest="verb", required=True)
     build.register(verbs)
     derive.register(verbs)
+    extension.register(verbs)
     keys.register(verbs)
     publish.register(verbs)
     test.register(verbs)

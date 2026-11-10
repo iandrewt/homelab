@@ -1,0 +1,99 @@
+# What each extension was last released from: `homelab image extension lock` writes it
+
+[dnsdist]
+version = "2.1.3-1"
+
+[dnsdist.ymir-amd64-vm]
+inputs = "10c211ed75728907fc2230fce156bacf624750e09866fc60e61ae009caab00bf"
+packages = [
+    "dnsdist=2.1.3-1pdns.debian13",
+    "libabsl20240722=20240722.0-4",
+    "libcdb1=0.81-2",
+    "libfstrm0=0.6.1-1+b3",
+    "libgdbm-compat4t64=1.24-2",
+    "libgdbm6t64=1.24-2",
+    "liblmdb0=0.9.31-1+b2",
+    "libluajit-5.1-2=2.1.0+openresty20250117-2",
+    "libluajit-5.1-common=2.1.0+openresty20250117-2",
+    "libpci3=1:3.13.0-2",
+    "libperl5.40=5.40.1-6+deb13u1",
+    "libre2-11=20240702-3+b1",
+    "libsensors-config=1:3.6.2-2",
+    "libsensors5=1:3.6.2-2",
+    "libsnmp-base=5.9.4+dfsg-2+deb13u1",
+    "libsnmp40t64=5.9.4+dfsg-2+deb13u1",
+    "libsodium23=1.0.18-1+deb13u1",
+    "libxdp1=1.5.4-1",
+    "pci.ids=0.0~2025.06.09-1",
+    "perl-modules-5.40=5.40.1-6+deb13u1",
+]
+
+[frr]
+version = "10.7.1-1"
+
+[frr.ymir-amd64-vm]
+inputs = "39268bafdbbecfd0907b76726e8cb33435d823f9c82eaac3c82397064746c911"
+packages = [
+    "frr=10.7.1-0~deb13u1",
+    "libcares2=1.34.5-1+deb13u1",
+    "liblsof0=4.99.4+dfsg-2",
+    "libpcre2-posix3=10.46-1~deb13u3",
+    "libyang3=3.13.6-1~deb13u1",
+    "logrotate=3.22.0-1",
+    "lsof=4.99.4+dfsg-2",
+]
+
+[haproxy]
+version = "3.0.11-1"
+
+[haproxy.ymir-amd64-vm]
+inputs = "9e1ce80723465c247738f21a6b0e45f2432afa8eb0993dbab737795c32ddd590"
+packages = [
+    "haproxy=3.0.11-1+deb13u4",
+    "libjemalloc2=5.3.0-3",
+    "liblua5.4-0=5.4.7-1+b2",
+    "libopentracing-c-wrapper0t64=1.1.3-3.1+b1",
+    "libopentracing1=1.6.0-4+b2",
+]
+
+[pdns]
+version = "5.1.5-1"
+
+[pdns.ymir-amd64-vm]
+inputs = "8b3c4bd92d6b94d077100769784bd5e5a247cda19cafeeb3085f10758a47d739"
+packages = [
+    "libboost-program-options1.83.0=1.83.0-4.2",
+    "libboost-serialization1.83.0=1.83.0-4.2",
+    "liblmdb0=0.9.31-1+b2",
+    "libluajit-5.1-2=2.1.0+openresty20250117-2",
+    "libluajit-5.1-common=2.1.0+openresty20250117-2",
+    "libsodium23=1.0.18-1+deb13u1",
+    "pdns-backend-lmdb=5.1.5-1pdns.debian13",
+    "pdns-server=5.1.5-1pdns.debian13",
+]
+
+[pdns-recursor]
+version = "5.4.9-1"
+
+[pdns-recursor.ymir-amd64-vm]
+inputs = "551e613d1f1e486bfbea6d3ed92482fc8a1ad78028ce581042489bdec3a45923"
+packages = [
+    "dns-root-data=2025080400~deb13u1",
+    "libboost-context1.83.0=1.83.0-4.2",
+    "libboost-filesystem1.83.0=1.83.0-4.2",
+    "libfstrm0=0.6.1-1+b3",
+    "libgdbm-compat4t64=1.24-2",
+    "libgdbm6t64=1.24-2",
+    "libluajit-5.1-2=2.1.0+openresty20250117-2",
+    "libluajit-5.1-common=2.1.0+openresty20250117-2",
+    "libpci3=1:3.13.0-2",
+    "libperl5.40=5.40.1-6+deb13u1",
+    "libsensors-config=1:3.6.2-2",
+    "libsensors5=1:3.6.2-2",
+    "libsnmp-base=5.9.4+dfsg-2+deb13u1",
+    "libsnmp40t64=5.9.4+dfsg-2+deb13u1",
+    "libsodium23=1.0.18-1+deb13u1",
+    "pci.ids=0.0~2025.06.09-1",
+    "pdns-recursor=5.4.9-1pdns.debian13",
+    "perl-modules-5.40=5.40.1-6+deb13u1",
+]

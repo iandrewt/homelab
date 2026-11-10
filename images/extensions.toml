@@ -1,0 +1,22 @@
+# What mkosi has no setting for: the images each system extension is built over, and the package whose
+# upstream version it's released at
+
+[dnsdist]
+images = ["ymir-amd64-vm"]
+package = "dnsdist"
+
+[frr]
+images = ["ymir-amd64-vm"]
+package = "frr"
+
+[haproxy]
+images = ["ymir-amd64-vm"]
+package = "haproxy"
+
+[pdns]
+images = ["ymir-amd64-vm"]
+package = "pdns-server"
+
+[pdns-recursor]
+images = ["ymir-amd64-vm"]
+package = "pdns-recursor"

@@ -1,0 +1,5 @@
+Types: deb
+URIs: https://deb.frrouting.org/frr
+Suites: trixie
+Components: frr-10.7
+Signed-By: /etc/apt/keyrings/frr.gpg

@@ -310,6 +310,20 @@ target's disk; **ymir** is laid out as a signed image: a UKI, `/usr` on erofs un
 forky. Whatever systemd reads before tmpfiles restores `/etc` on first boot moves to `/usr`;
 `homelab image test` checks the first boot is hardened as the second is.
 
+**A workload on ymir is a system extension**, on a cadence of its own: a profile in `mkosi.profiles/`
+with the `sysext` one, built `Overlay=yes` over the image's tree (`--format directory`, no boot chain),
+so it holds only what it adds, named in `extensions.toml`. A vendor's train has no snapshot, so its
+source is let through only signed by a key in `images/vendors/`. **`extensions.lock` is what each was
+last released from**, per image: what apt adds over the tree, every bundled package at its version, and
+its own files' hash. Only a moved lock rebuilds one, at upstream's version and a count (`5.4.9-2`, as
+Arch's pkgrel): the base's libraries move with the base, under Debian's ABI and the release file's
+`VERSION_ID`, but a bundled one is a copy. A build refuses a lock that no longer resolves, and an
+extension that installs anything else; CI checks the lock on every change, and `trains.yml` locks a
+vendor's release again in a PR. What a package's scripts write in `/etc` and `/var` is gone: its users
+become `sysusers.d`, and its enablement and configuration are the machine's. Each is a disabled
+sysupdate component in ymir, which a machine enables, so a new extension reaches machines with the
+image's next release; ymir merges only images db's key signed.
+
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,
 resolvers and apt are Ansible's. Ansible never reads a cluster file - the trunk
@@ -377,7 +391,7 @@ types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
 
 ```
 tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
-images/       Platform's base images: one mkosi project, its families and targets profiles laid over a bake per architecture
+images/       Platform's base images: one mkosi project, its families and targets profiles laid over a bake per architecture, and ymir's extensions
 ansible/      a tree per team (network/, platform/), the homelab.linux and homelab.debian collections, and the roles, plugins and baseline they share
 tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
 kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
@@ -427,6 +441,9 @@ uv run homelab bootstrap proxmox --host yggdrasil   # its answer inside its cell
 uv run homelab image bake x86-64                       # what every image of the architecture lays over
 uv run homelab image build debian-13-amd64-vm          # over its bake, baking it if it isn't current
 uv run homelab image test debian-13-amd64-vm           # boots it twice, as new VMs, and checks its contract
+uv run homelab image extension lock                    # each extension's lock, again where it moved; --check fails instead
+uv run homelab image extension build pdns-recursor     # at its locked version, over each of its images' trees
+uv run homelab image extension test ymir-amd64-vm      # the image's build, taking each built extension by sysupdate
 uv run homelab image derive <image> <base> <yours> --playbook <yml>   # docs/images.md
 
 cd ansible/network && uv run ansible-playbook site.yml --limit <host>   # or ansible/platform
@@ -488,7 +505,9 @@ starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, iss
 of the update bucket (`homelab image publish`), behind CloudFront on the Free flat-rate plan, whose WAF
 admits every site's public aggregates from NetBox; promoting to `stable` is `gh workflow run images.yml
 --ref image/<image>/<version> -f promote=true`. Each channel keeps five versions, its `SHA256SUMS`
-checked against the release key before anything's added.
+checked against the release key before anything's added. **An extension is released alike**, by
+`extension/<extension>/<version>` at the version its lock holds, tested on its image's newest release,
+into `<image>/extensions/<extension>/{canary,stable}/`.
 
 **`internal/design/` can lag the code.** Verify against it before citing one.
 

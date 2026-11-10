@@ -9,7 +9,8 @@ dpkg --purge aide aide-common unattended-upgrades
 
 # A release's update service; any other build's is a name that never resolves
 if [ -n "${IMAGES_UPDATE_URL:-}" ]; then
-  sed -i "s#^Path=https://images.invalid/#Path=$IMAGES_UPDATE_URL/#" /usr/lib/sysupdate.d/*.transfer
+  find /usr/lib -path '/usr/lib/sysupdate*.d/*.transfer' \
+    -exec sed -i "s#^Path=https://images.invalid/#Path=$IMAGES_UPDATE_URL/#" {} +
 fi
 rm -f /etc/systemd/system/dailyaidecheck.* /etc/systemd/system/*.wants/dailyaidecheck.* \
   /etc/apt/apt.conf.d/22auto-upgrades-local /etc/apt/apt.conf.d/52unattended-upgrades-local

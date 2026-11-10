@@ -4,6 +4,7 @@ with the image's family and target over it, as a tree on its disk or as a signed
 import hashlib
 import os
 import random
+import shutil
 import subprocess
 import time
 import uuid
@@ -60,6 +61,25 @@ GNUPGHOME=/out/keys/gnupg gpg --batch --quiet --yes --detach-sign --output SHA25
 """
 
 
+# Each system extension built for the image, a sysupdate component of its own that a machine enables to take it
+COMPONENT = """[Component]
+Description=The {name} system extension
+Enabled=false
+"""
+TRANSFER = """[Source]
+Type=url-file
+Path=https://images.invalid/%M/extensions/{name}/stable/
+MatchPattern={name}_@v.raw
+
+[Target]
+Type=regular-file
+Path=/var/lib/extensions/{name}.raw.v
+MatchPattern={name}_@v.raw
+Mode=0444
+InstancesMax=2
+"""
+
+
 def register(verbs) -> None:
     build = verbs.add_parser(
         "build", help="build an image",
@@ -99,7 +119,7 @@ def _build(args) -> int:
         _release(images.parent, image, out, args.version)
         _clear(f"{image.name}_{args.version}")
         builder.mkosi(images, *image.args, "--image-version", args.version, "--extra-tree", "/out/release:/",
-                      *snapshot.sandbox(image, out), "build", mounts={out: "/out"})
+                      *snapshot.sandbox(image.snapshot, image.sandbox_trees, out), "build", mounts={out: "/out"})
     _collect(image, out, args.version)
     say(f"built {out / f'{image.name}.{image.format}'}")
     return 0
@@ -238,7 +258,7 @@ def lay_out(images: Path, image: Image, out: Path, version: str, work: Path | No
             for a in (flag, f"/out/keys/{name}")]
     if url := os.environ.get("IMAGES_UPDATE_URL"):
         keys += ["--environment", f"IMAGES_UPDATE_URL={url}"]
-    keys += snapshot.sandbox(image, out)
+    keys += snapshot.sandbox(image.snapshot, image.sandbox_trees, out)
     _clear(f"{image.name}_{version}")
     builder.mkosi(images, *image.args, "--image-version", version, "--extra-tree", "/out/keys/tree:/",
                   "--extra-tree", "/out/release:/", *keys, "build", mounts={out: "/out"}, signing=work)
@@ -284,13 +304,22 @@ def _baseline(root: Path, work: Path, ssh: list[str]) -> None:
 
 
 def _release(root: Path, image: Image, out: Path, version: str) -> None:
-    """What this image is, in os-release's format, for whatever re-asserts or derives from it."""
+    """What this image is, in os-release's format, for whatever re-asserts or derives from it, and the
+    extensions built for it, each a sysupdate component."""
     git = ["git", "-C", str(root)]
     commit = run(*git, "rev-parse", "HEAD", capture=True).strip()
     dirty = run(*git, "status", "--porcelain", capture=True)
     collections = root / "ansible" / "collections" / "ansible_collections" / "homelab"
-    release = out / "release" / "usr" / "lib" / "homelab" / "image-release"
+    tree = out / "release"
+    shutil.rmtree(tree, ignore_errors=True)
+    release = tree / "usr" / "lib" / "homelab" / "image-release"
     release.parent.mkdir(parents=True, exist_ok=True)
+    if image.image_based:
+        for name, entry in catalog.extensions(root / "images").items():
+            if image.name in entry["images"]:
+                (tree / "usr" / "lib" / f"sysupdate.{name}.component").write_text(COMPONENT.format(name=name))
+                (tree / "usr" / "lib" / f"sysupdate.{name}.d").mkdir()
+                (tree / "usr" / "lib" / f"sysupdate.{name}.d" / f"{name}.transfer").write_text(TRANSFER.format(name=name))
     release.write_text("".join(f"{key}={value}\n" for key, value in {
         "IMAGE_ID": image.name,
         "IMAGE_VERSION": version,
