@@ -18,18 +18,25 @@ on:
   pull_request:
     paths: *paths
   workflow_dispatch:
+    inputs:
+      promote:
+        description: Promote this tag's release from canary to stable, building nothing
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# A promotion at a release's tag mustn't cancel the release
 concurrency:
-  group: images-${{ github.ref }}
+  group: images-${{ github.ref }}${{ inputs.promote && '-promote' || '' }}
   cancel-in-progress: true
 
 jobs:
   # A tag, image/<image>/<version>, builds and releases that image; anything else builds every image in
   # images.toml, each on a runner of its own architecture, over the one bake its architecture shares
   plan:
+    if: ${{ !inputs.promote }}
     runs-on: ubuntu-26.04
     outputs:
       bakes: ${{ steps.plan.outputs.bakes }}
@@ -151,12 +158,20 @@ jobs:
           aws-region: ${{ vars.IMAGES_REGION }}
       - env:
           HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
+          IMAGES_UPDATE_URL: ${{ vars.IMAGES_UPDATE_URL }}
         run: |
           uv run homelab image build "${{ matrix.image }}" --version "${{ needs.plan.outputs.version }}" \
             --sign "${{ matrix.sign }}"
       - env:
           HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
+          IMAGES_UPDATE_URL: ${{ vars.IMAGES_UPDATE_URL }}
         run: uv run homelab image test "${{ matrix.image }}" --sign "${{ matrix.sign }}"
+      # An image-based release goes to its canary channel; promoting it is a dispatch at its tag
+      - if: matrix.sign == 'kms'
+        env:
+          HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
+          IMAGES_BUCKET: ${{ vars.IMAGES_BUCKET }}
+        run: uv run homelab image publish "${{ matrix.image }}"
       - if: startsWith(github.ref, 'refs/tags/image/')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
@@ -195,3 +210,29 @@ jobs:
             --title "$IMAGE $VERSION" \
             --notes "Built from $GITHUB_SHA: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/images.md" \
             "$IMAGE-$VERSION".* SHA256SUMS SHA256SUMS.sigstore.json
+
+  # `gh workflow run images.yml --ref image/<image>/<version> -f promote=true`: at the tag, so in the release
+  # environment, with the release key
+  promote:
+    if: inputs.promote && startsWith(github.ref, 'refs/tags/image/')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+        with:
+          role-to-assume: ${{ vars.IMAGES_RELEASE_ROLE }}
+          aws-region: ${{ vars.IMAGES_REGION }}
+      - env:
+          HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
+          IMAGES_BUCKET: ${{ vars.IMAGES_BUCKET }}
+        run: |
+          release="${GITHUB_REF_NAME#image/}"
+          uv run homelab image promote "${release%/*}" "${release##*/}"
