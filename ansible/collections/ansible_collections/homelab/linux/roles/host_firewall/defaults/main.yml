@@ -8,5 +8,8 @@ host_firewall_rules: []
 host_firewall_needed:
   - { protocol: tcp, port: 22 }
 
+# Whether to install nftables, which an image may carry instead
+host_firewall_install: true
+
 # How long a ruleset that cut off Ansible stays, before the one it replaced is restored
 host_firewall_rollback_seconds: 90

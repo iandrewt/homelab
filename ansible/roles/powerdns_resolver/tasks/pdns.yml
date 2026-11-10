@@ -1,0 +1,78 @@
+---
+- name: Make the authoritative server's configuration directory
+  ansible.builtin.file:
+    path: /etc/powerdns
+    state: directory
+    owner: root
+    group: pdns
+    mode: "0750"
+
+- name: Configure the authoritative server
+  ansible.builtin.template:
+    src: pdns.conf.j2
+    dest: /etc/powerdns/pdns.conf
+    owner: root
+    group: pdns
+    mode: "0640"
+  # It holds the API key
+  diff: false
+  notify: Restart pdns
+
+- name: Make LMDB's directory
+  ansible.builtin.file:
+    path: /var/lib/powerdns
+    state: directory
+    owner: pdns
+    group: pdns
+    mode: "0750"
+
+- name: Run the authoritative server
+  ansible.builtin.systemd_service:
+    name: pdns
+    state: started
+    enabled: true
+
+- name: Apply its configuration before provisioning it
+  ansible.builtin.meta: flush_handlers
+
+- name: Provision the primary through its API
+  ansible.builtin.import_tasks: provision.yml
+  when: powerdns_resolver_role == 'primary'
+
+# create-secondary-zone only runs while a zone doesn't exist, so a primary that moves never
+# reaches an existing one, which change-secondary-zone-primary does
+- name: Make each secondary zone, from the primary's current addresses
+  ansible.builtin.shell:
+    cmd: >-
+      pdnsutil list-zone {{ item.name | quote }} >/dev/null 2>&1
+      && echo exists
+      || pdnsutil create-secondary-zone {{ item.name | quote }} {{ powerdns_resolver_primary_targets | map('quote') | join(' ') }}
+  loop: "{{ powerdns_resolver_zones }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+  become_user: pdns
+  register: powerdns_resolver_secondary_zones
+  changed_when: "'exists' not in powerdns_resolver_secondary_zones.stdout"
+  when: powerdns_resolver_role == 'secondary'
+
+- name: Point each secondary zone at the primary's current addresses
+  ansible.builtin.command:
+    argv: "{{ ['pdnsutil', 'change-secondary-zone-primary', item.name] + powerdns_resolver_primary_targets }}"
+  loop: "{{ powerdns_resolver_zones }}"
+  loop_control:
+    label: "{{ item.name }}"
+  become: true
+  become_user: pdns
+  # pdnsutil can't say whether this changed anything
+  changed_when: false
+  when: powerdns_resolver_role == 'secondary'
+
+- name: Fetch each secondary zone from it now, rather than at the next refresh
+  ansible.builtin.command:
+    argv: [pdns_control, retrieve, "{{ item.name }}"]
+  loop: "{{ powerdns_resolver_zones }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: false
+  when: powerdns_resolver_role == 'secondary'

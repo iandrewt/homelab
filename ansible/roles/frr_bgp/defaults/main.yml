@@ -14,15 +14,21 @@ frr_bgp_service_addresses: []
 frr_bgp_anycast_addresses: []
 frr_bgp_anycast_service: ~
 frr_bgp_anycast_needs: []
-# A command that exits 0 while this host serves the anycast addresses well
+# A command, with its arguments, that exits 0 while this host serves the anycast addresses well
 frr_bgp_anycast_check: "true"
 frr_bgp_anycast_interval: 5
 # Present, the host withdraws them whatever the check says
 frr_bgp_anycast_drain: /var/lib/anycast/drain
 
+# Whether to install FRR and the anycast loop, which an image's extension may carry instead
+frr_bgp_install: true
+
 # The netplan ID of the uplink, as cloud-init and the install seeds name it
 frr_bgp_uplink: primary
 frr_bgp_uplink_match: "e*"
+# Whether to declare the uplink's DHCP too, where nothing else in netplan does: an image whose default
+# network is networkd's own
+frr_bgp_uplink_dhcp: false
 frr_bgp_reply_table: 200
 
 frr_bgp_router_id: "{{ frr_bgp_service_addresses | reject('search', ':') | first | default('') }}"

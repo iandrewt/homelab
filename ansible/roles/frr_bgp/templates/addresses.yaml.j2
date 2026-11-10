@@ -17,6 +17,13 @@ network:
     {{ frr_bgp_uplink }}:
       match:
         name: "{{ frr_bgp_uplink_match }}"
+{% if frr_bgp_uplink_dhcp %}
+      # As the image's own default for it, which this definition replaces
+      dhcp4: true
+      dhcp6: true
+      emit-lldp: true
+      link-local: [ipv6]
+{% endif %}
       routes:
 {% for gateway in frr_bgp_gateways %}
         - to: default

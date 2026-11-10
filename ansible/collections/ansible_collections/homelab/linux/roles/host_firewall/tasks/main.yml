@@ -26,6 +26,7 @@
   ansible.builtin.package:
     name: nftables
     state: present
+  when: host_firewall_install
 
 - name: Write the ruleset
   ansible.builtin.template:

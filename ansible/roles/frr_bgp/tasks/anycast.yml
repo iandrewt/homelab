@@ -8,13 +8,23 @@
     mode: "0644"
   notify: Restart anycast
 
-- name: Write the health loop
-  ansible.builtin.template:
-    src: anycast-check.j2
-    dest: /usr/local/libexec/anycast-check
+- name: Make the health loop's directory
+  ansible.builtin.file:
+    path: /usr/libexec/homelab
+    state: directory
     owner: root
     group: root
     mode: "0755"
+  when: frr_bgp_install
+
+- name: Install the health loop
+  ansible.builtin.copy:
+    src: anycast-check
+    dest: /usr/libexec/homelab/anycast-check
+    owner: root
+    group: root
+    mode: "0755"
+  when: frr_bgp_install
   notify: Restart anycast-check
 
 - name: Write the health loop's unit

@@ -1,0 +1,134 @@
+---
+# The resolvers' roles on a booted image-based host, NetBox's part played by these vars:
+#   uv run homelab image extension test ymir-amd64-vm --playbook ansible/tests/resolver-primary.yml
+# runs it against host `build`, its extensions served at extensions_url, as a primary or a secondary
+- name: Baseline
+  ansible.builtin.import_playbook: ../baseline.yml
+
+- name: A resolver
+  hosts: build
+  become: true
+  vars:
+    zone: resolver.test
+    service: [192.0.2.53, "2001:db8::53"]
+    anycast: [192.0.2.1, "2001:db8::1"]
+    health: /usr/libexec/homelab/dns-health 5300 {{ zone }} . 198.41.0.4 193.0.14.129
+
+    host_firewall_rules:
+      - { name: ssh, protocol: tcp, ports: [22], addresses: [], sources: { internet: true } }
+      - { name: dns, protocol: udp, ports: [53], addresses: [], sources: { internet: true } }
+      - { name: dns, protocol: tcp, ports: [53], addresses: [], sources: { internet: true } }
+      - { name: api, protocol: tcp, ports: [8443], addresses: [], sources: { internet: true } }
+
+    frr_bgp_local_asn: 4200000010
+    frr_bgp_peer_asn: 4200000000
+    frr_bgp_peer_address: 10.0.2.2
+    frr_bgp_gateways: [10.0.2.2]
+    frr_bgp_service_addresses: "{{ service }}"
+    frr_bgp_anycast_addresses: "{{ anycast }}"
+    frr_bgp_anycast_service: dnsdist.service
+    frr_bgp_anycast_needs: [pdns-recursor.service, pdns.service]
+    frr_bgp_anycast_check: "{{ health }}"
+
+    powerdns_resolver_service_v4: "{{ service[0] }}"
+    powerdns_resolver_service_v6: "{{ service[1] }}"
+    powerdns_resolver_anycast_v4: "{{ anycast[0] }}"
+    powerdns_resolver_anycast_v6: "{{ anycast[1] }}"
+    powerdns_resolver_acl: [10.0.2.0/24]
+    powerdns_resolver_api_key: test
+    powerdns_resolver_api_addresses: ["{{ service[0] }}"]
+    powerdns_resolver_api_port: 8443
+    powerdns_resolver_api_allow_from: [127.0.0.0/8, 192.0.2.0/24]
+    powerdns_resolver_primary_host: build
+    powerdns_resolver_primary_api_key: test
+    # A secondary's primary is nowhere: it makes its zones, and serves nothing
+    powerdns_resolver_primary_addresses: "{{ service if powerdns_resolver_role == 'primary' else ['192.0.2.99'] }}"
+    powerdns_resolver_zones:
+      - name: "{{ zone }}"
+        nameservers: ["ns1.{{ zone }}"]
+        soa: ns1.{{ zone }}. hostmaster.{{ zone }}. 1 10800 3600 604800 3600
+        soa_ttl: 3600
+        dnssec_keys: "{{ [{'keytype': 'csk', 'algorithm': 'ECDSAP256SHA256'}] if powerdns_resolver_role == 'primary' else [] }}"
+    powerdns_resolver_health_internal: "{{ zone }}"
+  roles:
+    - homelab.linux.host_firewall
+    - frr_bgp
+    - powerdns_resolver
+  post_tasks:
+    - name: Read what serves DNS
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+      register: running_units
+      failed_when: running_units.status.ActiveState != 'active'
+      loop: [pdns, pdns-recursor, dnsdist, frr, nftables]
+
+    - name: Read FRR's BGP
+      ansible.builtin.command: vtysh -c 'show running-config'
+      register: running
+      changed_when: false
+      failed_when: "'router bgp ' ~ frr_bgp_local_asn not in running.stdout"
+
+    - name: Read the firewall
+      ansible.builtin.command: nft list ruleset
+      register: ruleset
+      changed_when: false
+      failed_when: "'dport 22' not in ruleset.stdout"
+
+    - name: As a primary, it answers for its zone, validated through dnsdist, and holds the anycast addresses
+      when: powerdns_resolver_role == 'primary'
+      block:
+        - name: Ask it for its zone's SOA
+          ansible.builtin.command: dig @{{ service[0] }} {{ zone }} SOA +short
+          register: soa
+          changed_when: false
+          failed_when: soa.stdout.split() | first != 'ns1.' ~ zone ~ '.'
+
+        # dnsdist marks the recursor down while it restarts, and checks it again only after a while
+        - name: Ask dnsdist, which asks the recursor, which validates it
+          ansible.builtin.command: dig @127.0.0.1 -p 5300 {{ zone }} SOA +dnssec
+          register: validated
+          changed_when: false
+          until: "'status: NOERROR' in validated.stdout and ' ad' in validated.stdout"
+          retries: 12
+          delay: 5
+
+        - name: Its health check passes
+          ansible.builtin.command: "{{ health }}"
+          changed_when: false
+
+        - name: Wait for anycast0 to come up
+          ansible.builtin.command: ip -br link show anycast0
+          register: anycast0
+          changed_when: false
+          until: "' UNKNOWN ' in anycast0.stdout or ' UP ' in anycast0.stdout"
+          retries: 12
+          delay: 5
+
+        - name: Its API answers over TLS, through HAProxy
+          ansible.builtin.uri:
+            url: https://{{ service[0] }}:8443/api/v1/servers/localhost
+            headers:
+              X-Api-Key: test
+            validate_certs: false
+
+    - name: As a secondary with no primary, it holds its zone and withdraws the anycast addresses
+      when: powerdns_resolver_role == 'secondary'
+      block:
+        # LMDB lists a zone only once it holds an SOA, which a secondary without a primary never does
+        - name: Its zone exists
+          ansible.builtin.command: pdnsutil list-zone {{ zone }}
+          become: true
+          become_user: pdns
+          changed_when: false
+
+        - name: Its health check fails
+          ansible.builtin.command: "{{ health }}"
+          register: unhealthy
+          changed_when: false
+          failed_when: unhealthy.rc == 0
+
+        - name: Its anycast0 stays down
+          ansible.builtin.command: ip -br link show anycast0
+          register: anycast0
+          changed_when: false
+          failed_when: "' DOWN ' not in anycast0.stdout"

@@ -20,6 +20,7 @@
     - name: Group by distribution
       ansible.builtin.group_by:
         key: "{{ ansible_facts['distribution'] | lower }}"
+      changed_when: false
 
     - name: Read which image this host was built from
       ansible.builtin.slurp:
@@ -39,6 +40,7 @@
           ansible.builtin.group_by:
             key: "{{ bake }}"
             parents: images
+          changed_when: false
 
         - name: Group by image
           ansible.builtin.group_by:
@@ -46,15 +48,34 @@
               image_{{ (image_release.content | b64decode).splitlines() | select('match', 'IMAGE_ID=')
                        | first | regex_replace('^IMAGE_ID=', '') | replace('-', '_') }}
             parents: "{{ bake }}"
+          changed_when: false
           when: image_release.content is defined
 
+        - name: Group by the image's family
+          ansible.builtin.group_by:
+            key: >-
+              family_{{ (image_release.content | b64decode).splitlines() | select('match', 'HOMELAB_FAMILY=')
+                        | first | regex_replace('^HOMELAB_FAMILY=', '') }}
+            parents: images
+          changed_when: false
+          when: image_release.content is defined and 'HOMELAB_FAMILY=' in image_release.content | b64decode
+
 - name: Debian
-  hosts: debian
+  hosts: debian:!family_ymir
   become: true
   roles:
     - homelab.debian.hardening
     - homelab.linux.sshd
     - homelab.linux.host
+
+# Its image is its baseline: what the bake and the image wrote in /etc follows the image only while no host
+# writes it, so a host writes what's its own alone
+- name: Image-based, ymir
+  hosts: family_ymir
+  become: true
+  roles:
+    - homelab.linux.host
+    - homelab.linux.extensions
 
 - name: Built from an image
   hosts: images

@@ -1,0 +1,101 @@
+---
+# Its API listens on loopback alone, and only the primary's is on
+- name: Wait for the API
+  ansible.builtin.uri:
+    url: "{{ powerdns_resolver_api_url }}"
+    headers:
+      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+  register: powerdns_resolver_api_up
+  until: powerdns_resolver_api_up.status == 200
+  retries: 30
+  delay: 2
+  check_mode: false
+
+- name: Read its zones
+  ansible.builtin.uri:
+    url: "{{ powerdns_resolver_api_url }}/zones"
+    headers:
+      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+  register: powerdns_resolver_zones_held
+  check_mode: false
+
+- name: Create each zone it lacks, with its name servers and SOA
+  ansible.builtin.uri:
+    url: "{{ powerdns_resolver_api_url }}/zones"
+    method: POST
+    headers:
+      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+    body_format: json
+    body: "{{ item }}"
+    status_code: [201]
+  loop: "{{ powerdns_resolver_provision_zones | rejectattr('name', 'in', powerdns_resolver_held) | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  changed_when: true
+  vars:
+    powerdns_resolver_held: "{{ powerdns_resolver_zones_held.json | map(attribute='name') | list }}"
+
+- name: Read each zone it held
+  ansible.builtin.uri:
+    url: "{{ powerdns_resolver_api_url }}/zones/{{ item.name }}?rrsets=false"
+    headers:
+      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+  loop: "{{ powerdns_resolver_provision_zones | selectattr('name', 'in', powerdns_resolver_held) | list }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: powerdns_resolver_zones_read
+  check_mode: false
+  vars:
+    powerdns_resolver_held: "{{ powerdns_resolver_zones_held.json | map(attribute='name') | list }}"
+
+# Its name servers and SOA are set only as it's created: afterwards they're octoDNS's
+- name: Bring each held zone's kind and SOA editing in line
+  ansible.builtin.uri:
+    url: "{{ powerdns_resolver_api_url }}/zones/{{ item.item.name }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+    body_format: json
+    body: "{{ declared }}"
+    status_code: [204]
+  loop: "{{ powerdns_resolver_zones_read.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+  changed_when: true
+  vars:
+    declared:
+      kind: "{{ item.item.kind }}"
+      soa_edit_api: "{{ item.item.soa_edit_api }}"
+      soa_edit: "{{ item.item.soa_edit }}"
+  when: >-
+    item.json.kind | lower != declared.kind | lower
+    or item.json.soa_edit_api != declared.soa_edit_api
+    or item.json.soa_edit != declared.soa_edit
+
+# Only while a zone has none: a rollover is the operator's, and a restored key goes only into a new zone
+- name: Read each signed zone's keys
+  ansible.builtin.uri:
+    url: "{{ powerdns_resolver_api_url }}/zones/{{ item }}/cryptokeys"
+    headers:
+      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+  loop: "{{ powerdns_resolver_provision_cryptokeys | default([]) | map(attribute='zone') | unique | list }}"
+  register: powerdns_resolver_keys_held
+  check_mode: false
+
+- name: Create each key of a zone that has none
+  ansible.builtin.uri:
+    url: "{{ powerdns_resolver_api_url }}/zones/{{ item.zone }}/cryptokeys"
+    method: POST
+    headers:
+      X-Api-Key: "{{ powerdns_resolver_api_key }}"
+    body_format: json
+    body: "{{ item | dict2items | rejectattr('key', 'eq', 'zone') | items2dict }}"
+    status_code: [201]
+  loop: "{{ powerdns_resolver_provision_cryptokeys | default([]) }}"
+  loop_control:
+    label: "{{ item.zone }} {{ item.keytype | default('key') }}"
+  changed_when: true
+  no_log: "{{ powerdns_resolver_restored_keys | length > 0 }}"
+  when: >-
+    powerdns_resolver_keys_held.results | selectattr('item', 'eq', item.zone)
+    | map(attribute='json') | first | length == 0

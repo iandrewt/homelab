@@ -1,0 +1,10 @@
+---
+# The system extensions this host takes, by name: each a sysupdate component its image ships, disabled
+# until a host enables it. Any other the image ships is disabled, and its installs removed
+extensions_enabled: []
+
+# The channel each follows, as the image's transfers name it: stable, or canary
+extensions_channel: stable
+
+# Where they're fetched from instead, `<url><name>/`, as a test serves them
+extensions_url: ~

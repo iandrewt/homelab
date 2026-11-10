@@ -1,0 +1,14 @@
+---
+# Nothing beyond what the image is
+image_roles: []
+
+# Updated A/B by sysupdate, which reboots into a new version in the host's window
+host_upgrade_timer: systemd-sysupdate-reboot.timer
+
+# What it runs is the image's, or an extension's
+host_firewall_install: false
+frr_bgp_install: false
+powerdns_resolver_install: false
+
+# Its uplink is networkd's own default, which a host's netplan for it replaces
+frr_bgp_uplink_dhcp: true

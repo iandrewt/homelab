@@ -1,0 +1,24 @@
+---
+- name: Make dnsdist's configuration directory
+  ansible.builtin.file:
+    path: /etc/dnsdist
+    state: directory
+    owner: root
+    group: _dnsdist
+    mode: "0750"
+
+- name: Configure dnsdist
+  ansible.builtin.template:
+    src: dnsdist.conf.j2
+    dest: /etc/dnsdist/dnsdist.conf
+    owner: root
+    group: _dnsdist
+    mode: "0640"
+    validate: dnsdist --check-config --config %s
+  notify: Restart dnsdist
+
+- name: Run dnsdist
+  ansible.builtin.systemd_service:
+    name: dnsdist
+    state: started
+    enabled: true

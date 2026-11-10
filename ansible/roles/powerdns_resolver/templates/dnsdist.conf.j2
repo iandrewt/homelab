@@ -1,0 +1,13 @@
+-- Managed by Ansible (powerdns_resolver role)
+{% for local in powerdns_resolver_dnsdist_locals %}
+{{ 'setLocal' if loop.first else 'addLocal' }}("{{ local }}", {reusePort=true})
+{% endfor %}
+-- Replaces dnsdist's defaults, every private range among them
+setACL({ {{- (powerdns_resolver_acl + ['127.0.0.1/32']) | map('to_json') | join(', ') -}} })
+{% if powerdns_resolver_query_logging | bool %}
+-- First, so no other rule's answer goes unlogged
+addAction(AllRule(), LogAction("", false, false, false, false))
+addResponseAction(AllRule(), LogResponseAction("", false, false, false))
+{% endif %}
+newServer({address="[::1]:53", useProxyProtocol=true, healthCheckMode="lazy", lazyHealthCheckMode="TimeoutOnly"})
+controlSocket("::1")

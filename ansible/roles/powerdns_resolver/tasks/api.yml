@@ -1,10 +1,13 @@
 ---
 # PowerDNS's webserver has no TLS, so it listens on loopback alone and HAProxy fronts it, with a
 # key made here and a certificate its clients pin in NetBox.
-- name: Install HAProxy, and what makes its key
-  ansible.builtin.apt:
-    name: [haproxy, python3-cryptography]
-    state: present
+- name: Make HAProxy's configuration directory
+  ansible.builtin.file:
+    path: /etc/haproxy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: Make the API's key
   community.crypto.openssl_privatekey:

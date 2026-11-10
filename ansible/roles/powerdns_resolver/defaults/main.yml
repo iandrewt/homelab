@@ -1,6 +1,9 @@
 ---
 powerdns_resolver_role: ~  # "primary" or "secondary"
 
+# Whether to install PowerDNS, dnsdist, HAProxy and the health check, which an image's extensions may carry instead
+powerdns_resolver_install: true
+
 powerdns_resolver_lmdb_shards: 1
 
 powerdns_resolver_api_key: ~

@@ -1,0 +1,21 @@
+---
+- name: Configure the recursor
+  ansible.builtin.copy:
+    dest: /etc/powerdns/recursor.conf
+    content: |
+      # Managed by Ansible (powerdns_resolver role)
+      {{ powerdns_resolver_recursor_config | to_nice_yaml(indent=2, sort_keys=true) }}
+    owner: root
+    group: pdns
+    mode: "0640"
+    # It checks a directory's recursor.conf, not a file
+    validate: >-
+      sh -c 'mkdir -p /run/recursor-check && cp "$1" /run/recursor-check/recursor.conf
+      && exec pdns_recursor --config-dir=/run/recursor-check --config=check' check %s
+  notify: Restart pdns-recursor
+
+- name: Run the recursor
+  ansible.builtin.systemd_service:
+    name: pdns-recursor
+    state: started
+    enabled: true

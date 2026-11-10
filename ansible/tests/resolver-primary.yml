@@ -1,0 +1,5 @@
+---
+- name: As a primary
+  ansible.builtin.import_playbook: resolver.yml
+  vars:
+    powerdns_resolver_role: primary

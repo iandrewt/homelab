@@ -1,0 +1,3 @@
+---
+# Anywhere but the image's own transfers name
+extensions_elsewhere: "{{ extensions_channel != 'stable' or extensions_url is not none }}"

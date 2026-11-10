@@ -1,0 +1,7 @@
+# Managed by Ansible (powerdns_resolver role)
+{% for key, value in powerdns_resolver_pdns_config | dictsort %}
+{{ key }}={{ ('yes' if value else 'no') if value is boolean else value }}
+{% endfor %}
+launch=lmdb
+lmdb-filename=/var/lib/powerdns/pdns.lmdb
+lmdb-shards={{ powerdns_resolver_lmdb_shards }}

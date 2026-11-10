@@ -1,0 +1,13 @@
+# Managed by Ansible (homelab.linux.extensions)
+{% set section = namespace(name='') %}
+{% for line in (item.content | b64decode).splitlines() %}
+{% if line.startswith('[') %}
+{% set section.name = line %}
+{% endif %}
+{% if section.name == '[Source]' and line.startswith('Path=') %}
+Path={{ extensions_url ~ item.item ~ '/' if extensions_url is not none
+        else line.removeprefix('Path=') | replace('/stable/', '/' ~ extensions_channel ~ '/') }}
+{% else %}
+{{ line }}
+{% endif %}
+{% endfor %}

@@ -1,2 +1,2 @@
 ---
-host_upgrade_timer: dnf-automatic.timer
+host_os_upgrade_timer: dnf-automatic.timer

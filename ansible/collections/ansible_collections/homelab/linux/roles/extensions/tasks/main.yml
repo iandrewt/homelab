@@ -1,0 +1,85 @@
+---
+- name: Find the components the image ships
+  ansible.builtin.find:
+    paths: /usr/lib
+    patterns: "sysupdate.*.component"
+  register: extensions_shipped
+
+- name: Name them
+  ansible.builtin.set_fact:
+    extensions_available: >-
+      {{ extensions_shipped.files | map(attribute='path') | map('basename')
+         | map('regex_replace', '^sysupdate[.]', '') | map('regex_replace', '[.]component$', '') | list }}
+
+- name: Assert the image ships each this host takes
+  ansible.builtin.assert:
+    that: extensions_enabled | difference(extensions_available) | length == 0
+    fail_msg: >-
+      {{ inventory_hostname }}'s image ships no component for {{ extensions_enabled | difference(extensions_available) }}:
+      a new extension reaches machines with its image's next release.
+    quiet: true
+
+- name: Enable each it takes, and disable the rest
+  ansible.builtin.copy:
+    dest: /etc/sysupdate.{{ item }}.component.d/50-enabled.conf
+    content: |
+      [Component]
+      Enabled={{ 'yes' if item in extensions_enabled else 'no' }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ extensions_available }}"
+
+- name: Read the image's transfer for each it takes from elsewhere
+  ansible.builtin.slurp:
+    src: /usr/lib/sysupdate.{{ item }}.d/{{ item }}.transfer
+  loop: "{{ extensions_enabled if extensions_elsewhere else [] }}"
+  register: extensions_transfers
+
+- name: Fetch each from there
+  ansible.builtin.template:
+    src: transfer.j2
+    dest: /etc/sysupdate.{{ item.item }}.d/{{ item.item }}.transfer
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ extensions_transfers.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Follow the image's own transfer otherwise
+  ansible.builtin.file:
+    path: /etc/sysupdate.{{ item }}.d
+    state: absent
+  loop: "{{ extensions_available }}"
+  when: item not in extensions_enabled or not extensions_elsewhere
+
+- name: Install the newest of each
+  ansible.builtin.command:
+    argv: [/usr/lib/systemd/systemd-sysupdate, "--component={{ item }}", update]
+  loop: "{{ extensions_enabled }}"
+  register: extensions_installed
+  changed_when: "'Successfully installed' in extensions_installed.stderr ~ extensions_installed.stdout"
+
+- name: Remove what a disabled one installed
+  ansible.builtin.file:
+    path: /var/lib/extensions/{{ item }}.raw.v
+    state: absent
+  loop: "{{ extensions_available | difference(extensions_enabled) }}"
+  register: extensions_removed
+
+- name: Merge what changed, and bring in its users and units  # noqa: no-handler
+  when: extensions_installed is changed or extensions_removed is changed
+  block:
+    - name: Merge them
+      ansible.builtin.command: systemd-sysext refresh
+      changed_when: true
+
+    - name: Make their users, then their directories
+      ansible.builtin.command: "{{ item }}"
+      loop: [systemd-sysusers, systemd-tmpfiles --create]
+      changed_when: true
+
+    - name: Read their units
+      ansible.builtin.systemd_service:
+        daemon_reload: true

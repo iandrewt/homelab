@@ -1,0 +1,2 @@
+---
+powerdns_resolver_api_url: "http://[::1]:8081/api/v1/servers/localhost"

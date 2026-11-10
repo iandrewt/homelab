@@ -1,4 +1,20 @@
 ---
+- name: Restart pdns
+  ansible.builtin.systemd_service:
+    name: pdns
+    state: restarted
+
+# Before the recursor's: a fresh install's dnsdist holds 127.0.0.1:53, which the recursor takes
+- name: Restart dnsdist
+  ansible.builtin.systemd_service:
+    name: dnsdist
+    state: restarted
+
+- name: Restart pdns-recursor
+  ansible.builtin.systemd_service:
+    name: pdns-recursor
+    state: restarted
+
 - name: Reload haproxy
   ansible.builtin.systemd_service:
     name: haproxy

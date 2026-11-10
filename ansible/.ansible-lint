@@ -5,6 +5,3 @@ skip_list:
 
 exclude_paths:
   - roles/DEBIAN13-CIS/
-  - roles/PowerDNS.pdns/
-  - roles/PowerDNS.pdns_recursor/
-  - roles/PowerDNS.dnsdist/

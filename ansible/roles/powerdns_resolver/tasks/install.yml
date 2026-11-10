@@ -1,0 +1,21 @@
+---
+- name: Install PowerDNS, dnsdist and HAProxy, dig for the health check, and what makes the API's key
+  ansible.builtin.apt:
+    name: [pdns-server, pdns-backend-lmdb, pdns-recursor, dnsdist, haproxy, bind9-dnsutils, python3-cryptography]
+    state: present
+
+- name: Make the health check's directory
+  ansible.builtin.file:
+    path: /usr/libexec/homelab
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the health check
+  ansible.builtin.copy:
+    src: dns-health
+    dest: /usr/libexec/homelab/dns-health
+    owner: root
+    group: root
+    mode: "0755"

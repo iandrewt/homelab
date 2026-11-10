@@ -12,6 +12,9 @@ dns_resolver_peers: >-
      | map(attribute='value') | list }}
 dns_resolver_vlan: "{{ netbox_site.vlans[dns_resolver.vlan] }}"
 
+# On an image-based host, what it runs
+extensions_enabled: [frr, pdns, pdns-recursor, dnsdist, haproxy]
+
 frr_bgp_local_asn: "{{ dns_resolver.asn }}"
 frr_bgp_peer_asn: "{{ netbox_site.router_asn }}"
 frr_bgp_peer_address: "{{ dns_resolver_vlan.gateway_ipv4 }}"
@@ -22,7 +25,9 @@ frr_bgp_anycast_addresses: >-
   {{ [netbox_site.dns.recursor.ipv4, netbox_site.dns.recursor.ipv6] | select | list }}
 frr_bgp_anycast_service: dnsdist.service
 frr_bgp_anycast_needs: [pdns-recursor.service, pdns.service]
-frr_bgp_anycast_check: /usr/local/libexec/dns-health
+frr_bgp_anycast_check: >-
+  /usr/libexec/homelab/dns-health {{ powerdns_resolver_health_port }} {{ powerdns_resolver_health_internal }}
+  {{ powerdns_resolver_health_public }} {{ powerdns_resolver_health_roots | join(' ') }}
 
 powerdns_resolver_anycast_v4: "{{ netbox_site.dns.recursor.ipv4 }}"
 powerdns_resolver_anycast_v6: "{{ netbox_site.dns.recursor.ipv6 }}"

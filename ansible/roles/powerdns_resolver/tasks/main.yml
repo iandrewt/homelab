@@ -27,6 +27,10 @@
     that: powerdns_resolver_health_internal | length > 0
     fail_msg: No zone is signed, so the anycast health check has no answer to expect AD on.
 
+- name: Install what it runs
+  ansible.builtin.import_tasks: install.yml
+  when: powerdns_resolver_install
+
 - name: Zones and records
   ansible.builtin.import_tasks: zones.yml
 
@@ -41,7 +45,7 @@
          + (powerdns_resolver_primary_addresses | select('search', ':') | map('regex_replace', '^', '[')
             | map('regex_replace', '$', ']:53') | list) }}
 
-- name: Compute the authoritative server's pdns_config
+- name: The authoritative server's configuration
   no_log: true
   ansible.builtin.set_fact:
     powerdns_resolver_pdns_config: >-
@@ -71,71 +75,30 @@
                            'recurse': false})
          | list }}
 
-- name: Build the secondary's create-secondary-zone commands
-  ansible.builtin.set_fact:
-    powerdns_resolver_secondary_zone_commands: >-
-      {{ (powerdns_resolver_secondary_zone_commands | default([]))
-         + [{'args': 'create-secondary-zone ' ~ item.name ~ ' ' ~ (powerdns_resolver_primary_targets | join(' ')),
-             'unless': 'list-zone ' ~ item.name}] }}
-  loop: "{{ powerdns_resolver_zones }}"
-  loop_control:
-    label: "{{ item.name }}"
-  when: powerdns_resolver_role == 'secondary'
-
-- name: Configure the authoritative server
-  ansible.builtin.include_role:
-    name: PowerDNS.pdns
-    # pdns.conf holds the API key, and a restore's keys are private
-    apply:
-      diff: false
-      no_log: "{{ powerdns_resolver_restored_keys | length > 0 }}"
-  vars:
-    pdns_config: "{{ powerdns_resolver_pdns_config }}"
-    pdns_api_url: "http://[::1]:8081/api/v1/servers/localhost"
-    pdns_backends:
-      lmdb:
-        filename: /var/lib/powerdns/pdns.lmdb
-        shards: "{{ powerdns_resolver_lmdb_shards }}"
-    pdns_lmdb_databases_locations:
-      - /var/lib/powerdns/pdns.lmdb
-    pdns_provision: true
-    pdns_provision_update_existing: true
-    pdns_provision_zones: "{{ (powerdns_resolver_provision_zones | default([])) if powerdns_resolver_role == 'primary' else [] }}"
-    pdns_provision_pdnsutils: "{{ powerdns_resolver_secondary_zone_commands | default([]) }}"
-    pdns_provision_cryptokeys: "{{ (powerdns_resolver_provision_cryptokeys | default([])) if powerdns_resolver_role == 'primary' else [] }}"
+- name: Configure the authoritative server, and provision its zones
+  ansible.builtin.import_tasks: pdns.yml
 
 - name: The API, over TLS
   ansible.builtin.import_tasks: api.yml
   when: powerdns_resolver_role == 'primary'
 
-# create-secondary-zone only runs while a zone doesn't exist, so a primary that moves never
-# reaches an existing one. pdnsutil can't say whether this changed anything.
-- name: Point each secondary zone at the primary's current addresses
-  ansible.builtin.command:
-    argv: "{{ ['pdnsutil', 'change-secondary-zone-primary', item.name] + powerdns_resolver_primary_targets }}"
-  loop: "{{ powerdns_resolver_zones }}"
-  loop_control:
-    label: "{{ item.name }}"
-  changed_when: false
-  when: powerdns_resolver_role == 'secondary'
-
-- name: Fetch each secondary zone from it now, rather than at the next refresh
-  ansible.builtin.command:
-    argv: [pdns_control, retrieve, "{{ item.name }}"]
-  loop: "{{ powerdns_resolver_zones }}"
-  loop_control:
-    label: "{{ item.name }}"
-  changed_when: false
-  when: powerdns_resolver_role == 'secondary'
-
 - name: DNSSEC trust anchors
   ansible.builtin.import_tasks: anchors.yml
 
-- name: Configure the recursor
-  ansible.builtin.include_role:
-    name: PowerDNS.pdns_recursor
-  vars:
-    pdns_rec_config:
+# Before the recursor, whose handler follows dnsdist's: a fresh install's dnsdist holds 127.0.0.1:53
+- name: Build dnsdist's listen address list, the health check's on loopback last
+  ansible.builtin.set_fact:
+    powerdns_resolver_dnsdist_locals: >-
+      {{ ([powerdns_resolver_anycast_v4 ~ ':53'] if powerdns_resolver_anycast_v4 is not none else [])
+         + (['[' ~ powerdns_resolver_anycast_v6 ~ ']:53'] if powerdns_resolver_anycast_v6 is not none else [])
+         + ['127.0.0.1:' ~ powerdns_resolver_health_port] }}
+
+- name: Configure dnsdist
+  ansible.builtin.import_tasks: dnsdist.yml
+
+- name: The recursor's configuration
+  ansible.builtin.set_fact:
+    powerdns_resolver_recursor_config:
       logging:
         quiet: "{{ not powerdns_resolver_query_logging | bool }}"
       dnssec:
@@ -154,6 +117,12 @@
       recursor:
         forward_zones: "{{ powerdns_resolver_forward_zones }}"
 
+- name: Configure the recursor
+  ansible.builtin.import_tasks: recursor.yml
+
+- name: Apply its configuration before wiping its cache
+  ansible.builtin.meta: flush_handlers
+
 # The recursor caches the authoritative answers it forwarded for, so a changed record
 # isn't seen until its TTL runs out otherwise.
 - name: Wipe the primary's recursor cache for its own zones
@@ -165,46 +134,3 @@
   become: true
   when: powerdns_resolver_role == 'primary'
   changed_when: false
-
-- name: Build dnsdist's listen address list, the health check's on loopback last
-  ansible.builtin.set_fact:
-    powerdns_resolver_dnsdist_locals: >-
-      {{ ([powerdns_resolver_anycast_v4 ~ ':53'] if powerdns_resolver_anycast_v4 is not none else [])
-         + (['[' ~ powerdns_resolver_anycast_v6 ~ ']:53'] if powerdns_resolver_anycast_v6 is not none else [])
-         + ['127.0.0.1:' ~ powerdns_resolver_health_port] }}
-
-- name: Configure dnsdist
-  ansible.builtin.include_role:
-    name: PowerDNS.dnsdist
-  vars:
-    # dnsdist_locals itself has no way to pass setLocal/addLocal's options table
-    # (PowerDNS/dnsdist-ansible#33)
-    dnsdist_locals: []
-    dnsdist_config: |-
-      {% for local in powerdns_resolver_dnsdist_locals %}
-      {{ 'setLocal' if loop.first else 'addLocal' }}("{{ local }}", {reusePort=true})
-      {% endfor %}
-      setACL({ {{- (powerdns_resolver_acl + ['127.0.0.1/32']) | map('to_json') | join(', ') -}} })
-      {% if powerdns_resolver_query_logging | bool %}
-      -- First, so no other rule's answer goes unlogged
-      addAction(AllRule(), LogAction("", false, false, false, false))
-      addResponseAction(AllRule(), LogResponseAction("", false, false, false))
-      {% endif %}
-    dnsdist_servers:
-      - '{address="[::1]:53", useProxyProtocol=true, healthCheckMode="lazy", lazyHealthCheckMode="TimeoutOnly"}'
-    dnsdist_controlsocket: "::1"
-    # addACL appends to dnsdist's defaults, every private range among them; setACL replaces them
-    dnsdist_acls: []
-
-- name: Install dig, for the health check
-  ansible.builtin.apt:
-    name: bind9-dnsutils
-    state: present
-
-- name: Write the anycast health check
-  ansible.builtin.template:
-    src: dns-health.j2
-    dest: /usr/local/libexec/dns-health
-    owner: root
-    group: root
-    mode: "0755"

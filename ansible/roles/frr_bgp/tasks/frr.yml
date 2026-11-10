@@ -19,12 +19,46 @@
   ansible.builtin.apt:
     name: frr
     state: present
+  when: frr_bgp_install
 
-- name: Enable bgpd
-  ansible.builtin.lineinfile:
-    path: /etc/frr/daemons
-    regexp: '^bgpd='
-    line: bgpd=yes
+- name: Make FRR's configuration directory
+  ansible.builtin.file:
+    path: /etc/frr
+    state: directory
+    owner: frr
+    group: frr
+    mode: "0750"
+
+# Whole, since an extension carries none of the package's /etc
+- name: Run bgpd, with what FRR always runs
+  ansible.builtin.template:
+    src: daemons.j2
+    dest: /etc/frr/daemons
+    owner: frr
+    group: frr
+    mode: "0640"
+  notify: Restart frr
+
+# The package's own, which an extension doesn't carry: without it, PAM asks vtysh for a password
+- name: Let anyone run vtysh, which the socket's group alone may use
+  ansible.builtin.copy:
+    dest: /etc/pam.d/frr
+    content: |
+      auth sufficient pam_permit.so
+      account sufficient pam_permit.so
+    owner: root
+    group: root
+    mode: "0644"
+  when: not frr_bgp_install
+
+- name: Read one integrated configuration
+  ansible.builtin.copy:
+    dest: /etc/frr/vtysh.conf
+    content: |
+      service integrated-vtysh-config
+    owner: frr
+    group: frrvty
+    mode: "0640"
   notify: Restart frr
 
 - name: Write frr.conf

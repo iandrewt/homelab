@@ -293,7 +293,15 @@ inventory sets none, since DEBIAN13-CIS's defaults outrank any other role's; a h
 one with its own `deb13cis_*`. A host built from one of `images/` is grouped by its bake and its
 image too, the bake from its facts and the image from `IMAGE_ID` in
 `/usr/lib/homelab/image-release`: `images.yml` is what every image shares, `bake_<distribution>_<major>_<architecture>` an architecture's, and `image_<image>` the
-image's own. **`images/` is one mkosi project**: the distribution in `mkosi.conf.d/<distribution>/`,
+image's own. **A ymir host's baseline is its image**: grouped `family_ymir` by `HOMELAB_FAMILY`, it
+takes no hardening, sshd or image role, since a file a host writes in `/etc` stops following the
+image; only `host` (its accounts, and sysupdate's reboot window as its upgrade timer) and
+`extensions` (the components its group_vars name, enabled, installed and merged). A role that installs
+does so only while `<role>_install`, which `family_ymir.yml` turns off: what it runs is an extension's,
+so it writes the whole of its `/etc`, since an extension carries none of its packages'. The resolvers'
+roles write PowerDNS's configuration themselves, no galaxy role between, and
+`ansible/tests/resolver-{primary,secondary}.yml` prove them on a booted ymir (`homelab image extension
+test --playbook`), each run twice, the second changing nothing. **`images/` is one mkosi project**: the distribution in `mkosi.conf.d/<distribution>/`,
 each family (`mutable`, `ymir`) and target (`vm`, `raspi3`) a profile in `mkosi.profiles/`, and an
 image a pair of them, which a `mkosi.conf.d` file matching both names; `images.toml` holds only what
 mkosi has no setting for. **Every package a build takes is Debian's snapshot's** (`Snapshot=` in
@@ -320,7 +328,10 @@ Arch's pkgrel): the base's libraries move with the base, under Debian's ABI and 
 `VERSION_ID`, but a bundled one is a copy. A build refuses a lock that no longer resolves, and an
 extension that installs anything else; CI checks the lock on every change, and `trains.yml` locks a
 vendor's release again in a PR. What a package's scripts write in `/etc` and `/var` is gone: its users
-become `sysusers.d`, and its enablement and configuration are the machine's. Each is a disabled
+and their groups become `sysusers.d`, the directories its packages hold in `/var` tmpfiles, and its
+enablement and configuration are the machine's. It may hold a role's own files (`files` in
+`extensions.toml`), the anycast loop and the resolvers' health check, which a package-managed host
+takes from the role. Each is a disabled
 sysupdate component in ymir, which a machine enables, so a new extension reaches machines with the
 image's next release; ymir merges only images db's key signed.
 
@@ -444,6 +455,7 @@ uv run homelab image test debian-13-amd64-vm           # boots it twice, as new 
 uv run homelab image extension lock                    # each extension's lock, again where it moved; --check fails instead
 uv run homelab image extension build pdns-recursor     # at its locked version, over each of its images' trees
 uv run homelab image extension test ymir-amd64-vm      # the image's build, taking each built extension by sysupdate
+uv run homelab image extension test ymir-amd64-vm --playbook ansible/tests/resolver-primary.yml   # and the roles over them
 uv run homelab image derive <image> <base> <yours> --playbook <yml>   # docs/images.md
 
 cd ansible/network && uv run ansible-playbook site.yml --limit <host>   # or ansible/platform
@@ -520,7 +532,7 @@ into `<image>/extensions/<extension>/{canary,stable}/`.
 - Proxmox's certificates are self-signed until the private CA exists, so its cluster file says
   `insecure`. Its endpoint is a machine name served by ratatoskr, so the DNS fleet's primary is
   built first.
-- `ansible/roles/PowerDNS.*` and `DEBIAN13-CIS` are galaxy installs, gitignored.
+- `ansible/roles/DEBIAN13-CIS` is a galaxy install, gitignored.
 - A handler's name is global to its play, and DEBIAN13-CIS's sshd handlers listen on `Restart
   sshd`: a role of ours whose handler shares a name or topic with CIS's runs on CIS's notify,
   before its own vars are loaded.
