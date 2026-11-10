@@ -1,10 +1,10 @@
 # What each extension was last released from: `homelab image extension lock` writes it
 
 [dnsdist]
-version = "2.1.3-1"
+version = "2.1.3-2"
 
 [dnsdist.ymir-amd64-vm]
-inputs = "10c211ed75728907fc2230fce156bacf624750e09866fc60e61ae009caab00bf"
+inputs = "af6ad767a9571951a779b5e35110fe6e3377da999cdb13e3b417232d05fa855a"
 packages = [
     "dnsdist=2.1.3-1pdns.debian13",
     "libabsl20240722=20240722.0-4",
@@ -29,10 +29,10 @@ packages = [
 ]
 
 [frr]
-version = "10.7.1-1"
+version = "10.7.1-2"
 
 [frr.ymir-amd64-vm]
-inputs = "39268bafdbbecfd0907b76726e8cb33435d823f9c82eaac3c82397064746c911"
+inputs = "96bf2a9acf01425c15074f54b08cc08a96b7ea097cc86dff1273af84e42060bb"
 packages = [
     "frr=10.7.1-0~deb13u1",
     "libcares2=1.34.5-1+deb13u1",
@@ -44,10 +44,10 @@ packages = [
 ]
 
 [haproxy]
-version = "3.0.11-1"
+version = "3.0.11-2"
 
 [haproxy.ymir-amd64-vm]
-inputs = "9e1ce80723465c247738f21a6b0e45f2432afa8eb0993dbab737795c32ddd590"
+inputs = "977846204447846dae0d0e218146df08f475d479bc610a52dbbb21b431df9f35"
 packages = [
     "haproxy=3.0.11-1+deb13u4",
     "libjemalloc2=5.3.0-3",
@@ -57,10 +57,10 @@ packages = [
 ]
 
 [pdns]
-version = "5.1.5-1"
+version = "5.1.5-2"
 
 [pdns.ymir-amd64-vm]
-inputs = "8b3c4bd92d6b94d077100769784bd5e5a247cda19cafeeb3085f10758a47d739"
+inputs = "e003d46dd61dff1320d76f24e154f9c33b7ca3b5e71bbfde1044e8ffd252e40e"
 packages = [
     "libboost-program-options1.83.0=1.83.0-4.2",
     "libboost-serialization1.83.0=1.83.0-4.2",
@@ -73,10 +73,10 @@ packages = [
 ]
 
 [pdns-recursor]
-version = "5.4.9-1"
+version = "5.4.9-2"
 
 [pdns-recursor.ymir-amd64-vm]
-inputs = "551e613d1f1e486bfbea6d3ed92482fc8a1ad78028ce581042489bdec3a45923"
+inputs = "c023a3785d912814f71adab02999dc87c6badc4d13f4b06a953e843934e4eb41"
 packages = [
     "dns-root-data=2025080400~deb13u1",
     "libboost-context1.83.0=1.83.0-4.2",
