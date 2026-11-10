@@ -8,6 +8,7 @@ and Environment= isn't passed to a subimage."""
 import hashlib
 import json
 import os
+import platform
 import shutil
 import urllib.request
 from pathlib import Path
@@ -67,10 +68,11 @@ gpg --export > /out/keys/tree/usr/lib/systemd/import-pubring.pgp
 """
 
 
-def prepare(images: Path, architecture: str, work: Path) -> Path:
-    """The module, checked against its pin, its config, and the certificate the key's in db by, in work."""
+def prepare(images: Path, work: Path) -> Path:
+    """The module, checked against its pin, its config, and the certificate the key's in db by, in work. The
+    builder's architecture, whatever the image's: the module loads there."""
     work.mkdir(parents=True, exist_ok=True)
-    arch, digest = MODULE_SHA256[architecture]
+    arch, digest = MODULE_SHA256[{"x86_64": "x86-64", "aarch64": "arm64"}[platform.machine()]]
     module = work / "aws_kms_pkcs11.so"
     if not module.exists() or hashlib.sha256(module.read_bytes()).hexdigest() != digest:
         with urllib.request.urlopen(MODULE.format(arch)) as response:
