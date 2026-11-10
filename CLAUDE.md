@@ -301,7 +301,8 @@ does so only while `<role>_install`, which `family_ymir.yml` turns off: what it 
 so it writes the whole of its `/etc`, since an extension carries none of its packages'. The resolvers'
 roles write PowerDNS's configuration themselves, no galaxy role between, and
 `ansible/tests/resolver-{primary,secondary}.yml` prove them on a booted ymir (`homelab image extension
-test --playbook`), each run twice, the second changing nothing. **`images/` is one mkosi project**: the distribution in `mkosi.conf.d/<distribution>/`,
+test --playbook`), each run twice, the second changing nothing; `images.yml` runs them where a change
+touches what they read, and builds no image for a change only they and the extensions read. **`images/` is one mkosi project**: the distribution in `mkosi.conf.d/<distribution>/`,
 each family (`mutable`, `ymir`) and target (`vm`, `raspi3`) a profile in `mkosi.profiles/`, and an
 image a pair of them, which a `mkosi.conf.d` file matching both names; `images.toml` holds only what
 mkosi has no setting for. **Every package a build takes is Debian's snapshot's** (`Snapshot=` in

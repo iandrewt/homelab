@@ -10,8 +10,11 @@ on:
       - ansible/baseline/**
       - ansible/collections/**
       - ansible/requirements.yml
-      # What an extension holds of a role's
+      # What an extension holds of a role's, and the roles the resolver tests prove
       - ansible/roles/*/files/**
+      - ansible/roles/frr_bgp/**
+      - ansible/roles/powerdns_resolver/**
+      - ansible/tests/**
       - tools/src/homelab/image/**
       - tools/src/homelab/render/seed.py
       - pyproject.toml
@@ -46,6 +49,7 @@ jobs:
       bakes: ${{ steps.plan.outputs.bakes }}
       builds: ${{ steps.plan.outputs.builds }}
       locks: ${{ steps.plan.outputs.locks }}
+      resolvers: ${{ steps.plan.outputs.resolvers }}
       extensions: ${{ steps.plan.outputs.extensions }}
       version: ${{ steps.plan.outputs.version }}
     steps:
@@ -90,13 +94,25 @@ jobs:
                                         r"|ansible/roles/[^/]+/files/"
                                         r"|tools/src/homelab/image/|tools/src/homelab/render/seed\.py$|pyproject\.toml$"
                                         r"|uv\.lock$|\.github/workflows/images\.yml$)")
+          # What the resolver tests run on: their roles, what a ymir host takes, and ymir and its extensions
+          resolvers_read = re.compile(r"ansible/(roles/(frr_bgp|powerdns_resolver)/|tests/|baseline"
+                                      r"|collections/ansible_collections/homelab/linux/roles/(extensions|host|host_firewall)/)"
+                                      r"|images/(extensions\.|vendors/|mkosi\.conf$|mkosi\.conf\.d/(debian|packages|ymir)"
+                                      r"|mkosi\.profiles/(ymir|vm|%s)/)"
+                                      r"|tools/src/homelab/image/|\.github/workflows/images\.yml$"
+                                      % "|".join(map(re.escape, [*extensions, "sysext"])))
           base = os.environ.get("BASE", "")
           changed = None
           if not ref.startswith("refs/tags/") and base and set(base) != {"0"}:
-              changed = [p for p in subprocess.run(["git", "diff", "--name-only", base, "HEAD"], check=True,
-                                                   capture_output=True, text=True).stdout.split()
-                         if inputs_of_images.match(p)]
-          extensions_alone = bool(changed) and all(only_theirs.match(p) for p in changed)
+              changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"], check=True,
+                                       capture_output=True, text=True).stdout.split()
+          # A change only extensions or the resolver roles read builds no image
+          extensions_alone = changed is not None and not any(
+              inputs_of_images.match(p) and not only_theirs.match(p) for p in changed)
+          resolvers = []
+          if not ref.startswith("refs/tags/") and (changed is None or any(resolvers_read.match(p) for p in changed)):
+              resolvers = [{"image": image, "extensions": " ".join(n for n, e in extensions.items() if image in e["images"])}
+                           for image in sorted({i for e in extensions.values() for i in e["images"]})]
 
           builds = []
           for image, entry in catalog.items():
@@ -110,19 +126,20 @@ jobs:
                              "sign": "kms" if signed else "test"})
           if wanted and not builds:
               sys.exit(f"::error::{wanted} is not an image in images/images.toml")
-          for job in locks + released:
+          for job in locks + released + resolvers:
               entry = catalog[job["image"]]
               job.update(architecture=entry["architecture"], runner=runners[entry["architecture"]], format=entry["format"])
           # A bake's cache key is what homelab would bake it from, so a bake it restores is current
           inputs = {a: subprocess.run(["uv", "run", "homelab", "image", "bake", "--inputs", a], check=True,
                                       capture_output=True, text=True).stdout.strip()
-                    for a in {job["architecture"] for job in builds + locks + released}}
-          for job in builds + locks + released:
+                    for a in {job["architecture"] for job in builds + locks + released + resolvers}}
+          for job in builds + locks + released + resolvers:
               job["inputs"] = inputs[job["architecture"]]
           bakes = [{"architecture": a, "runner": runners[a], "inputs": inputs[a]} for a in sorted(inputs)]
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
               for key, value in {"version": version, "builds": json.dumps(builds), "bakes": json.dumps(bakes),
-                                 "locks": json.dumps(locks), "extensions": json.dumps(released)}.items():
+                                 "locks": json.dumps(locks), "extensions": json.dumps(released),
+                                 "resolvers": json.dumps(resolvers)}.items():
                   out.write(f"{key}={value}\n")
 
   # Cached by what a bake is a function of, so a change to a family or target doesn't bake again
@@ -301,6 +318,49 @@ jobs:
           key: *packages-key
           restore-keys: *packages-older
       - run: uv run homelab image extension lock --check --image "${{ matrix.image }}"
+
+  # The resolvers' roles on a booted image, taking its extensions as this change builds them, as a primary
+  # and a secondary, each run twice: only where something they read changed
+  resolvers:
+    name: resolvers on ${{ matrix.image }}
+    needs: [plan, bake]
+    if: needs.plan.outputs.resolvers != '[]'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.resolvers) }}
+    env:
+      IMAGE: ${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          enable-cache: true
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: *bake-path
+          key: *bake-key
+          fail-on-cache-miss: true
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: *packages-path
+          key: *packages-key
+          restore-keys: *packages-older
+      - run: uv run ansible-galaxy collection install -r ansible/requirements.yml
+      - run: uv run homelab image build "$IMAGE"
+      - run: for extension in ${{ matrix.extensions }}; do uv run homelab image extension build "$extension" --image "$IMAGE"; done
+      - run: ls -l /dev/kvm || echo "no KVM here"
+      - run: >-
+          uv run homelab image extension test "$IMAGE"
+          --playbook ansible/tests/resolver-primary.yml --playbook ansible/tests/resolver-secondary.yml
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: resolvers-${{ matrix.image }}
+          path: ~/.cache/homelab/images/${{ matrix.image }}/*.log
+          retention-days: 7
 
   # An extension's release: built over each of its images, tested on the newest release of the image, as its
   # machines run it, and published to the image's canary channel for it
