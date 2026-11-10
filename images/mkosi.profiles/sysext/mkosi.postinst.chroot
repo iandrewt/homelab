@@ -10,13 +10,35 @@ find /usr/share/doc -mindepth 1 ! -name copyright ! -type d -delete
 find /usr/share/doc -mindepth 1 -type d -empty -delete
 rm -rf /usr/share/man /usr/share/info /usr/share/locale /usr/share/i18n
 
-# The users its packages' scripts made in /etc, which an extension doesn't carry, as sysusers makes them at boot
+# The users its packages' scripts made in /etc, and the groups they joined, which an extension doesn't carry, as
+# sysusers makes them at boot
 conf="/usr/lib/sysusers.d/$IMAGE_ID.conf"
-cat /usr/lib/sysusers.d/*.conf | awk 'FNR == NR { if ($1 == "u" || $1 == "g") known[$1 " " $2]; if ($1 == "u") known["g " $2]; next }
+cat /usr/lib/sysusers.d/*.conf | awk 'FNR == NR {
+       if ($1 == "u" || $1 == "g") known[$1 " " $2]
+       if ($1 == "u") known["g " $2]
+       if ($1 == "m") known["m " $2 " " $3]
+       next }
      { split($0, f, ":") }
-     FILENAME ~ /group$/ { group[f[3]] = f[1]; if (!(("g " f[1]) in known)) print "g", f[1], "-" }
+     FILENAME ~ /group$/ {
+       group[f[3]] = f[1]
+       if (!(("g " f[1]) in known)) print "g", f[1], "-"
+       n = split(f[4], members, ",")
+       for (i = 1; i <= n; i++) if (!(("m " members[i] " " f[1]) in known)) joined[++joins] = "m " members[i] " " f[1] }
      FILENAME ~ /passwd$/ && !(("u " f[1]) in known) {
-       printf "u %s -:%s \"%s\" %s %s\n", f[1], group[f[4]], f[5], f[6], f[7] }' \
+       printf "u %s -:%s \"%s\" %s %s\n", f[1], group[f[4]], f[5], f[6], f[7] }
+     END { for (i = 1; i <= joins; i++) print joined[i] }' \
   - /etc/group /etc/passwd > "$conf.new"
+mv "$conf.new" "$conf"
+[ -s "$conf" ] || rm "$conf"
+
+# The directories its packages hold under /var, which an extension doesn't carry either, as tmpfiles makes them
+# at boot, unless a package's own tmpfiles does: EXTENSION_PACKAGES names them, from its lock
+conf="/usr/lib/tmpfiles.d/$IMAGE_ID-var.conf"
+for package in $EXTENSION_PACKAGES; do dpkg-query --listfiles "$package"; done \
+  | grep -E '^/var/[^/]+/[^/]+' | sort -u | while read -r path; do
+    if [ -d "$path" ] && ! grep -qsE "^[^#]+[[:space:]]$path/?([[:space:]]|$)" /usr/lib/tmpfiles.d/*.conf; then
+      stat -c 'd %n %a %U %G -' "$path"
+    fi
+  done > "$conf.new"
 mv "$conf.new" "$conf"
 [ -s "$conf" ] || rm "$conf"

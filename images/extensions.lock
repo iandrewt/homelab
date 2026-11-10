@@ -1,38 +1,46 @@
 # What each extension was last released from: `homelab image extension lock` writes it
 
 [dnsdist]
-version = "2.1.3-2"
+version = "2.1.3-3"
 
 [dnsdist.ymir-amd64-vm]
-inputs = "af6ad767a9571951a779b5e35110fe6e3377da999cdb13e3b417232d05fa855a"
+inputs = "158e3caa9cb4909a508cdaf6f03ade8e00783a1f6c17440b70c3b7a8c74d2413"
 packages = [
+    "bind9-dnsutils=1:9.20.30-1~deb13u1",
+    "bind9-host=1:9.20.30-1~deb13u1",
+    "bind9-libs=1:9.20.30-1~deb13u1",
     "dnsdist=2.1.3-1pdns.debian13",
     "libabsl20240722=20240722.0-4",
     "libcdb1=0.81-2",
     "libfstrm0=0.6.1-1+b3",
     "libgdbm-compat4t64=1.24-2",
     "libgdbm6t64=1.24-2",
+    "libjemalloc2=5.3.0-3",
     "liblmdb0=0.9.31-1+b2",
     "libluajit-5.1-2=2.1.0+openresty20250117-2",
     "libluajit-5.1-common=2.1.0+openresty20250117-2",
+    "libmaxminddb0=1.12.2-1",
     "libpci3=1:3.13.0-2",
     "libperl5.40=5.40.1-6+deb13u1",
+    "libprotobuf-c1=1.5.1-1",
     "libre2-11=20240702-3+b1",
     "libsensors-config=1:3.6.2-2",
     "libsensors5=1:3.6.2-2",
     "libsnmp-base=5.9.4+dfsg-2+deb13u1",
     "libsnmp40t64=5.9.4+dfsg-2+deb13u1",
     "libsodium23=1.0.18-1+deb13u1",
+    "liburcu8t64=0.15.2-2",
+    "libuv1t64=1.50.0-2",
     "libxdp1=1.5.4-1",
     "pci.ids=0.0~2025.06.09-1",
     "perl-modules-5.40=5.40.1-6+deb13u1",
 ]
 
 [frr]
-version = "10.7.1-2"
+version = "10.7.1-3"
 
 [frr.ymir-amd64-vm]
-inputs = "96bf2a9acf01425c15074f54b08cc08a96b7ea097cc86dff1273af84e42060bb"
+inputs = "292410508950ba56fb7b12de9ef3e4ce8aa81c4041dfeac5e55568a06bd12c48"
 packages = [
     "frr=10.7.1-0~deb13u1",
     "libcares2=1.34.5-1+deb13u1",
@@ -44,10 +52,10 @@ packages = [
 ]
 
 [haproxy]
-version = "3.0.11-2"
+version = "3.0.11-3"
 
 [haproxy.ymir-amd64-vm]
-inputs = "977846204447846dae0d0e218146df08f475d479bc610a52dbbb21b431df9f35"
+inputs = "2648594b65c673c0e56a3df303a0de4b16d16367152709738d4150cf4498cad7"
 packages = [
     "haproxy=3.0.11-1+deb13u4",
     "libjemalloc2=5.3.0-3",
@@ -57,10 +65,10 @@ packages = [
 ]
 
 [pdns]
-version = "5.1.5-2"
+version = "5.1.5-3"
 
 [pdns.ymir-amd64-vm]
-inputs = "e003d46dd61dff1320d76f24e154f9c33b7ca3b5e71bbfde1044e8ffd252e40e"
+inputs = "267b4901e03393cec6e4543ba702bbb54e4ff3ba58ba550f25baa4b3ff58c648"
 packages = [
     "libboost-program-options1.83.0=1.83.0-4.2",
     "libboost-serialization1.83.0=1.83.0-4.2",
@@ -73,10 +81,10 @@ packages = [
 ]
 
 [pdns-recursor]
-version = "5.4.9-2"
+version = "5.4.9-3"
 
 [pdns-recursor.ymir-amd64-vm]
-inputs = "c023a3785d912814f71adab02999dc87c6badc4d13f4b06a953e843934e4eb41"
+inputs = "baeb798996e557fb19023af18a64822129ac3e781827ab08a7fdc6fa895fe0ec"
 packages = [
     "dns-root-data=2025080400~deb13u1",
     "libboost-context1.83.0=1.83.0-4.2",

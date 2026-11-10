@@ -323,6 +323,8 @@ def _release(root: Path, image: Image, out: Path, version: str) -> None:
     release.write_text("".join(f"{key}={value}\n" for key, value in {
         "IMAGE_ID": image.name,
         "IMAGE_VERSION": version,
+        # Its first profile, which the baseline groups its hosts by
+        "HOMELAB_FAMILY": image.profiles[0],
         "BUILD_ID": commit + ("-dirty" if dirty else ""),
         **{f"HOMELAB_{c.name.upper()}_VERSION": yaml.safe_load((c / "galaxy.yml").read_text())["version"]
            for c in sorted(collections.iterdir())},

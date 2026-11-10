@@ -13,13 +13,17 @@ of your own from one.
 **`ymir-amd64-vm` is image-based**: its `/usr`, and the `/etc` it starts from, are one signed,
 verity-checked image, updated whole and A/B by systemd-sysupdate, rolled back if a version can't
 boot. A machine keeps only its own state, encrypted to its vTPM, and its writes to `/etc` override the
-image's. Nothing installs on it: what it runs comes as a signed system extension. It starts on a
+image's. Nothing installs on it: what it runs comes as a signed system extension. It carries nftables,
+for a host's own firewall, and Python with cryptography, for Ansible to configure it. It starts on a
 4 GB disk, and `/var` takes whatever more its disk is grown by. A release's UKI, `/usr` and update
 sums are signed by Platform's release key, which only a release can use, and which db trusts by
 [its certificate](../images/secure-boot/db.crt).
 
 **It updates from Platform's update service**, which admits the sites' public addresses alone: each
-release goes to a `canary` channel, and is promoted to `stable`, which a machine follows. A machine
+release goes to a `canary` channel, and is promoted to `stable`, which a machine follows.
+`systemd-sysupdate-update.timer` installs the newest of the image and of every component the machine
+has enabled, and `systemd-sysupdate-reboot.timer` reboots into a new version of the image daily at
+04:10 UTC, which a drop-in moves to a window of its own. A machine
 following canary says so in `/etc/sysupdate.d/`, a copy of each `/usr/lib/sysupdate.d/*.transfer`
 with `stable` in its `Path=` changed to `canary`.
 
@@ -61,9 +65,11 @@ sudo /usr/lib/systemd/systemd-sysupdate --component=pdns-recursor update
 
 It's merged at the next boot (or `systemd-sysext refresh`) into `/usr`, under
 `/var/lib/extensions/<extension>.raw.v/`, and only if db trusts its signature. **Merged isn't
-running**: what a package's scripts would write in `/etc` and `/var` isn't there. Its users come
-with it as `sysusers.d`, but its default configuration doesn't, and nothing is enabled until the
-machine writes its own configuration and enables the unit.
+running**: what a package's scripts would write in `/etc` and `/var` isn't there. Its users and
+their groups come with it as `sysusers.d`, and its packages' directories in `/var` as `tmpfiles.d`,
+but none of its packages' `/etc` does, and nothing is enabled until the machine writes its own
+configuration and enables the unit. A newer version is merged as it's installed, and a running
+service keeps the one it started with until it restarts.
 
 **A version is upstream's and a rebuild count**, `5.4.9-2`, as Arch's `pkgrel`. It's rebuilt
 only when [`images/extensions.lock`](../images/extensions.lock) moves: what apt would add over the
@@ -109,8 +115,9 @@ commit says; its `.packages` lists them. Installed, its apt is plain `deb.debian
 - **A VM's firewall is Proxmox's**, the VM's own. nftables inside it is yours to add;
   [`homelab.linux.host_firewall`](../ansible/collections/ansible_collections/homelab/linux/roles/host_firewall)
   is one way, and metal's.
-- **`/usr/lib/homelab/image-release`**: which image it is (`IMAGE_ID`, `IMAGE_VERSION`), the
-  commit that built it (`BUILD_ID`), and the versions of the collections that hardened it.
+- **`/usr/lib/homelab/image-release`**: which image it is (`IMAGE_ID`, `IMAGE_VERSION`) and its
+  family (`HOMELAB_FAMILY`), the commit that built it (`BUILD_ID`), and the versions of the
+  collections that hardened it.
 
 Its disk is laid out for CIS, the same on every image: on GPT by repart's
 [definitions](../images/mkosi.conf.d/mutable-vm/mkosi.extra/usr/lib/repart.d), and on a Pi's MBR by

@@ -10,6 +10,8 @@ on:
       - ansible/baseline/**
       - ansible/collections/**
       - ansible/requirements.yml
+      # What an extension holds of a role's
+      - ansible/roles/*/files/**
       - tools/src/homelab/image/**
       - tools/src/homelab/render/seed.py
       - pyproject.toml
@@ -82,8 +84,10 @@ jobs:
 
           # What only extensions read, which no image is built from: on: paths is what any is
           only_theirs = re.compile(r"images/(extensions\.lock|vendors/.*|mkosi\.profiles/(%s)/.*)$"
-                                   r"|tools/src/homelab/image/extension\.py$" % "|".join(map(re.escape, [*extensions, "sysext"])))
+                                   r"|ansible/roles/[^/]+/files/|tools/src/homelab/image/extension\.py$"
+                                   % "|".join(map(re.escape, [*extensions, "sysext"])))
           inputs_of_images = re.compile(r"(images/|ansible/baseline|ansible/collections/|ansible/requirements\.yml$"
+                                        r"|ansible/roles/[^/]+/files/"
                                         r"|tools/src/homelab/image/|tools/src/homelab/render/seed\.py$|pyproject\.toml$"
                                         r"|uv\.lock$|\.github/workflows/images\.yml$)")
           base = os.environ.get("BASE", "")

@@ -1,13 +1,15 @@
-# What mkosi has no setting for: the images each system extension is built over, and the package whose
-# upstream version it's released at
+# What mkosi has no setting for: the images each system extension is built over, the package whose
+# upstream version it's released at, and the files of our own it holds, by where, from the role that uses them
 
 [dnsdist]
 images = ["ymir-amd64-vm"]
 package = "dnsdist"
+files = { "/usr/libexec/homelab/dns-health" = "ansible/roles/powerdns_resolver/files/dns-health" }
 
 [frr]
 images = ["ymir-amd64-vm"]
 package = "frr"
+files = { "/usr/libexec/homelab/anycast-check" = "ansible/roles/frr_bgp/files/anycast-check" }
 
 [haproxy]
 images = ["ymir-amd64-vm"]

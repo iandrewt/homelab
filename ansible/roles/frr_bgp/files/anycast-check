@@ -1,0 +1,12 @@
+#!/bin/sh
+# Holds anycast0 up while this host isn't drained, what it fronts runs, and its check passes, as its unit
+# says: ANYCAST_DRAIN, ANYCAST_UNITS, ANYCAST_CHECK and ANYCAST_INTERVAL
+while :; do
+  # shellcheck disable=SC2086 # a list of units, and a command with its arguments
+  if [ ! -e "$ANYCAST_DRAIN" ] && systemctl is-active --quiet $ANYCAST_UNITS && $ANYCAST_CHECK >/dev/null 2>&1; then
+    systemctl start anycast.service
+  else
+    systemctl stop anycast.service
+  fi
+  sleep "$ANYCAST_INTERVAL"
+done

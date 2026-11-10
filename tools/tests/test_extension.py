@@ -1,7 +1,7 @@
 from homelab.image.extension import Extension, next_version
 
 RECURSOR = Extension(name="pdns-recursor", images=("ymir-amd64-vm",), package="pdns-recursor", packages=(),
-                     snapshot=None, sandbox_trees=(), inputs=())
+                     snapshot=None, sandbox_trees=(), files=(), inputs=())
 
 
 def locked(version: str, *packages: str) -> dict:

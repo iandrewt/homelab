@@ -1,0 +1,29 @@
+#!/bin/sh
+# Exits 0 while this resolver answers through dnsdist as its clients would be answered:
+#   dns-health <dnsdist's port on 127.0.0.1> <a signed internal name> <a public name> <root server>...
+set -u
+port=$1 internal=$2 public=$3
+shift 3
+
+answer() {
+  dig @127.0.0.1 -p "$port" +dnssec +noall +comments +tries=2 +time=2 "$@" SOA
+}
+
+validated() {
+  out=$(answer "$1") || return 1
+  printf '%s\n' "$out" | grep -q 'status: NOERROR' && printf '%s\n' "$out" | grep -Eq '^;; flags:[a-z ]* ad[ ;]'
+}
+
+# With a root server answering, a failed public name is this resolver's fault, not the WAN's
+online() {
+  for server in "$@"; do
+    dig @"$server" +norec +noall +comments +tries=1 +time=2 . SOA | grep -q 'status: NOERROR' && return 0
+  done
+  return 1
+}
+
+# Every server holds the same zones and anchors, so a bogus internal zone is bogus on all of
+# them: withdrawing would take public names down too. Only an unanswered one withdraws.
+answer +cd "$internal" | grep -q 'status: NOERROR' || exit 1
+validated "$internal" || logger -t dns-health -p daemon.err "$internal doesn't validate"
+validated "$public" || ! online "$@"

@@ -6,8 +6,11 @@ reads, and the packages it adds, as apt resolves them over the image's tree. Onl
 upstream's version and a rebuild count, as Arch's pkgrel: a dependency the base provides moves with the base,
 under Debian's ABI, while one the extension bundles is a copy only a rebuild updates."""
 
+import json
 import os
 import re
+import shutil
+import subprocess
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +18,7 @@ from pathlib import Path
 import tomli_w
 
 from ..bootstrap.shell import BootstrapError, say
+from ..repo import Repo
 from . import build, builder, images as catalog, publish, signing, snapshot
 from .images import Image
 from .test import _check, _fresh, _report
@@ -91,6 +95,8 @@ class Extension:
     packages: tuple[str, ...]
     snapshot: str | None
     sandbox_trees: tuple[Path, ...]
+    # Our own beside its packages, by where it holds each: a role's, which a package-managed host takes from it
+    files: tuple[tuple[str, Path], ...]
     # What its build reads, besides the packages it resolves to
     inputs: tuple[Path, ...]
 
@@ -153,6 +159,9 @@ def register(verbs) -> None:
     )
     test.add_argument("image", help="an image-based image in images/images.toml, e.g. ymir-amd64-vm")
     test.add_argument("names", nargs="*", help="its extensions to merge (default: every one built for it)")
+    test.add_argument("--playbook", type=Path, action="append",
+                      help="a playbook to run against each new VM, as host `build`, twice: the second must change "
+                      "nothing. Each gets a VM of its own")
     test.set_defaults(run=_test)
 
 
@@ -182,10 +191,12 @@ def load(images: Path, name: str) -> Extension:
         raise BootstrapError(f"the {name} profile makes {config['ImageId']!r}: its ImageId= is its name")
     trees = tuple(images / Path(t["Source"]).relative_to("/images") for t in config["SandboxTrees"]
                   if t["Source"].startswith("/images/"))
+    files = tuple((dest, images.parent / source) for dest, source in entry.get("files", {}).items())
     return Extension(
         name=name, images=tuple(entry["images"]), package=entry["package"], packages=tuple(config["Packages"]),
-        snapshot=config["Snapshot"], sandbox_trees=trees,
-        inputs=(images / "mkosi.profiles" / PROFILE, images / "mkosi.profiles" / name, *trees),
+        snapshot=config["Snapshot"], sandbox_trees=trees, files=files,
+        inputs=(images / "mkosi.profiles" / PROFILE, images / "mkosi.profiles" / name, *trees,
+                *(source for _, source in files)),
     )
 
 
@@ -335,8 +346,15 @@ def _build_over(images: Path, extension: Extension, image: Image, version: str, 
         for a in (flag, f"/out/keys/{name}")]
     base = tree(images, image)
     build._clear(extension.name)
+    staged = out / "extension-files" / extension.name
+    shutil.rmtree(staged, ignore_errors=True)
+    for dest, source in extension.files:
+        (staged / dest.lstrip("/")).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, staged / dest.lstrip("/"))
+    files = ["--extra-tree", f"/out/extension-files/{extension.name}:/"] if extension.files else []
+    files += ["--environment", f"EXTENSION_PACKAGES={' '.join(p.split('=', 1)[0] for p in packages)}"]
     builder.mkosi(images, *extension.args(image), "--image-version", version, "--base-tree", f"/cache/output/{base.name}",
-                  "--workspace-directory", "/cache/workspace", *keys,
+                  "--workspace-directory", "/cache/workspace", *keys, *files,
                   *snapshot.sandbox(extension.snapshot, extension.sandbox_trees, out), "build",
                   mounts={out: "/out"}, signing=work)
     listed = builder.OUTPUT / f"{extension.name}_{version}.packages"
@@ -388,7 +406,15 @@ def _test(args) -> int:
     names = args.names or sorted(built)
     if missing := [n for n in names if n not in built]:
         raise BootstrapError(f"not built for {image.name}: {missing}")
+    failures = []
+    for playbook in args.playbook or [None]:
+        failures += _boot(image, out, disk, names, built, playbook)
+    return _report(f"{image.name} with {', '.join(names)}", failures)
 
+
+def _boot(image: Image, out: Path, disk: Path, names: list[str], built: dict[str, Path],
+          playbook: Path | None) -> list[str]:
+    """A new VM taking the extensions, checked, and the playbook run against it twice, the second changing nothing."""
     work = _fresh(out)
     vm = Vm(work, "test", image.boot, mounts={out: "/image:ro"}, log=out / "extensions.serial.log")
     failures = []
@@ -411,10 +437,41 @@ def _test(args) -> int:
         state = vm.ssh("systemctl is-system-running || true").strip()
         failures += _check("it's running with them merged, with no unit failed", state == "running",
                            state + "\n" + vm.ssh("systemctl --failed --no-legend --plain || true"))
+        if playbook:
+            extra = {"extensions_enabled": names, "extensions_url": url}
+            first = _play(vm, playbook, extra, out / f"{playbook.stem}.first.log")
+            if first is None:
+                (out / f"{playbook.stem}.journal.log").write_text(vm.ssh(
+                    "systemctl --failed --no-pager; sudo journalctl -b --no-pager -n 400 || true"))
+            failures += _check(f"{playbook.name} runs", first is not None,
+                               f"see {out / f'{playbook.stem}.first.log'} and its journal.log")
+            if first is not None:
+                again = _play(vm, playbook, extra, out / f"{playbook.stem}.second.log")
+                failures += _check(f"{playbook.name} changes nothing run again", again == 0,
+                                   f"{again} changed: see {out / f'{playbook.stem}.second.log'}")
     finally:
         vm.remove()
         builder.run_in({out: "/out"}, "sh", "-c", "cp /out/test/serial.log /out/extensions.serial.log; rm -rf /out/test")
-    return _report(f"{image.name} with {', '.join(names)}", failures)
+    return failures
+
+
+def _play(vm: Vm, playbook: Path, extra: dict, log: Path) -> int | None:
+    """How many tasks the playbook changed on the VM, as the trees run it, or None if it failed."""
+    ansible = Repo.discover().root / "ansible"
+    env = os.environ | {
+        "ANSIBLE_ROLES_PATH": str(ansible / "roles"),
+        "ANSIBLE_COLLECTIONS_PATH": f"{ansible / 'collections'}:{Path.home() / '.ansible/collections'}",
+        "ANSIBLE_PIPELINING": "true",
+        "ANSIBLE_INTERPRETER_PYTHON": "auto_silent",
+        "ANSIBLE_FORCE_HANDLERS": "true",
+        "ANSIBLE_HOST_KEY_CHECKING": "false",
+    }
+    with open(log, "w") as stream:
+        result = subprocess.run(
+            ["ansible-playbook", "-i", str(vm.inventory()), "-i", str(ansible / "baseline"), str(playbook.resolve()),
+             "--extra-vars", json.dumps(extra)], env=env, stdout=stream, stderr=subprocess.STDOUT, check=False)
+    recap = re.search(r"^build\s*:.*changed=(\d+)", log.read_text(), re.MULTILINE)
+    return int(recap[1]) if result.returncode == 0 and recap else None
 
 
 def _extension(vm: Vm, name: str, file: str, merged: str) -> list[str]:
