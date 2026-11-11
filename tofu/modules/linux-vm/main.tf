@@ -13,13 +13,51 @@ locals {
     var.dhcp6 ? { dhcp6-overrides = local.dhcp_overrides } : {},
     length(var.dns_servers) > 0 ? { ra-overrides = { use-dns = false } } : {},
   )
+
+  cloud_init = var.seed == "cloud-init"
+
+  # The same network, in networkd's own terms, for an image that reads no network-config
+  pinned_dns = length(var.dns_servers) > 0
+  accept_ra  = compact([local.pinned_dns ? "UseDNS=no" : "", var.ipv6_token != null ? "Token=static:${var.ipv6_token}" : ""])
+  network_unit = join("\n\n", compact([
+    "[Match]\nName=e*",
+    join("\n", concat(
+      [
+        "[Network]",
+        "DHCP=${var.dhcp4 && var.dhcp6 ? "yes" : var.dhcp4 ? "ipv4" : var.dhcp6 ? "ipv6" : "no"}",
+        "EmitLLDP=yes",
+        "LinkLocalAddressing=ipv6",
+        "UseDomains=yes",
+      ],
+      [for a in local.static_addresses : "Address=${a}"],
+      [for g in compact([var.ipv4_gateway, var.ipv6_gateway]) : "Gateway=${g}"],
+      [for s in var.dns_servers : "DNS=${s}"],
+    )),
+    local.pinned_dns ? "[DHCPv4]\nUseDNS=no" : "",
+    local.pinned_dns ? "[DHCPv6]\nUseDNS=no" : "",
+    length(local.accept_ra) > 0 ? join("\n", concat(["[IPv6AcceptRA]"], local.accept_ra)) : "",
+  ]))
+
+  # As SMBIOS type 11 carries them, a line each; a value of many lines goes in base64
+  credentials = join("", [for name, value in {
+    "system.hostname"            = var.hostname
+    "ssh.authorized_keys.debian" = join("\n", var.ssh_public_keys)
+    "network.network.50-seed"    = "${local.network_unit}\n"
+    } : strcontains(value, "\n")
+    ? "io.systemd.credential.binary:${name}=${base64encode(value)}\n"
+    : "io.systemd.credential:${name}=${value}\n"
+  ])
 }
 
 resource "random_id" "vm_instance_id" {
+  count = local.cloud_init ? 1 : 0
+
   byte_length = 20
 }
 
 resource "proxmox_virtual_environment_file" "meta_data" {
+  count = local.cloud_init ? 1 : 0
+
   content_type = "snippets"
   upload_mode  = "sftp"
   datastore_id = var.snippet_datastore_id
@@ -28,7 +66,7 @@ resource "proxmox_virtual_environment_file" "meta_data" {
   source_raw {
     file_name = "${var.hostname}-meta-data.yaml"
     data = yamlencode(merge({
-      instance-id       = random_id.vm_instance_id.hex
+      instance-id       = random_id.vm_instance_id[0].hex
       local-hostname    = var.hostname
       public-keys       = var.ssh_public_keys
       cloud-name        = "homelab"
@@ -40,6 +78,8 @@ resource "proxmox_virtual_environment_file" "meta_data" {
 }
 
 resource "proxmox_virtual_environment_file" "vendor_data" {
+  count = local.cloud_init ? 1 : 0
+
   content_type = "snippets"
   upload_mode  = "sftp"
   datastore_id = var.snippet_datastore_id
@@ -58,6 +98,8 @@ resource "proxmox_virtual_environment_file" "vendor_data" {
 }
 
 resource "proxmox_virtual_environment_file" "network_config" {
+  count = local.cloud_init ? 1 : 0
+
   content_type = "snippets"
   upload_mode  = "sftp"
   datastore_id = var.snippet_datastore_id
@@ -99,7 +141,7 @@ resource "proxmox_virtual_environment_file" "user_data" {
 
   source_raw {
     file_name = "${var.hostname}-user-data.yaml"
-    data      = var.user_data
+    data      = local.cloud_init ? var.user_data : "${local.credentials}${var.user_data}"
   }
 }
 
@@ -206,9 +248,9 @@ resource "proxmox_virtual_environment_vm" "this" {
     datastore_id = var.disk_datastore_id
     interface    = "ide2"
 
-    meta_data_file_id    = proxmox_virtual_environment_file.meta_data.id
-    network_data_file_id = proxmox_virtual_environment_file.network_config.id
-    vendor_data_file_id  = proxmox_virtual_environment_file.vendor_data.id
+    meta_data_file_id    = one(proxmox_virtual_environment_file.meta_data[*].id)
+    network_data_file_id = one(proxmox_virtual_environment_file.network_config[*].id)
+    vendor_data_file_id  = one(proxmox_virtual_environment_file.vendor_data[*].id)
     user_data_file_id    = proxmox_virtual_environment_file.user_data.id
   }
 }

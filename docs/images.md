@@ -20,7 +20,9 @@ sums are signed by Platform's release key, which only a release can use, and whi
 [its certificate](../images/secure-boot/db.crt).
 
 **It updates from Platform's update service**, which admits the sites' public addresses alone: each
-release goes to a `canary` channel, and is promoted to `stable`, which a machine follows.
+release goes to a `canary` channel, and is promoted to `stable`, which a machine follows. A version's
+qcow2 is beside its update files, `<image>/<channel>/<image>_<version>.qcow2`, for a new machine to
+start from, until its channel keeps five newer.
 `systemd-sysupdate-update.timer` installs the newest of the image and of every component the machine
 has enabled, and `systemd-sysupdate-reboot.timer` reboots into a new version of the image daily at
 04:10 UTC, which a drop-in moves to a window of its own. A machine
@@ -37,9 +39,14 @@ io.systemd.credential:ssh.authorized_keys.debian=ssh-ed25519 AAAA...
 
 `system.hostname` names it, unless it has named itself in `/etc/hostname`, and
 `ssh.authorized_keys.debian` lets you in, once. Any other credential reaches what imports it
-after udev has found the drive: `tmpfiles.extra` and `network.*`, but not `sysusers.extra`. A value with a newline is
-`io.systemd.credential.binary:<name>=<base64>`. The rest of this page is the package-managed
-images', but for [its system extensions](#system-extensions).
+after udev has found the drive: `tmpfiles.extra`, but not `sysusers.extra`. A value with a newline is
+`io.systemd.credential.binary:<name>=<base64>`.
+
+Its network is DHCPv4 and SLAAC, taking the lease's search domains, unless the seed has a network of
+its own: a `network.network.<name>` credential is a [systemd.network](https://www.freedesktop.org/software/systemd/man/latest/systemd.network.html) file, `<name>.network`,
+from the first boot (and `network.netdev.*` and `network.link.*` alike). `linux-vm` writes its
+network so, as `network.network.50-seed`; a host's netplan sorts before it. The rest of this page is
+the package-managed images', but for [its system extensions](#system-extensions).
 
 ## System extensions
 

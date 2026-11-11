@@ -1,8 +1,9 @@
-"""What sysupdate reads: an image's versions in a channel of the update bucket, and their sums, signed by the
-release key. A release publishes its build to canary, and promoting copies a version from canary to stable;
-each channel keeps its newest versions, and its sums are checked against the release key before anything is
-added to them."""
+"""What sysupdate reads, and a cell imports new machines from: an image's versions in a channel of the update
+bucket, and their sums, signed by the release key. A release publishes its build to canary, and promoting copies
+a version from canary to stable; each channel keeps its newest versions, and its sums are checked against the
+release key before anything is added to them."""
 
+import hashlib
 import os
 import re
 import subprocess
@@ -65,7 +66,7 @@ class Channel:
 
 
 def image_channel(image: str) -> Channel:
-    return Channel(image, rf"{re.escape(image)}_(.+?)\.(?:efi|usr-.*)", r"\d+(\.\d+)*")
+    return Channel(image, rf"{re.escape(image)}_(.+?)\.(?:efi|usr-.*|qcow2)", r"\d+(\.\d+)*")
 
 
 def merge(old: str, new: str, channel: Channel, keep: int = KEEP) -> tuple[str, list[str]]:
@@ -90,9 +91,16 @@ def _publish(args) -> int:
     images = builder.ensure()
     image = _image_based(images, args.image)
     out = builder.CACHE / image.name
+    channel = image_channel(image.name)
     sums = (out / "updates" / "SHA256SUMS").read_text()
+    files = local(sums, out / "updates")
+    # What a cell imports a new machine from, kept as long as its version is
+    disk = f"{image.name}_{channel.version_of(next(iter(files)))}.{image.format}"
+    files[disk] = out / f"{image.name}.{image.format}"
+    with files[disk].open("rb") as stream:
+        sums += f"{hashlib.file_digest(stream, 'sha256').hexdigest()}  {disk}\n"
     work = signing.prepare(images, builder.CACHE / "signing")
-    publish(image_channel(image.name), out, work, sums, out / "updates")
+    publish(channel, out, work, sums, files)
     return 0
 
 
@@ -105,9 +113,14 @@ def _promote(args) -> int:
     return 0
 
 
-def publish(channel: Channel, out: Path, work: Path, sums: str, files: Path) -> None:
-    """A release's files, beside their sums in files, added to the channel's canary."""
-    _update(channel, out, work, "canary", sums, {name: str(files / name) for name in _names(sums)})
+def local(sums: str, directory: Path) -> dict[str, Path]:
+    """Each file sums names, in directory."""
+    return {name: directory / name for name in _names(sums)}
+
+
+def publish(channel: Channel, out: Path, work: Path, sums: str, files: dict[str, Path]) -> None:
+    """A release's files, each one sums names, added to the channel's canary."""
+    _update(channel, out, work, "canary", sums, {name: str(path) for name, path in files.items()})
 
 
 def promote(channel: Channel, version: str, out: Path, signer: Callable[[], Path]) -> None:

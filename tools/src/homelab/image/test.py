@@ -10,7 +10,7 @@ from pathlib import Path
 from ..bootstrap.shell import BootstrapError, run, say
 from . import build, builder, images as catalog, signing
 from .images import Image
-from .vm import Vm
+from .vm import LEASE_DOMAIN, Vm
 
 DISK = "16G"
 # The size an image-based VM starts at, which its owner may grow
@@ -46,6 +46,24 @@ printf "[Service]\\nType=oneshot\\nRemainAfterExit=yes\\nUser=probe\\nExecStart=
   > $x/systemd/system/probe.service
 ln -s ../probe.service $x/systemd/system/multi-user.target.wants/probe.service
 '
+"""
+# A seed's own network, as linux-vm writes a resolver's: the lease's addresses, and resolvers of its own
+SEED_NETWORK = """[Match]
+Name=e*
+
+[Network]
+DHCP=yes
+UseDomains=yes
+DNS=10.0.2.3
+
+[DHCPv4]
+UseDNS=no
+
+[DHCPv6]
+UseDNS=no
+
+[IPv6AcceptRA]
+UseDNS=no
 """
 # What differs between any two boots
 VOLATILE = re.compile(r"random|_seed|boot_id|ns_last_pid|fs\.(file|inode|dentry|quota)|tcp_fastopen_key"
@@ -113,7 +131,8 @@ def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -
         say(f"booting it as a new VM, the {boot}")
         work = _fresh(out)
         vm = Vm(work, "test", base.boot, mounts={image.parent: "/image:ro", out / "next": "/updates:ro"},
-                 log=out / f"{boot}.serial.log")
+                 log=out / f"{boot}.serial.log",
+                 credentials={"network.network.50-seed": SEED_NETWORK} if boot == "second" else None)
         try:
             builder.run_in(vm.mounts, "qemu-img", "create", "-q", "-f", "qcow2", "-F", "qcow2",
                            "-b", f"/image/{image.name}", "/work/disk.qcow2", IMAGE_BASED_DISK)
@@ -128,6 +147,8 @@ def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -
                 failures += _extended(vm)
                 failures += _updated(vm, base, following)
                 failures += _grown(vm)
+            else:
+                failures += _seeded_network(vm)
         finally:
             vm.remove()
             # What went wrong, once the VM's gone
@@ -185,6 +206,9 @@ def _contract_image_based(base: Image, vm: Vm, host_key: str) -> list[str]:
     journal = vm.ssh("sudo journalctl --header -n0 2>/dev/null | grep -m1 'File path' || true")
     failed += _check("the journal is on disk from the first boot", "/var/log/journal/" in journal, journal)
 
+    domains = vm.ssh("resolvectl domain")
+    failed += _check("it searches the lease's domains", LEASE_DOMAIN in domains, domains)
+
     release = vm.ssh("cat /usr/lib/homelab/image-release")
     failed += _check("the release file names the image", f"IMAGE_ID={base.name}\n" in release, release)
     url = os.environ.get("IMAGES_UPDATE_URL") or "https://images.invalid"
@@ -193,6 +217,13 @@ def _contract_image_based(base: Image, vm: Vm, host_key: str) -> list[str]:
     if "qemu-guest-agent" in base.packages:
         failed += _agent(vm, host_key)
     return failed
+
+
+def _seeded_network(vm: Vm) -> list[str]:
+    """A seed's network, taken before udev finds the drive that holds it"""
+    status = vm.ssh("networkctl status --no-pager $(ip -o route show default | awk '{print $5; exit}')")
+    return _check("networkd took the seed's network from first boot", "/run/systemd/network/50-seed.network" in status,
+                  status)
 
 
 def _hardening(vm: Vm) -> list[str]:

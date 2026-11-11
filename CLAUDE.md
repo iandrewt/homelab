@@ -133,7 +133,8 @@ computes; what a prefix must satisfy is NetBox's own containment. The design is 
 - **The default is DHCP**: DHCPv4 and SLAAC, resolvers and search list from the lease, so an
   install seed is the same for every host at a site. A resolver alone ignores the lease's
   servers and asks its VLAN's gateway, since nothing it needs to build itself may come from the
-  VIP it will serve; `linux-vm` gives hugin the same.
+  VIP it will serve; `linux-vm` gives hugin the same, and on ymir `frr_bgp`'s netplan, which
+  replaces the seed's (`frr_bgp_uplink_nameservers`).
 - **A leased address is status `dhcp`**, recorded once leased, never decided ahead; `active` is
   what a host configures itself, `reserved` held and unused. The only static addresses are
   Proxmox nodes', gateways and routed service addresses; on a VLAN-only network each interface's
@@ -272,9 +273,10 @@ node is open from boot until Flux applies the policies.
 ## Host networking
 
 Every host is **netplan → systemd-networkd, with systemd-resolved**, and every interface it has
-is in netplan, but for ymir's default, networkd's own in `/usr` (`89-ethernet.network`): on first
-boot netplan's generator runs before sysusers makes the group networkd reads its output as. Roles
-write netplan and assume networkd; an OS's quirks belong to its bootstrap or its own role.
+is in netplan, but for ymir's default, networkd's own in `/usr` (`89-ethernet.network`), and its
+seed's (`50-seed`): on first boot netplan's generator runs before sysusers makes the group networkd
+reads its output as. Roles write netplan and assume networkd; an OS's quirks belong to its bootstrap
+or its own role.
 Proxmox is the exception: ifupdown2, which `proxmox_node` writes from the node's NetBox
 interfaces, with a static `resolv.conf`.
 
@@ -365,8 +367,10 @@ systemd-resolved, and shadows `rpi-cloud-init-mods`' NM default with a file of t
   through as bytes, since what reads it may not be cloud-init (Talos's machine config).
 - **ymir has no cloud-init**: its `user-data` is systemd credentials, a line each as SMBIOS
   type 11 carries them (`io.systemd.credential:<name>=<value>`), which `seed-credentials` copies
-  into `/run/credstore` for `ImportCredential=`: `system.hostname`, and the `debian` user's key
-  as `ssh.authorized_keys.debian`. It reads no other document.
+  into `/run/credstore` for `ImportCredential=`: `system.hostname`, the `debian` user's key
+  as `ssh.authorized_keys.debian`, and its network as networkd's own (`network.network.50-seed`),
+  which it writes to `/run/systemd/network` itself, since `systemd-network-generator` runs before
+  udev finds the drive. It reads no other document; `linux-vm`'s `seed = "credentials"` writes it.
 - Raspberry Pi OS needs `users: [default]` in vendor-data, or `cc_ssh` drops the keys silently;
   `pi` already exists with `nologin`, so `runcmd` fixes its shell.
 
@@ -514,9 +518,9 @@ signed keylessly by the workflow (`docs/images.md` says how to check one). An im
 `alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`): mkosi's
 signing tools have no network, so its PKCS#11 module runs behind `p11-kit server`, which `mkosi box`
 starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, issued by KEK
-(`homelab image db`). Its release publishes its update files to the `canary` channel
-of the update bucket (`homelab image publish`), behind CloudFront on the Free flat-rate plan, whose WAF
-admits every site's public aggregates from NetBox; promoting to `stable` is `gh workflow run images.yml
+(`homelab image db`). Its release publishes its update files and its qcow2 to the `canary` channel
+of the update bucket (`homelab image publish`), which a site's image library pins from `stable`,
+behind CloudFront on the Free flat-rate plan, whose WAF admits every site's public aggregates from NetBox; promoting to `stable` is `gh workflow run images.yml
 --ref image/<image>/<version> -f promote=true`. Each channel keeps five versions, its `SHA256SUMS`
 checked against the release key before anything's added. **An extension is released alike**, by
 `extension/<extension>/<version>` at the version its lock holds, tested on its image's newest release,

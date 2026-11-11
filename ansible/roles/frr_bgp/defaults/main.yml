@@ -29,6 +29,8 @@ frr_bgp_uplink_match: "e*"
 # Whether to declare the uplink's DHCP too, where nothing else in netplan does: an image whose default
 # network is networkd's own
 frr_bgp_uplink_dhcp: false
+# Declared so, the resolvers it asks instead of the lease's, as its seed did
+frr_bgp_uplink_nameservers: []
 frr_bgp_reply_table: 200
 
 frr_bgp_router_id: "{{ frr_bgp_service_addresses | reject('search', ':') | first | default('') }}"

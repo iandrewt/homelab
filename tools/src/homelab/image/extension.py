@@ -380,7 +380,8 @@ def _publish(args) -> int:
     for image in _images(extension, args.image):
         out = builder.CACHE / image
         files = out / "extensions" / extension.name
-        publish.publish(channel(image, extension.name), out, work, (files / "SHA256SUMS").read_text(), files)
+        sums = (files / "SHA256SUMS").read_text()
+        publish.publish(channel(image, extension.name), out, work, sums, publish.local(sums, files))
     return 0
 
 

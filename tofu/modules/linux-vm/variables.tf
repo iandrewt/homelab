@@ -154,8 +154,19 @@ variable "ssh_public_keys" {
   type = list(string)
 }
 
+variable "seed" {
+  description = "What reads the seed: cloud-init, or an image that takes user-data as systemd credentials and reads nothing else (ymir)."
+  type        = string
+  default     = "cloud-init"
+
+  validation {
+    condition     = contains(["cloud-init", "credentials"], var.seed)
+    error_message = "seed is cloud-init or credentials."
+  }
+}
+
 variable "user_data" {
-  description = "Optional cloud-init user-data."
+  description = "Host-specific user-data: cloud-config, or credential lines after the module's own."
   type        = string
   default     = ""
   nullable    = false
