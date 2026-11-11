@@ -9,7 +9,7 @@ it's generated here and pasted in by hand.
 ```sh
 uv run homelab unifi status                        # Site Magic's tunnels
 uv run homelab unifi export <dir>                  # every site's policies, zones and networks
-uv run homelab unifi apply <site> <step> [--apply] # egress, ipv6, gateway <zone>, vpn
+uv run homelab unifi apply <site> <step> [--apply] # egress, ipv6, home, gateway <zone>, vpn
 uv run homelab unifi show <site> <from> <to>       # a zone pair's policies of ours, in order
 uv run homelab unifi blocked <site> [--minutes N]  # what the firewall blocked, by flow, most first
 ```

@@ -25,6 +25,11 @@ CONSOLE_PORTS = [22, 80, 443]
 # UniFi's port reference, 2026-10-30, and what its gear was seen using that it doesn't list
 PROTECT_PORTS = [(7441, 7445), 7447, 7550, 7552, 6666, 7888]
 UNIFI_UDP_PORTS = [3478, 5514, 10001, 10101]
+MATTER_PORT = 5540
+EPHEMERAL_PORTS = (32768, 65535)
+# Where Matter's devices reach the gateway's controller from: Wi-Fi's own zone, and Thread's
+# through People's border routers
+GATEWAY_MATTER = ("People", "Devices")
 # Where a zone gets what it needs from the gateway, beside ICMP and DHCP
 GATEWAY_DNS = ("Work", "Workloads", "Cameras")
 GATEWAY_MDNS = ("People", "Devices", "Infrastructure")
@@ -66,7 +71,7 @@ def register(subparsers) -> None:
 
     apply = actions.add_parser("apply", help="one step of the runbook's policies")
     apply.add_argument("site")
-    apply.add_argument("step", choices=["egress", "ipv6", "gateway", "vpn"])
+    apply.add_argument("step", choices=["egress", "ipv6", "home", "gateway", "vpn"])
     apply.add_argument("zone", nargs="?", help="gateway's: the zone whose way to the gateway it is")
     apply.add_argument("--apply", action="store_true", help="make the changes, rather than print them")
     apply.set_defaults(run=_apply)
@@ -148,7 +153,7 @@ def _apply(args) -> int:
             raise UnifiError("gateway takes a zone")
         c = Console(key, consoles[args.site])
         site = model["sites"][args.site]
-        steps = {"egress": egress, "ipv6": ipv6, "gateway": gateway, "vpn": vpn}
+        steps = {"egress": egress, "ipv6": ipv6, "home": home, "gateway": gateway, "vpn": vpn}
         wanted = steps[args.step](c, site, model["sites"], args.zone)
         c.ensure(wanted, apply=args.apply)
     return _run(run)
@@ -360,6 +365,16 @@ def ipv6(c: Console, site: dict, sites: dict, zone=None) -> list[dict]:
     return out
 
 
+def home(c: Console, site: dict, sites: dict, zone=None) -> list[dict]:
+    """24 and 24a: People reaches Devices, and Matter's devices report back."""
+    return [
+        policy(c, "Allow People to Devices", "ALLOW", side(c, "People"), side(c, "Devices"), scope(None)),
+        # A subscription's interval outlives conntrack's, so its reports arrive as NEW
+        policy(c, "Allow Matter Reports", "ALLOW", side(c, "Devices", port=ports(MATTER_PORT)),
+               side(c, "People", port=ports(EPHEMERAL_PORTS)), scope("UDP")),
+    ]
+
+
 def gateway(c: Console, site: dict, sites: dict, zone: str) -> list[dict]:
     """50-69: a zone's way to the gateway, then its block."""
     gw = side(c, "Gateway")
@@ -378,6 +393,9 @@ def gateway(c: Console, site: dict, sites: dict, zone: str) -> list[dict]:
             # The gateway asks from an ephemeral port, and a reply to a multicast query is NEW
             policy(c, "Allow Gateway mDNS Replies", "ALLOW", side(c, zone, port=ports(5353)), gw, scope("UDP")),
         ]
+    if zone in GATEWAY_MATTER:
+        out.append(policy(c, "Allow Gateway Matter Reports", "ALLOW", side(c, zone, port=ports(MATTER_PORT)),
+                          side(c, "Gateway", port=ports(EPHEMERAL_PORTS)), scope("UDP")))
     if zone in BREAK_GLASS_FROM and any(v["type"] == "WIREGUARD" for v in c.every("vpn/servers")):
         out.append(policy(c, "Allow Break-glass", "ALLOW", src, side(c, "Gateway", port=ports(BREAK_GLASS_PORT)),
                           scope("UDP")))
