@@ -77,7 +77,7 @@ resource "kubernetes_namespace_v1" "bootstrap" {
 
 module "flux" {
   source  = "controlplaneio-fluxcd/flux-operator-bootstrap/kubernetes"
-  version = "0.9.0"
+  version = "0.10.0"
 
   bootstrap_namespace        = kubernetes_namespace_v1.bootstrap.metadata[0].name
   create_bootstrap_namespace = false
