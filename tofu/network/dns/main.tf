@@ -44,7 +44,7 @@ locals {
     }
   }
 
-  image = yamldecode(file("${path.module}/../../platform/proxmox/images/${local.site}.yaml")).images["debian-13-genericcloud"]
+  image = yamldecode(file("${path.module}/../../platform/proxmox/images/${local.site}.yaml")).images["ymir-amd64-vm"]
 }
 
 data "onepassword_item" "ssh_key" {
@@ -74,6 +74,9 @@ module "resolver" {
   description = "DNS resolver."
 
   image_file_id = "${local.proxmox[each.value.proxmox].image_storage}:${local.image.content_type}/${local.image.file_name}"
+  # ymir: its seed is credentials, and it enrolls its own Secure Boot keys
+  seed              = "credentials"
+  pre_enrolled_keys = false
 
   disk_datastore_id    = local.proxmox[each.value.proxmox].guest_defaults.disk_storage
   snippet_datastore_id = local.proxmox[each.value.proxmox].guest_defaults.snippet_storage

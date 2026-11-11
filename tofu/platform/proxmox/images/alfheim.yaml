@@ -1,11 +1,12 @@
 # yaml-language-server: $schema=schema.json
 images:
-  debian-13-genericcloud:
-    url: https://cloud.debian.org/images/cloud/trixie/20261017-2634/debian-13-genericcloud-amd64-20261017-2634.qcow2
-    file_name: debian-13-genericcloud-amd64.qcow2
+  # From its stable channel, which keeps five versions
+  ymir-amd64-vm:
+    url: https://d3mmebre0rx3rz.cloudfront.net/ymir-amd64-vm/stable/ymir-amd64-vm_2026.11.7.qcow2
+    file_name: ymir-amd64-vm.qcow2
     content_type: import
-    checksum: ec584ccabfef7120b4c4f7482adf0e615894d9292cedec446b64194b951ebe5dd97c336b5dcbae458333764b0edd516334506017f33c4f2020ef8d38b569ffe3
-    checksum_algorithm: sha512
+    checksum: fd30ec0bfe7e7a71edd42e6102149b123cafbabf35827a9d909ef7635a9fd6d6
+    checksum_algorithm: sha256
 
   # schematic includes qemu-guest-agent
   talos-metal-secureboot:
