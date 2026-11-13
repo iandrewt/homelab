@@ -98,9 +98,4 @@ provider "proxmox" {
   endpoint  = each.value.endpoint
   insecure  = try(each.value.insecure, false)
   api_token = ephemeral.onepassword_item.proxmox[each.key].password
-
-  ssh {
-    agent    = true
-    username = each.value.ssh_username
-  }
 }

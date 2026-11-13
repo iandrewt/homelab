@@ -17,12 +17,6 @@ variable "hostname" {
   type = string
 }
 
-variable "region" {
-  description = "Reported as meta-data region. The cluster, matching what proxmox-cloud-controller-manager calls a region."
-  type        = string
-  default     = null
-}
-
 variable "pool_id" {
   description = "Proxmox pool the VM joins."
   type        = string
@@ -30,7 +24,7 @@ variable "pool_id" {
 }
 
 variable "image_file_id" {
-  description = "Already-imported cloud image, e.g. from proxmox_download_file."
+  description = "The image's volume, e.g. from proxmox_download_file."
   type        = string
 }
 
@@ -59,12 +53,6 @@ variable "disk_datastore_id" {
   type = string
 }
 
-variable "snippet_datastore_id" {
-  description = "Datastore for the four cloud-init snippets. Must be node-local."
-  type        = string
-  default     = "local"
-}
-
 variable "disk_size_gb" {
   type = number
 }
@@ -85,39 +73,16 @@ variable "vnet" {
   type        = string
 }
 
-variable "dhcp4" {
-  description = "Ask for an IPv4 lease."
-  type        = bool
-  default     = true
-}
-
-variable "dhcp6" {
-  description = "Ask for an IPv6 lease."
-  type        = bool
-  default     = true
-}
-
-variable "ipv4_address" {
-  description = "Static IPv4 in CIDR notation. Null when dhcp4 is on."
+variable "ipv4" {
+  description = "\"dhcp\", a static address in CIDR notation, or null for none."
   type        = string
-  default     = null
+  default     = "dhcp"
 }
 
-variable "ipv6_address" {
-  description = "Static IPv6 in CIDR notation. Prefer ipv6_token unless something binds to the address at boot."
+variable "ipv6" {
+  description = "\"auto\" for SLAAC, \"dhcp\", a static address in CIDR notation, or null for none."
   type        = string
-  default     = null
-}
-
-variable "ipv6_token" {
-  description = "SLAAC interface identifier, e.g. \"::11\". Yields <prefix>::11 under every advertised prefix."
-  type        = string
-  default     = null
-
-  validation {
-    condition     = var.ipv6_token == null || can(regex("^::[0-9a-fA-F:]+$", var.ipv6_token))
-    error_message = "ipv6_token must be an interface identifier written as ::n."
-  }
+  default     = "auto"
 }
 
 variable "ipv4_gateway" {
@@ -133,7 +98,7 @@ variable "ipv6_gateway" {
 }
 
 variable "dns_servers" {
-  description = "DNS servers to use instead of the lease's. Only a resolver should need this."
+  description = "DNS servers to use instead of the lease's. Unset, Proxmox seeds its node's, the recursor."
   type        = list(string)
   default     = []
 }
@@ -152,24 +117,6 @@ variable "enable_multiqueue" {
 
 variable "ssh_public_keys" {
   type = list(string)
-}
-
-variable "seed" {
-  description = "What reads the seed: cloud-init, or an image that takes user-data as systemd credentials and reads nothing else (ymir)."
-  type        = string
-  default     = "cloud-init"
-
-  validation {
-    condition     = contains(["cloud-init", "credentials"], var.seed)
-    error_message = "seed is cloud-init or credentials."
-  }
-}
-
-variable "user_data" {
-  description = "Host-specific user-data: cloud-config, or credential lines after the module's own."
-  type        = string
-  default     = ""
-  nullable    = false
 }
 
 variable "started" {

@@ -8,13 +8,6 @@ deb13cis_rule_5_1_21: false
 # pve-manager depends on rsync, so mask its service rather than remove the package
 deb13cis_rsync_mask: true
 
-host_service_accounts:
-  - name: tofu
-    comment: OpenTofu provider SSH access
-    ssh_key: "{{ tofu_ssh_public_key }}"
-    directories:
-      - /var/lib/vz/snippets
-
 deb13cis_config_aide: false
 deb13cis_rule_6_3_2: false
 deb13cis_rule_6_3_3: false

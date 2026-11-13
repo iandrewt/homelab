@@ -7,7 +7,6 @@ insecure: true
 onepassword_vault: Platform
 onepassword_break_glass_vault: Break-glass
 
-ssh_username: tofu
 timezone: Australia/Sydney
 mailto: pve@titmuss.house
 release: 9
@@ -17,10 +16,11 @@ sdn:
   mtu: 9000
 
 storages:
+  # The installer's, which the cluster layer adopts. Nothing a tenant writes is on a node
   local:
     type: directory
     path: /var/lib/vz
-    content: [snippets]
+    content: [iso]
 
   images:
     type: nfs
@@ -48,7 +48,6 @@ storages:
 
 guest_defaults:
   disk_storage: tank
-  snippet_storage: local
 
 backup:
   storage: backups

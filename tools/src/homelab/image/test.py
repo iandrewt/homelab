@@ -47,24 +47,8 @@ printf "[Service]\\nType=oneshot\\nRemainAfterExit=yes\\nUser=probe\\nExecStart=
 ln -s ../probe.service $x/systemd/system/multi-user.target.wants/probe.service
 '
 """
-# A seed's own network, as linux-vm writes a resolver's: the lease's addresses, and resolvers of its own
-SEED_NETWORK = """[Match]
-Name=e*
-
-[Network]
-DHCP=yes
-UseDomains=yes
-DNS=10.0.2.3
-
-[DHCPv4]
-UseDNS=no
-
-[DHCPv6]
-UseDNS=no
-
-[IPv6AcceptRA]
-UseDNS=no
-"""
+# A seed's own resolvers, as linux-vm pins a resolver's
+SEED_NAMESERVERS = ["10.0.2.3"]
 # What differs between any two boots
 VOLATILE = re.compile(r"random|_seed|boot_id|ns_last_pid|fs\.(file|inode|dentry|quota)|tcp_fastopen_key"
                       r"|user_reserve_kbytes|admin_reserve_kbytes|nr_inodes=|pipe_ino=|fd=|pgrp=|stat_"
@@ -132,7 +116,7 @@ def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -
         work = _fresh(out)
         vm = Vm(work, "test", base.boot, mounts={image.parent: "/image:ro", out / "next": "/updates:ro"},
                  log=out / f"{boot}.serial.log",
-                 credentials={"network.network.50-seed": SEED_NETWORK} if boot == "second" else None)
+                 nameservers=SEED_NAMESERVERS if boot == "second" else None)
         try:
             builder.run_in(vm.mounts, "qemu-img", "create", "-q", "-f", "qcow2", "-F", "qcow2",
                            "-b", f"/image/{image.name}", "/work/disk.qcow2", IMAGE_BASED_DISK)
@@ -222,8 +206,8 @@ def _contract_image_based(base: Image, vm: Vm, host_key: str) -> list[str]:
 def _seeded_network(vm: Vm) -> list[str]:
     """A seed's network, taken before udev finds the drive that holds it"""
     status = vm.ssh("networkctl status --no-pager $(ip -o route show default | awk '{print $5; exit}')")
-    return _check("networkd took the seed's network from first boot", "/run/systemd/network/50-seed.network" in status,
-                  status)
+    return _check("networkd took the seed's network from first boot",
+                  "/run/systemd/network/50-seed-eth0.network" in status, status)
 
 
 def _hardening(vm: Vm) -> list[str]:

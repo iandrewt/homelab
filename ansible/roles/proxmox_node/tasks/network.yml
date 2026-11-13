@@ -27,11 +27,11 @@
     mode: "0644"
   notify: Reload the network
 
+# No search list: Proxmox seeds a guest that names none with its node's
 - name: Point the node at the site's resolvers
   ansible.builtin.copy:
     dest: /etc/resolv.conf
     content: |
-      search {{ netbox_site.forward_zone }}
       nameserver {{ netbox_site.dns.recursor.ipv6 }}
       nameserver {{ netbox_site.dns.recursor.ipv4 }}
     mode: "0644"

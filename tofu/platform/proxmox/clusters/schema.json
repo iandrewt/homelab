@@ -10,7 +10,6 @@
     "endpoint",
     "onepassword_vault",
     "onepassword_break_glass_vault",
-    "ssh_username",
     "timezone",
     "mailto",
     "release",
@@ -35,10 +34,6 @@
     },
     "onepassword_break_glass_vault": {
       "description": "Where each node's root login lives: read by hand, at install, and never by automation.",
-      "type": "string"
-    },
-    "ssh_username": {
-      "description": "Linux account the OpenTofu provider connects as.",
       "type": "string"
     },
     "timezone": {
@@ -210,7 +205,6 @@
                 "iso",
                 "vztmpl",
                 "backup",
-                "snippets",
                 "import"
               ]
             }
@@ -292,16 +286,11 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "disk_storage",
-        "snippet_storage"
+        "disk_storage"
       ],
       "properties": {
         "disk_storage": {
           "description": "Must be a key of `storages`.",
-          "type": "string"
-        },
-        "snippet_storage": {
-          "description": "Must be a key of `storages`, and must be node-local.",
           "type": "string"
         }
       }

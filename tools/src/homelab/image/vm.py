@@ -25,7 +25,7 @@ class Boot:
     architecture: str
     firmware: bool
     seed: str
-    # What reads a drive or partition: cloud-init, or the image itself, taking user-data as credentials
+    # What reads a drive or partition: cloud-init, or the image itself, as Proxmox writes it
     cloud_init: bool = True
     # By its kernel, the command line it's booted with
     cmdline: str = ""
@@ -53,6 +53,33 @@ MACHINES = {
 LEASE_DOMAIN = "lease.test"
 
 OVMF_SETUP_MODE = "/usr/share/OVMF/OVMF_VARS_4M.fd"
+
+MAC = "bc:24:11:00:00:01"
+
+# As Proxmox's Cloudinit.pm writes a drive's documents, for an image that reads them itself
+PROXMOX_USER_DATA = """#cloud-config
+hostname: {hostname}
+manage_etc_hosts: true
+fqdn: {hostname}
+ssh_authorized_keys:
+  - {key}
+chpasswd:
+  expire: False
+users:
+  - default
+package_upgrade: true
+"""
+PROXMOX_NETWORK = """version: 1
+config:
+    - type: physical
+      name: eth0
+      mac_address: '{mac}'
+      subnets:
+      - type: dhcp4
+      - type: ipv6_slaac
+    - type: nameserver
+      address:
+{addresses}"""
 
 # Into the partition whose FAT filesystem is labelled CIDATA, as a card is seeded
 SEED_PARTITION = """
@@ -102,7 +129,7 @@ class Vm:
     """One boot of a disk in work/, with a throwaway seed whose key the default user takes."""
 
     def __init__(self, work: Path, hostname: str, boot: Boot, mounts: dict[Path, str] | None = None,
-                 log: Path | None = None, credentials: dict[str, str] | None = None) -> None:
+                 log: Path | None = None, nameservers: list[str] | None = None) -> None:
         self.work = work
         # Where its console is kept once it's removed, if not in work/
         self.log = log or work / "serial.log"
@@ -119,17 +146,20 @@ class Vm:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             self.port = probe.getsockname()[1]
-        self._seed(hostname, credentials or {})
+        self._seed(hostname, nameservers)
 
-    def _seed(self, hostname: str, credentials: dict[str, str]) -> None:
+    def _seed(self, hostname: str, nameservers: list[str] | None) -> None:
         self.key.unlink(missing_ok=True)
         run("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-C", self.name, "-f", str(self.key))
         documents = self.work / "seed"
         documents.mkdir(exist_ok=True)
         key = self.key.with_suffix(".pub").read_text().strip()
         (documents / "meta-data").write_text(seed.meta_data(hostname, None, ssh_keys=[key], instance_id=self.name))
-        (documents / "user-data").write_text("" if self.boot.cloud_init else seed.credentials(
-            {"system.hostname": hostname, "ssh.authorized_keys.debian": key, **credentials}))
+        (documents / "user-data").write_text(
+            "" if self.boot.cloud_init else PROXMOX_USER_DATA.format(hostname=hostname, key=key))
+        if nameservers:
+            (documents / "network-config").write_text(PROXMOX_NETWORK.format(
+                mac=MAC, addresses="".join(f"      - '{a}'\n" for a in nameservers)))
         if self.boot.seed == "drive":
             builder.run_in({self.work: "/work"}, "xorriso", "-as", "mkisofs", "-quiet", "-output",
                            "/work/seed.iso", "-volid", "cidata", "-joliet", "-rock", "/work/seed")
@@ -159,7 +189,7 @@ class Vm:
             "-drive", f"file=/work/{disk},format={Path(disk).suffix.lstrip('.')},if=virtio,discard=unmap",
             *seed_drive, *tpm,
             "-netdev", f"user,id=net,hostfwd=tcp::2222-:22,dnssearch={LEASE_DOMAIN}",
-            "-device", "virtio-net-pci,netdev=net",
+            "-device", f"virtio-net-pci,netdev=net,mac={MAC}",
             "-chardev", "socket,id=qga,path=/work/qga.sock,server=on,wait=off",
             "-device", "virtio-serial", "-device", "virtserialport,chardev=qga,name=org.qemu.guest_agent.0",
             "-display", "none", "-serial", "file:/work/serial.log",

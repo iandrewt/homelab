@@ -8,7 +8,7 @@ of your own from one.
 | --- | --- | --- | --- | --- |
 | [`debian-13-amd64-vm`](../images/mkosi.conf.d/mutable-vm) | a VM on Proxmox | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys | a drive labelled `cidata` |
 | [`debian-13-raspi3`](../images/mkosi.conf.d/mutable-raspi3.conf) | a Raspberry Pi 3B | Debian's arm64 kernel | `raspi-firmware` | its own partition, labelled `CIDATA` |
-| [`ymir-amd64-vm`](../images/mkosi.conf.d/ymir-vm.conf) | a Platform appliance VM | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys, from a signed UKI | a drive labelled `cidata`, whose `user-data` is systemd credentials |
+| [`ymir-amd64-vm`](../images/mkosi.conf.d/ymir-vm.conf) | a Platform appliance VM | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys, from a signed UKI | Proxmox's cloud-init drive, which it reads itself |
 
 **`ymir-amd64-vm` is image-based**: its `/usr`, and the `/etc` it starts from, are one signed,
 verity-checked image, updated whole and A/B by systemd-sysupdate, rolled back if a version can't
@@ -29,24 +29,14 @@ has enabled, and `systemd-sysupdate-reboot.timer` reboots into a new version of 
 following canary says so in `/etc/sysupdate.d/`, a copy of each `/usr/lib/sysupdate.d/*.transfer`
 with `stable` in its `Path=` changed to `canary`.
 
-**ymir has no cloud-init.** Its seed's `user-data` is systemd credentials, one a line as SMBIOS
-type 11 carries them, and the image reads no other document:
-
-```
-io.systemd.credential:system.hostname=ratatoskr
-io.systemd.credential:ssh.authorized_keys.debian=ssh-ed25519 AAAA...
-```
-
-`system.hostname` names it, unless it has named itself in `/etc/hostname`, and
-`ssh.authorized_keys.debian` lets you in, once. Any other credential reaches what imports it
-after udev has found the drive: `tmpfiles.extra`, but not `sysusers.extra`. A value with a newline is
-`io.systemd.credential.binary:<name>=<base64>`.
-
-Its network is DHCPv4 and SLAAC, taking the lease's search domains, unless the seed has a network of
-its own: a `network.network.<name>` credential is a [systemd.network](https://www.freedesktop.org/software/systemd/man/latest/systemd.network.html) file, `<name>.network`,
-from the first boot (and `network.netdev.*` and `network.link.*` alike). `linux-vm` writes its
-network so, as `network.network.50-seed`; a host's netplan sorts before it. The rest of this page is
-the package-managed images', but for [its system extensions](#system-extensions).
+**ymir has no cloud-init.** It reads the drive Proxmox writes from a VM's cloud-init settings
+itself: the user-data's `hostname` names it, unless it has named itself in `/etc/hostname`, and its
+`ssh_authorized_keys` let you in as `debian`, once; any other user fails the seed. Each NIC the
+network-config names becomes networkd's own `50-seed-<name>.network`, matched by MAC, from the first
+boot: DHCPv4 or a static address, SLAAC, and the drive's nameservers in place of the lease's, keeping
+the lease's search domains. Proxmox gives a VM that names no nameservers its node's. A host's netplan
+sorts before the seed's units, and a NIC the drive doesn't name takes DHCPv4 and SLAAC. The rest of
+this page is the package-managed images', but for [its system extensions](#system-extensions).
 
 ## System extensions
 
@@ -170,8 +160,9 @@ boot finds the firmware in setup mode and enrolls [Platform's keys and Debian's
 CA](../images/secure-boot), then resets; from then on it boots with Secure Boot enforcing, through
 Debian-signed systemd-boot and kernels. It trusts Debian's signatures and Platform's keys alone.
 
-**Give it a seed**, which is how you log in: a NoCloud drive, an ISO labelled `cidata`, holding
-`meta-data` and `user-data` (which may be empty), and optionally `network-config`.
+**Give it a seed**, which is how you log in: Proxmox's own cloud-init drive, with your SSH keys,
+`ip=dhcp` and `ip6=auto`. Proxmox names it after the VM. Elsewhere, a NoCloud drive, an ISO labelled
+`cidata`, holding `meta-data` and `user-data` (which may be empty), and optionally `network-config`:
 
 ```yaml
 # meta-data
@@ -181,8 +172,9 @@ public-keys:
   - ssh-ed25519 AAAA... you@example
 ```
 
-**A new `instance-id` is a new instance**: new SSH host keys, a new machine ID. Change it only
-to make the VM someone new. Its host key can be read before you trust it, through Proxmox's API
+**A new `instance-id` is a new instance**: a new machine ID, and whatever cloud-init runs once per
+instance. Proxmox's changes with a VM's keys or network. The SSH host keys stay: the image keeps them
+(`ssh_deletekeys: false`). Its host key can be read before you trust it, through Proxmox's API
 (`agent/file-read` of `/etc/ssh/ssh_host_ed25519_key.pub`), since the guest agent allows reading.
 
 ### On a Raspberry Pi 3B

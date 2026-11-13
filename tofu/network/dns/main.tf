@@ -70,16 +70,13 @@ module "resolver" {
   node_name   = each.value.host
   pool_id     = proxmox_virtual_environment_pool.this[each.value.proxmox].pool_id
   hostname    = each.key
-  region      = each.value.proxmox
   description = "DNS resolver."
 
   image_file_id = "${local.proxmox[each.value.proxmox].image_storage}:${local.image.content_type}/${local.image.file_name}"
-  # ymir: its seed is credentials, and it enrolls its own Secure Boot keys
-  seed              = "credentials"
+  # ymir enrolls its own Secure Boot keys
   pre_enrolled_keys = false
 
-  disk_datastore_id    = local.proxmox[each.value.proxmox].guest_defaults.disk_storage
-  snippet_datastore_id = local.proxmox[each.value.proxmox].guest_defaults.snippet_storage
+  disk_datastore_id = local.proxmox[each.value.proxmox].guest_defaults.disk_storage
 
   cpu_cores    = each.value.cores
   memory_mb    = each.value.memory_mb

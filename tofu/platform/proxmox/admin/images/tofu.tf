@@ -73,9 +73,4 @@ provider "proxmox" {
   endpoint  = local.cluster.endpoint
   insecure  = try(local.cluster.insecure, false)
   api_token = ephemeral.onepassword_item.token.password
-
-  ssh {
-    agent    = true
-    username = local.cluster.ssh_username
-  }
 }
