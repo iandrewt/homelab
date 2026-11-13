@@ -19,6 +19,8 @@ ROUTER_DEVICE_ROLE = "Router Firewall"
 # to come up into
 RENDERED_SESSIONS = ("active", "planned")
 PRIMARY_TAG = "dns-primary"
+# NetBox's own module type profile
+GPU_PROFILE = "GPU"
 # A zone whose owner writes its records over RFC 2136, which octoDNS must leave alone
 RFC2136_TAG = "rfc2136"
 # A Service's parent, in the terms `_host` keys a host by
@@ -100,6 +102,8 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
         "services": _services(hosts, addresses, snap),
         "dns": _dns(hosts, addresses, vlans, speakers, snap),
         "hosts": sorted(h["name"] for h in hosts),
+        # Each device's GPUs by maker, which decides the drivers a passed-through card keeps off
+        "gpus": _gpus(hosts, snap),
         # Each host's pinned SSH key, at the primary addresses it's reached by
         "host_keys": {
             h["name"]: {"key": key, "addresses": [str(_ip(p)) for p in (h.get("primary_ip6"), h.get("primary_ip4")) if p]}
@@ -107,6 +111,16 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
         },
         "named": {str(_ip(a)): a["dns_name"] for a in addresses if a.get("dns_name")},
     }
+
+
+def _gpus(hosts: list[dict], snap: netbox.Snapshot) -> dict:
+    names = {h["id"]: h["name"] for h in hosts if "device_type" in h}
+    gpus: dict = {}
+    for m in snap.modules:
+        kind = m["module_type"]
+        if (kind.get("profile") or {}).get("name") == GPU_PROFILE and m["device"]["id"] in names:
+            gpus.setdefault(names[m["device"]["id"]], set()).add(kind["manufacturer"]["slug"])
+    return {host: sorted(makers) for host, makers in gpus.items()}
 
 
 def _zones(snap: netbox.Snapshot) -> dict:

@@ -1,30 +1,41 @@
 ---
 # Proxmox binds a mapped card to vfio-pci at VM start, as long as no host driver claimed it first
-- name: Keep Intel GPU drivers off the host
+- name: Keep the node's GPU drivers off the host
   ansible.builtin.copy:
     dest: /etc/modprobe.d/passthrough.conf
     mode: "0644"
     content: |
-      blacklist i915
-      blacklist xe
+      {% for driver in proxmox_node_gpu_blacklist %}
+      blacklist {{ driver }}
+      {% endfor %}
+  when: proxmox_node_gpu_blacklist | length > 0
+  notify: Rebuild the initramfs
+
+- name: Let a node with no GPU keep them
+  ansible.builtin.file:
+    path: /etc/modprobe.d/passthrough.conf
+    state: absent
+  when: proxmox_node_gpu_blacklist | length == 0
   notify: Rebuild the initramfs
 
 - name: Rebuild the initramfs before any reboot
   ansible.builtin.meta: flush_handlers
 
 - name: Check whether a GPU driver still holds the card
-  ansible.builtin.command: grep -qE '^(i915|xe) ' /proc/modules
+  ansible.builtin.command: grep -qE '^({{ proxmox_node_gpu_blacklist | join('|') }}) ' /proc/modules
   register: proxmox_node_gpu_driver
   changed_when: false
   failed_when: proxmox_node_gpu_driver.rc > 1
+  check_mode: false
+  when: proxmox_node_gpu_blacklist | length > 0
 
 - name: Ask to reboot
   ansible.builtin.pause:
     prompt: >-
-      {{ inventory_hostname }} still has i915/xe loaded. Reboot now? (yes/no)
+      {{ inventory_hostname }} still has {{ proxmox_node_gpu_blacklist | join('/') }} loaded. Reboot now? (yes/no)
   register: proxmox_node_reboot
-  when: proxmox_node_gpu_driver.rc == 0
+  when: proxmox_node_gpu_driver.rc | default(1) == 0
 
 - name: Reboot
   ansible.builtin.reboot:
-  when: proxmox_node_gpu_driver.rc == 0 and proxmox_node_reboot.user_input | default('') | lower == 'yes'
+  when: proxmox_node_gpu_driver.rc | default(1) == 0 and proxmox_node_reboot.user_input | default('') | lower == 'yes'

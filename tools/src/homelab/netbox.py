@@ -34,6 +34,7 @@ class Snapshot:
     dnssec_policies: list[dict] = field(default_factory=list)
     records: list[dict] = field(default_factory=list)
     devices: list[dict] = field(default_factory=list)
+    modules: list[dict] = field(default_factory=list)
     services: list[dict] = field(default_factory=list)
     fhrp_groups: list[dict] = field(default_factory=list)
     bgp_sessions: list[dict] = field(default_factory=list)
@@ -70,6 +71,7 @@ def fetch(item: str | None = None) -> Snapshot:
             dnssec_policies=[dict(o) for o in nb.plugins.netbox_dns.dnssecpolicies.all()],
             records=[dict(o) for o in nb.plugins.netbox_dns.records.all()],
             devices=[dict(o) for o in nb.dcim.devices.all()],
+            modules=[dict(o) for o in nb.dcim.modules.all()],
             services=[dict(o) for o in nb.ipam.services.all()],
             fhrp_groups=[dict(o) for o in nb.ipam.fhrp_groups.all()],
             bgp_sessions=[dict(o) for o in nb.plugins.bgp.session.all()],
