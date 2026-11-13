@@ -23,6 +23,16 @@
       {{ proxmox_node_membership.results | selectattr('stat.exists')
          | map(attribute='item') | list }}
 
+# Facts predate the network this run wrote, and corosync binds only once DAD is done with it
+- name: Wait for the corosync address
+  ansible.builtin.command: ip -6 -o addr show to {{ proxmox_node_link0 }}
+  register: proxmox_node_link0_state
+  until: proxmox_node_link0_state.stdout and 'tentative' not in proxmox_node_link0_state.stdout
+  retries: 15
+  delay: 2
+  changed_when: false
+  check_mode: false
+
 - name: Create the cluster on its first node
   ansible.builtin.command: pvecm create {{ proxmox_node_cluster }} --link0 {{ proxmox_node_link0 }}
   args:
@@ -30,7 +40,6 @@
   when:
     - proxmox_node_members | length == 0
     - inventory_hostname == proxmox_node_member
-    - proxmox_node_link0 in ansible_facts.all_ipv6_addresses
 
 # Tasks run across every host before the next starts, so a fresh cluster's first node
 # has created it by the time the others get here. Joining is over SSH, as root from node to
@@ -42,7 +51,6 @@
   when: &joining
     - inventory_hostname not in proxmox_node_members
     - inventory_hostname != proxmox_node_member
-    - proxmox_node_link0 in ansible_facts.all_ipv6_addresses
 
 - name: Let it in to the member, through the cluster's own authorized_keys
   ansible.posix.authorized_key:

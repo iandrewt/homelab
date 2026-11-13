@@ -33,11 +33,10 @@ def interfaces(nics: list[dict], site: dict, primary: list[str], bond: dict) -> 
             elif group == "bridge":
                 attrs += [("bridge-ports", " ".join(members("bridge", name)) or "none"),
                           ("bridge-stp", "off")]
+                # Every VID, so a VNet tofu makes before Ansible's next run carries at once:
+                # the switch port is what limits a node to the site's VLANs
                 if _mode(nic) == "tagged":
-                    vids = set(vnets) | {_vid(c) for c in children(name)}
-                    vids |= {_vid(p) for p in nics if _ref(p, "bridge") == name and _vid(p)}
-                    attrs += [("bridge-vlan-aware", "yes"),
-                              ("bridge-vids", " ".join(map(str, sorted(vids))))]
+                    attrs += [("bridge-vlan-aware", "yes"), ("bridge-vids", "2-4094")]
             elif group == "vlan" and name != f"{_ref(nic, 'parent')}.{_vid(nic)}":
                 attrs += [("vlan-raw-device", _ref(nic, "parent")), ("vlan-id", _vid(nic))]
             if _ref(nic, "bridge") and _vid(nic):

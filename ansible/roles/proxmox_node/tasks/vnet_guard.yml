@@ -8,9 +8,7 @@
       table bridge vnet-guard {
           chain input {
               type filter hook input priority filter; policy accept;
-      {% if proxmox_node_unjoined_vnets %}
-              meta ibrname { {{ proxmox_node_unjoined_vnets | map('to_json') | join(', ') }} } ether type { ip, ip6, arp } drop
-      {% endif %}
+              meta ibrname != { {{ proxmox_node_held_bridges | map('to_json') | join(', ') }} } ether type { ip, ip6, arp } drop
           }
       }
     mode: "0644"
