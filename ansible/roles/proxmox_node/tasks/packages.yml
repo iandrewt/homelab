@@ -29,3 +29,32 @@
   ansible.builtin.apt:
     name: lldpd
     update_cache: "{{ proxmox_node_enterprise is changed or proxmox_node_no_subscription is changed }}"
+
+# A node joins at the cell's level whatever ISO it came from. Only before it joins: a
+# member's guests have to move off first
+- name: Check whether the node is in a cluster yet
+  ansible.builtin.stat:
+    path: /etc/pve/corosync.conf
+  register: proxmox_node_clustered
+
+- name: Upgrade the node before it joins
+  ansible.builtin.apt:
+    upgrade: dist
+    update_cache: true
+  register: proxmox_node_upgrade
+  when: not proxmox_node_clustered.stat.exists
+
+- name: Find the newest kernel it boots
+  ansible.builtin.shell: set -o pipefail && ls -1v /boot/vmlinuz-* | tail -n 1
+  args:
+    executable: /bin/bash
+  register: proxmox_node_newest_kernel
+  changed_when: false
+  check_mode: false
+  when: proxmox_node_upgrade is changed
+
+- name: Boot it before joining
+  ansible.builtin.reboot:
+  when:
+    - proxmox_node_upgrade is changed
+    - proxmox_node_newest_kernel.stdout != '/boot/vmlinuz-' ~ ansible_facts.kernel
