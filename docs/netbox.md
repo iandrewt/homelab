@@ -180,20 +180,34 @@ your own token, so the changelog says who trusted it):
 ## Keeping it
 
 The data is load-bearing in the way Git history is for the code, so back it up as you would
-that. A `pg_dump` round-trip, because it keeps every object as it was:
+that. A copy is four things, and a database dump alone restores a NetBox none of your tokens
+work on:
+
+- **The database**, as a `pg_dump`, because it keeps every object as it was.
+- **Media**, the device-type images and anything else uploaded.
+- **`SECRET_KEY` and the API token peppers** from your NetBox configuration. Tokens are stored
+  hashed with a pepper, so a restore without the same one breaks every token. Keep them
+  somewhere other than the host.
+- **The versions:** NetBox's and each plugin's, pinned in your plugin requirements, since a
+  dump restores only onto the versions that wrote it.
 
 ```
 docker compose exec -T postgres pg_dump -U netbox netbox | gzip > netbox-$(date +%F).sql.gz
+docker compose exec -T netbox tar czf - -C /opt/netbox/netbox/media . > netbox-media-$(date +%F).tar.gz
 ```
 
-**Restoring**, onto a fresh netbox-docker at the *same* NetBox and plugin versions:
+**Restoring**, onto a fresh netbox-docker at the *same* NetBox and plugin versions, with the
+same secret key and peppers in its environment. Bring up only the database first, since NetBox
+migrates an empty one as it starts:
 
 ```
 docker compose up -d postgres
 gunzip -c netbox-<date>.sql.gz | docker compose exec -T postgres psql -U netbox netbox
 docker compose up -d
+docker compose exec -T netbox tar xzf - -C /opt/netbox/netbox/media < netbox-media-<date>.tar.gz
 ```
 
 Then, if it moved, update `hostname` on every NetBox item in 1Password, and `NETBOX_API`.
 Nothing else in the repo cares which instance it talks to. Run `homelab netbox plan`: a
-restore from before a schema change shows exactly what to apply.
+restore from before a schema change shows exactly what to apply. Rehearse a restore beside
+the running instance before you need one.
