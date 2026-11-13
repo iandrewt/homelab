@@ -2,3 +2,19 @@
 # Ansible connects as root, using the key answer.toml planted at install time. sshd keeps
 # PermitRootLogin prohibit-password via group_vars/hypervisor.yml, so this is key-only.
 ansible_user: root
+
+proxmox_node_zpools:
+  tank:
+    vdevs:
+      - type: mirror
+        disks:
+          - /dev/disk/by-id/wwn-0x5002538fc242310d
+          - /dev/disk/by-id/wwn-0x5002538fc24230c7
+      - type: mirror
+        disks:
+          - /dev/disk/by-id/wwn-0x5002538fc2423113
+          - /dev/disk/by-id/wwn-0x5002538fc24230cb
+  nvme:
+    vdevs:
+      - disks:
+          - /dev/disk/by-id/nvme-eui.0025385301b095c0

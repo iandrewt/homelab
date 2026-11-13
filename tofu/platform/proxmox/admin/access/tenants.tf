@@ -46,6 +46,12 @@ locals {
     }
   ]...)
 
+  disk_storage = local.cluster.guest_defaults.disk_storage
+  tenant_disk_storage = {
+    for tenant in keys(local.cluster.tenants) : tenant =>
+    try(local.cluster.storages[local.disk_storage].tenants, false) ? "${local.disk_storage}-${tenant}" : local.disk_storage
+  }
+
   # PVEPoolAdmin lets a tenant make its own workloads, as pools under this one
   tenant_identities = {
     for tenant, grant in local.cluster.tenants : "tenant-${tenant}" => {
@@ -63,7 +69,7 @@ locals {
           role_id = "PVEPoolAdmin"
         },
         {
-          path    = "/storage/${local.cluster.guest_defaults.disk_storage}"
+          path    = "/storage/${local.tenant_disk_storage[tenant]}"
           role_id = "PVEDatastoreUser"
         },
         {
@@ -224,7 +230,7 @@ resource "onepassword_item" "grant" {
     field {
       label = "disk storage"
       type  = "STRING"
-      value = local.cluster.guest_defaults.disk_storage
+      value = local.tenant_disk_storage[each.key]
     }
   }
 

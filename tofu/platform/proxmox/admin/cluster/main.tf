@@ -1,10 +1,3 @@
-locals {
-  pool_nodes = {
-    for pool in toset(flatten([for _, n in local.cluster.nodes : keys(n.pools)])) :
-    pool => sort([for name, n in local.cluster.nodes : name if contains(keys(n.pools), pool)])
-  }
-}
-
 resource "proxmox_cluster_options" "this" {
   language = "en"
   keyboard = "en-us"
@@ -32,8 +25,7 @@ module "node" {
   source   = "../../../../modules/proxmox-node"
   for_each = local.cluster.nodes
 
-  name  = each.key
-  pools = each.value.pools
+  name = each.key
 }
 
 # --- SDN ---------------------------------------------------------------------------
@@ -118,17 +110,23 @@ resource "proxmox_storage_nfs" "this" {
   create_subdirs = true
 }
 
+locals {
+  zfs_storages = merge([
+    for id, s in local.cluster.storages : try(s.tenants, false) ? {
+      for tenant in keys(local.cluster.tenants) : "${id}-${tenant}" => merge(s, { pool = "${s.pool}/${tenant}" })
+    } : { (id) = s } if s.type == "zfspool"
+  ]...)
+}
+
 resource "proxmox_storage_zfspool" "this" {
-  for_each = { for id, s in local.cluster.storages : id => s if s.type == "zfspool" }
+  for_each = local.zfs_storages
 
   id       = each.key
   zfs_pool = each.value.pool
-  nodes    = local.pool_nodes[each.value.pool]
+  nodes    = sort(try(each.value.nodes, keys(local.cluster.nodes)))
 
   content        = each.value.content
   thin_provision = try(each.value.thin_provision, true)
-
-  depends_on = [module.node]
 }
 
 # --- Mappings ----------------------------------------------------------------------

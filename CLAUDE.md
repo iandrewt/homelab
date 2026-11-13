@@ -340,10 +340,12 @@ sysupdate component in ymir, which a machine enables, so a new extension reaches
 image's next release; ymir merges only images db's key signed.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
-firewall, storage and its ZFS pools, access and guests are tofu's; the node's interfaces,
-resolvers and apt are Ansible's. Ansible never reads a cluster file - the trunk
-bridge's name and MTU are stated on both sides (NetBox for the node, `sdn` in the cluster file),
-and a mismatch fails in ifupdown2. SDN owns `<bridge>.<vid>` for every VNet, so a node joins a
+firewall, storage definitions, access and guests are tofu's; the node's interfaces, resolvers,
+apt and ZFS are Ansible's, since Proxmox's API makes no dataset. Ansible never reads a cluster
+file - the trunk bridge's name and MTU are stated on both sides (NetBox for the node, `sdn` in
+the cluster file), and a mismatch fails in ifupdown2; so are a split storage's tenants (its
+`tenants` in the cluster file, a dataset with a quota each in `proxmox_node_datasets`), and a
+missing one leaves the storage inactive. SDN owns `<bridge>.<vid>` for every VNet, so a node joins a
 VNet with an address on the VNet's bridge, and a host-only VLAN with a subinterface.
 
 Raspberry Pi OS is brought into line by `bootstrap pi` before first boot: its NetworkManager

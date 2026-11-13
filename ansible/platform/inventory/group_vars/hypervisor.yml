@@ -11,3 +11,11 @@ deb13cis_rsync_mask: true
 deb13cis_config_aide: false
 deb13cis_rule_6_3_2: false
 deb13cis_rule_6_3_3: false
+
+# A dataset per tenant of each split storage in the cluster file. Together under 80% of the
+# pool, past which ZFS slows, so no tenant can fill it for another
+proxmox_node_datasets:
+  tank/network:
+    quota: 200G
+  tank/platform:
+    quota: 1200G

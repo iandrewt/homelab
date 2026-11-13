@@ -2,6 +2,11 @@ locals {
   # In this order: Proxmox puts netN in PCI slot 18+N, which udev names ens<18+N>
   vm_vnets = concat([local.node_vlan.vnet], try(local.cluster.vnets, []))
   vm_links = { for i, vnet in local.vm_vnets : vnet => "ens${18 + i}" }
+
+  disk_storage = {
+    for cell, c in local.proxmox : cell =>
+    try(c.storages[c.guest_defaults.disk_storage].tenants, false) ? "${c.guest_defaults.disk_storage}-${local.team}" : c.guest_defaults.disk_storage
+  }
 }
 
 # Proxmox CCM's ACL names this pool
@@ -28,7 +33,7 @@ module "vm" {
 
   cpu_cores         = local.cluster.classes[each.value.class].vm.cores
   memory_mb         = local.cluster.classes[each.value.class].vm.memory_mb
-  disk_datastore_id = local.proxmox[each.value.proxmox].guest_defaults.disk_storage
+  disk_datastore_id = local.disk_storage[each.value.proxmox]
   disk_size_gb      = local.cluster.classes[each.value.class].vm.disk_gb
 
   vnets       = local.vm_vnets

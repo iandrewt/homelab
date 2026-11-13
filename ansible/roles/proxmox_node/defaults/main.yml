@@ -14,3 +14,8 @@ proxmox_node_bond:
   miimon: 100
   mode: 802.3ad
   xmit-hash-policy: layer3+4
+
+# Pools by name, each a list of community.general.zpool vdevs
+proxmox_node_zpools: {}
+# Datasets by path, each a tenant's share of its pool's: what the cell file's split storages sit on
+proxmox_node_datasets: {}

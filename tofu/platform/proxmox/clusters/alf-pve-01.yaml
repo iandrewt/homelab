@@ -38,9 +38,11 @@ storages:
     options: vers=4.2
     content: [backup]
 
+  # A storage per tenant, on tank/<tenant>: Ansible makes the dataset and sets its quota
   tank:
     type: zfspool
     pool: tank
+    tenants: true
     content: [images, rootdir]
 
   nvme:
@@ -57,20 +59,9 @@ backup:
   retention:
     keep-weekly: 4
 
+# Their pools are the host's: Ansible's, in each node's host_vars
 nodes:
-  yggdrasil:
-    pools:
-      tank:
-        raidlevel: raid10
-        devices:
-          - /dev/disk/by-id/wwn-0x5002538fc242310d
-          - /dev/disk/by-id/wwn-0x5002538fc24230c7
-          - /dev/disk/by-id/wwn-0x5002538fc2423113
-          - /dev/disk/by-id/wwn-0x5002538fc24230cb
-      nvme:
-        raidlevel: single
-        devices:
-          - /dev/disk/by-id/nvme-eui.0025385301b095c0
+  yggdrasil: {}
 
 image_storage: images
 

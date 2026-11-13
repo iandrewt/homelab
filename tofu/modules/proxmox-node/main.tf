@@ -12,19 +12,3 @@ resource "proxmox_node_firewall" "this" {
   nf_conntrack_max                     = var.firewall_configuration.nf_conntrack_max
   nf_conntrack_tcp_timeout_established = var.firewall_configuration.nf_conntrack_tcp_timeout_established
 }
-
-resource "proxmox_node_disk_zfs" "pools" {
-  for_each = var.pools
-
-  node_name = var.name
-  name      = each.key
-  devices   = each.value.devices
-  raidlevel = each.value.raidlevel
-
-  ashift      = each.value.ashift
-  compression = each.value.compression
-
-  add_storage    = false
-  cleanup_config = true
-  cleanup_disks  = false
-}

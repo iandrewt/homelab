@@ -11,6 +11,10 @@
   ansible.builtin.import_tasks: vnet_guard.yml
   tags: [vnet_guard]
 
+- name: Storage
+  ansible.builtin.import_tasks: storage.yml
+  tags: [storage]
+
 - name: PCI passthrough
   ansible.builtin.import_tasks: passthrough.yml
   tags: [passthrough]

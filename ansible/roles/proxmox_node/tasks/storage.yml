@@ -1,0 +1,43 @@
+---
+- name: List the imported pools
+  ansible.builtin.command: zpool list -H -o name
+  register: proxmox_node_imported
+  changed_when: false
+
+# A reinstall wipes only the boot disk, so the pools are still on theirs
+- name: Import the pools a reinstall left
+  ansible.builtin.command: zpool import -N {{ item }}
+  loop: "{{ proxmox_node_zpools | difference(proxmox_node_imported.stdout_lines) }}"
+  register: proxmox_node_import
+  changed_when: proxmox_node_import.rc == 0
+  failed_when: proxmox_node_import.rc not in [0, 1]
+
+- name: Pools
+  community.general.zpool:
+    name: "{{ item.key }}"
+    vdevs: "{{ item.value.vdevs }}"
+    pool_properties:
+      ashift: "{{ item.value.ashift | default(12) }}"
+    filesystem_properties:
+      compression: "{{ item.value.compression | default('on') }}"
+  loop: "{{ proxmox_node_zpools | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+# As Proxmox does for a pool it makes
+- name: Import each pool at boot
+  ansible.builtin.systemd_service:
+    name: zfs-import@{{ item }}.service
+    enabled: true
+  loop: "{{ proxmox_node_zpools | list }}"
+
+- name: Tenant datasets
+  community.general.zfs:
+    name: "{{ item.key }}"
+    state: present
+    extra_zfs_properties:
+      quota: "{{ item.value.quota }}"
+  loop: "{{ proxmox_node_datasets | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+  when: item.key.split('/') | first in proxmox_node_zpools
