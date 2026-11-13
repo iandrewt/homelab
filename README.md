@@ -33,15 +33,15 @@ tofu/platform/
     access/               roles, users, pools, the Entra realm, every other token
     cluster/              cluster options, SDN, node firewall, storage, mappings, backups
     images/               the site's library, downloaded once through one of its clusters
-  kubernetes/             a workspace per Talos cluster, a file each in clusters/ (au1-shared.yaml)
+  kubernetes/             a workspace per Talos cluster, a file each in clusters/ (au1-k8s-shared.yaml)
 tofu/network/
   aws/dns/                titmuss.au in Route53, and its signing key
   dns/                    a workspace per site: the resolvers NetBox records as VMs
 tofu/modules/             talos-cluster, fleet-bootstrap, talos-vm, linux-vm, netbox-site, entra-app, ...
 kubernetes/
   components/             cluster-neutral: Flux's operator, Cilium and its BGP, Proxmox CCM, Intel's GPU driver, the descheduler, the pools NetBox gives, the host firewall, OIDC RBAC; fleet/, the catalog and the ResourceSet that turns a cluster's list into Kustomizations
-  clusters/au1-shared/    its FluxInstance, and the components it takes from fleet/catalog.yaml
-  fleet/au1-shared/       au1-shared's ring: the one thing it syncs from Git
+  clusters/au1-k8s-shared/ its FluxInstance, and the components it takes from fleet/catalog.yaml
+  fleet/au1-k8s-shared/   au1-k8s-shared's ring: the one thing it syncs from Git
 unifi/generated/
   <router>-frr.conf       BGP toward the speakers, written by `homelab generate`; never committed
   <site>-ipv6.txt         the policies that send another site's IPv6 to IPv4, likewise
@@ -177,9 +177,9 @@ A Talos upgrade only rolls one node at a time - drained, rebooted into the new i
 back - when applied without parallelism:
 
 ```
-tofu -chdir=tofu/platform/kubernetes workspace select au1-shared
+tofu -chdir=tofu/platform/kubernetes workspace select au1-k8s-shared
 tofu -chdir=tofu/platform/kubernetes apply -parallelism=1
-op read 'op://Platform/Talos Config - au1-shared/notesPlain' > ~/.talos/config
+op read 'op://Platform/Talos Config - au1-k8s-shared/notesPlain' > ~/.talos/config
 talosctl kubeconfig                    # break-glass; people sign in with Entra
 ```
 
@@ -197,12 +197,12 @@ Taking a control plane out of `nodes` destroys its VM, but nothing tells etcd: r
 - [ ] Drop `insecure` from each Proxmox cluster file once the private CA issues the nodes' certificates
 - [ ] Replace the Kubernetes layer's `external` fleet read: an antipattern
 - [x] Backups: an NFS storage of their own on mimir, on a dataset of their own - not `images`, and not `local`, which every tenant can delete from
-- [ ] proxmox-csi: a `csi` entry in au1-shared's `proxmox_integrations` (`pool: [VM.Audit, VM.Config.Disk]`, `storages: {nvme: [Datastore.Allocate, Datastore.AllocateSpace, Datastore.Audit]}`)
+- [ ] proxmox-csi: a `csi` entry in au1-k8s-shared's `proxmox_integrations` (`pool: [VM.Audit, VM.Config.Disk]`, `storages: {nvme: [Datastore.Allocate, Datastore.AllocateSpace, Datastore.Audit]}`)
 - [ ] Karpenter for Proxmox - revisit; Proxmox CCM already gives every node a provider ID
 
 **Kubernetes**
 
-- [ ] Bring up au1-shared on address plan v2, replacing valhalla
+- [ ] Bring up au1-k8s-shared on address plan v2, replacing valhalla
 - [ ] Make the repository public, and drop the GHCR pull token
 - [ ] The boot service: cached Image Factory artifacts for UEFI HTTP Boot and iPXE, then metal nodes
 - [ ] Renovate for what Dependabot can't see: Talos and Kubernetes versions, Flux's charts and sources

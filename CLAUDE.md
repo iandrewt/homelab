@@ -48,8 +48,8 @@ where NetBox has nothing, and points at a built-in object rather than a choice:
 | what a speaker group may originate | Prefix, custom field `origin` → its ASN (a dynamic pool); IP, custom field `origins` (an assigned address, always a `/32` or `/128`) |
 | who changes a record, and whose capacity it is | NetBox's Owner (a team) and Tenant (the team it's carved out for) |
 | a cloud region | Site Group (`au1`), holding the site its AZs are at; a site in none is a branch. Regions stay geographic |
-| an AZ | Location (`alf-az1`), the rooms with capacity in one failure domain nested under it |
-| a cluster | Virtualization Cluster: a Proxmox cell scoped to its AZ, named as gear (`alf-pve-01`); a Kubernetes cluster scoped to its region, `<region>-<purpose>` (`au1-shared`), custom field `number` its Cilium cluster ID, unique within a mesh. Its node or corosync network is the VLAN whose `cluster` names it |
+| an AZ | Location, `<region>-az<n>` (`au1-az1`), numbered within its region, the rooms with capacity in one failure domain nested under it |
+| a cluster | Virtualization Cluster: a Proxmox cell scoped to its AZ, named as gear (`alf-pve-01`); a Kubernetes cluster scoped to its region, `<region>-k8s-<purpose>` (`au1-k8s-shared`), its DNS path reversed (`shared.k8s.au1.sys`), custom field `number` its Cilium cluster ID, unique within a mesh. Its node or corosync network is the VLAN whose `cluster` names it |
 | a CPU family | the host's CPU module; a VM inherits its host's, under `cpu=host` |
 | the site's router | ASN, role `router`, assigned to the site; the Device, role `Router Firewall` (by name: the tofu provider can look a role up by nothing else) |
 | the VIDs a site may have | its VLAN group's `vid_ranges`: below 100 anywhere, 200-399 and the lab's trunks at a hub |
@@ -187,7 +187,7 @@ purpose**. A **speaker group** shares an ASN: a DNS fleet, a Kubernetes cluster,
 ## Kubernetes
 
 A cluster is Talos in one region, across its Proxmox cells and its metal, named
-`<region>-<purpose>` (`au1-shared`). One layer builds every one, `tofu/platform/kubernetes`, a
+`<region>-k8s-<purpose>` (`au1-k8s-shared`). One layer builds every one, `tofu/platform/kubernetes`, a
 workspace and a data file (`clusters/<name>.yaml`) each, through `talos-cluster` and
 `fleet-bootstrap`. VMs are the data file's; **metal is NetBox's**: a device in the
 virtualization cluster is a node, its interfaces named as Talos names its links. A node class's
@@ -476,8 +476,8 @@ uv run homelab image derive <image> <base> <yours> --playbook <yml>   # docs/ima
 
 cd ansible/network && uv run ansible-playbook site.yml --limit <host>   # or ansible/platform
 tofu -chdir=tofu/platform/proxmox/admin/cluster plan   # workspace alf-pve-01
-tofu -chdir=tofu/platform/kubernetes plan             # workspace au1-shared
-uv run homelab fleet resolve au1-shared               # the artifact its ring runs
+tofu -chdir=tofu/platform/kubernetes plan             # workspace au1-k8s-shared
+uv run homelab fleet resolve au1-k8s-shared           # the artifact its ring runs
 ```
 
 ## Secrets

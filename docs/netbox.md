@@ -77,12 +77,14 @@ its NetBox name is where it is, which the repo never needs.
   Regions stay geographic, as NetBox means them.
 - A Site Group per cloud region (`au1`), holding the site or sites its AZs are at. A site in
   none is a branch: a network people use, with nothing of the cloud's.
-- An AZ is a Location of its site (`alf-az1`), holding the rooms with capacity in one failure
-  domain. Other rooms stay directly under the site.
+- An AZ is a Location of its site, `<region>-az<n>` (`au1-az1`), numbered within its region,
+  holding the rooms with capacity in one failure domain. Other rooms stay directly under the site.
 - A VLAN group per site, its slug the site's, scoped to the site, with `vid_ranges` the VIDs
   the site may have.
-- A VLAN per network, whose Role is its firewall zone. A VLAN a guest's NIC can join names its
-  Proxmox SDN VNet in `vnet`; a cluster's node or corosync network names it in `cluster`.
+- A VLAN per network, whose Role is its firewall zone, named for the network it is: a cluster's
+  by the cluster and what it carries (`alf-pve-01 Cluster`, `au1-k8s-shared Nodes`,
+  `au1-k8s-shared SAN`). A VLAN a guest's NIC can join names its Proxmox SDN VNet in `vnet`; a
+  cluster's node or corosync network names it in `cluster`.
 
 **Prefixes**
 
@@ -132,7 +134,8 @@ its NetBox name is where it is, which the repo never needs.
   the panel port it lands on.
 - A Proxmox cluster as a Virtualization Cluster scoped to its AZ, named as gear is
   (`alf-pve-01`); a Kubernetes cluster scoped to its region's Site Group, named
-  `<region>-<name>` (`au1-shared`), its `number` Cilium's cluster ID.
+  `<region>-k8s-<purpose>` (`au1-k8s-shared`), its DNS path reversed (`shared.k8s.au1.sys`), its
+  `number` Cilium's cluster ID.
 - A source narrower than a zone carries a trust tag (`connector`, `proxmox-api`, ...), on its
   prefix, its VLAN, or its device or VM.
 

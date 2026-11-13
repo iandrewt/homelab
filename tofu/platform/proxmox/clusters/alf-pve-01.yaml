@@ -26,14 +26,14 @@ storages:
 
   images:
     type: nfs
-    server: alf-pve-01.san.au1.sys.titmuss.zone
+    server: san.alf-pve-01.alfheim.infra.titmuss.zone
     export: /mnt/tank/infra/proxmox
     options: vers=4.2
     content: [import, iso, vztmpl]
 
   backups:
     type: nfs
-    server: alf-pve-01.san.au1.sys.titmuss.zone
+    server: san.alf-pve-01.alfheim.infra.titmuss.zone
     export: /mnt/tank/backups/proxmox
     options: vers=4.2
     content: [backup]
