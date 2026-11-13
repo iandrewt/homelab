@@ -1,6 +1,7 @@
 # yaml-language-server: $schema=schema.json
 site: alfheim
-endpoint: https://yggdrasil.alfheim.infra.titmuss.zone:8006/
+# Substrate, so by site: a record per node in NetBox, and a client takes whichever answers
+endpoint: https://alf-pve-01.alfheim.infra.titmuss.zone:8006/
 # Self-signed until the private CA exists
 insecure: true
 

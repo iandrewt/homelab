@@ -13,11 +13,8 @@ locals {
     {
       for name, cluster in local.proxmox_clusters : "Proxmox ${name}" => {
         logo = "${path.module}/logos/proxmox.png"
-        # The login page sends its origin exactly: no path, no trailing slash
-        redirect_uris = [
-          for node in keys(cluster.nodes) :
-          "https://${node}.${regex("^https://[^.]+\\.([^:/]+)", cluster.endpoint)[0]}:8006"
-        ]
+        # The login page sends its origin exactly: no path, no trailing slash. A node's own name signs in nobody
+        redirect_uris = [regex("^https://[^/]+", cluster.endpoint)]
         groups = concat(["Administrators", "Security"], [for t in keys(cluster.tenants) : module.tenancy.teams[t].title])
       }
     },

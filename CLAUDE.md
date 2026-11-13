@@ -551,8 +551,9 @@ into `<image>/extensions/<extension>/{canary,stable}/`.
 - The `root` layer authenticates as `root@pam` with `PROXMOX_VE_PASSWORD`: nothing less can
   create `tofu@pve`.
 - Proxmox's certificates are self-signed until the private CA exists, so its cluster file says
-  `insecure`. Its endpoint is a machine name served by ratatoskr, so the DNS fleet's primary is
-  built first.
+  `insecure`. Its endpoint is the cell's name, `<cell>.<site>.infra.titmuss.zone`, a record per
+  node in NetBox (a CNAME while there's one), served by ratatoskr, so the DNS fleet's primary is built
+  first. A down node fails a plan until its record goes.
 - `ansible/roles/DEBIAN13-CIS` is a galaxy install, gitignored.
 - A handler's name is global to its play, and DEBIAN13-CIS's sshd handlers listen on `Restart
   sshd`: a role of ours whose handler shares a name or topic with CIS's runs on CIS's notify,
