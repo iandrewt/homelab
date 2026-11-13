@@ -15,6 +15,17 @@ resource "proxmox_cluster_options" "this" {
   max_workers = 5
 
   # TODO: email_from, once there's somewhere for notifications to go.
+
+  # A guest is reached at its MAC's EUI-64, and cells share VNets, so a duplicate prefix is a collision waiting
+  lifecycle {
+    precondition {
+      condition = length([
+        for f in fileset("${path.module}/../../clusters", "*.yaml") : f
+        if yamldecode(file("${path.module}/../../clusters/${f}")).mac_prefix == local.cluster.mac_prefix
+      ]) == 1
+      error_message = "Another cell's file has mac_prefix ${local.cluster.mac_prefix}: give this one a nibble of its own."
+    }
+  }
 }
 
 module "node" {

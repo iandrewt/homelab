@@ -10,7 +10,8 @@ onepassword_break_glass_vault: Break-glass
 timezone: Australia/Sydney
 mailto: pve@titmuss.house
 release: 9
-mac_prefix: "BC:24:11"
+# Proxmox's OUI and a nibble per cell, the longest prefix Proxmox takes
+mac_prefix: "BC:24:11:1"
 sdn:
   bridge: vmbr0
   mtu: 9000

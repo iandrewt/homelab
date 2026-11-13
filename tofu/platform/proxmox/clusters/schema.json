@@ -395,9 +395,9 @@
       "type": "string"
     },
     "mac_prefix": {
-      "description": "Three-octet OUI for MACs this cluster generates.",
+      "description": "Proxmox's OUI and a hex digit unique to this cell: the prefix of every MAC it generates.",
       "type": "string",
-      "pattern": "^([0-9A-Fa-f]{2}:){2}[0-9A-Fa-f]{2}$"
+      "pattern": "^BC:24:11:[0-9A-F]$"
     },
     "endpoint": {
       "description": "Proxmox API URL.",
