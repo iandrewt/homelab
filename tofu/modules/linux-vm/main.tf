@@ -71,7 +71,7 @@ resource "proxmox_virtual_environment_vm" "this" {
 
   network_device {
     bridge   = var.vnet
-    firewall = var.enable_firewall
+    firewall = true
     model    = "virtio"
     # The bridge's, so a guest runs as large as its VNet carries
     mtu    = 1
@@ -135,4 +135,20 @@ resource "proxmox_virtual_environment_vm" "this" {
       keys = var.ssh_public_keys
     }
   }
+}
+
+# Against what the guest sends, not what reaches it: what it admits is its own firewall's
+resource "proxmox_virtual_environment_firewall_options" "this" {
+  node_name = proxmox_virtual_environment_vm.this.node_name
+  vm_id     = proxmox_virtual_environment_vm.this.vm_id
+
+  enabled   = true
+  macfilter = true
+  ipfilter  = false
+  radv      = false
+  ndp       = true
+  dhcp      = true
+
+  input_policy  = "ACCEPT"
+  output_policy = "ACCEPT"
 }

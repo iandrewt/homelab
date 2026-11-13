@@ -80,7 +80,7 @@ resource "proxmox_virtual_environment_vm" "this" {
       model  = "virtio"
       # The bridge's, so a guest runs as large as its VNet carries
       mtu      = 1
-      firewall = false
+      firewall = true
       queues   = 2 * var.cpu_cores
     }
   }
@@ -104,4 +104,20 @@ resource "proxmox_virtual_environment_vm" "this" {
   operating_system {
     type = "l26"
   }
+}
+
+# Against what the guest sends, not what reaches it: what it admits is its own firewall's
+resource "proxmox_virtual_environment_firewall_options" "this" {
+  node_name = proxmox_virtual_environment_vm.this.node_name
+  vm_id     = proxmox_virtual_environment_vm.this.vm_id
+
+  enabled   = true
+  macfilter = true
+  ipfilter  = false
+  radv      = false
+  ndp       = true
+  dhcp      = true
+
+  input_policy  = "ACCEPT"
+  output_policy = "ACCEPT"
 }

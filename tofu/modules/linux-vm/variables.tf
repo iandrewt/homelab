@@ -103,12 +103,6 @@ variable "dns_servers" {
   default     = []
 }
 
-variable "enable_firewall" {
-  description = "Whether to enable the Proxmox firewall for this VM."
-  type        = bool
-  default     = true
-}
-
 variable "enable_multiqueue" {
   description = "Whether to enable multiqueue for the network interface. This can improve network performance for VMs with multiple CPU cores."
   type        = bool

@@ -4,8 +4,9 @@ resource "proxmox_virtual_environment_cluster_firewall" "this" {
   input_policy  = "DROP"
   output_policy = "ACCEPT"
 
-  # Every frame a VNet bridges passes forward, the gateway's included. Guests are
-  # filtered by their own firewalls, and VLANs from each other by the router.
+  # Every frame a VNet bridges passes forward, the gateway's included, so this waits for a
+  # VNet firewall to admit them (bpg/terraform-provider-proxmox#3039 has its rules, not yet
+  # its options)
   forward_policy = "ACCEPT"
 
   log_ratelimit {
@@ -15,9 +16,10 @@ resource "proxmox_virtual_environment_cluster_firewall" "this" {
   }
 }
 
+# Proxmox's own: what it holds reaches the GUI, SSH, VNC and SPICE through its built-in rules
 resource "proxmox_virtual_environment_firewall_ipset" "management" {
   name    = "management"
-  comment = "Allowed to reach the GUI and SSH. Managed by OpenTofu."
+  comment = "Allowed to reach the GUI, SSH and consoles. Managed by OpenTofu."
 
   dynamic "cidr" {
     for_each = concat(module.netbox.audiences["management"].ipv6, module.netbox.audiences["management"].ipv4)
@@ -39,6 +41,13 @@ resource "proxmox_virtual_environment_firewall_ipset" "api" {
   }
 }
 
+# Proxmox admits cluster traffic from it, and guesses it from the node's own address unless told
+resource "proxmox_virtual_environment_firewall_alias" "local_network" {
+  name    = "local_network"
+  cidr    = one(flatten([for v in module.netbox.vlans : v.subnets[*].cidr if v.cluster == terraform.workspace]))
+  comment = "The corosync network. Managed by OpenTofu."
+}
+
 resource "proxmox_virtual_environment_firewall_rules" "cluster" {
   rule {
     comment = "API"
@@ -46,26 +55,6 @@ resource "proxmox_virtual_environment_firewall_rules" "cluster" {
     action  = "ACCEPT"
     source  = "+dc/${proxmox_virtual_environment_firewall_ipset.api.name}"
     dport   = "8006"
-    proto   = "tcp"
-    log     = "nolog"
-  }
-
-  rule {
-    comment = "GUI"
-    type    = "in"
-    action  = "ACCEPT"
-    source  = "+dc/${proxmox_virtual_environment_firewall_ipset.management.name}"
-    dport   = "8006"
-    proto   = "tcp"
-    log     = "nolog"
-  }
-
-  rule {
-    comment = "SSH"
-    type    = "in"
-    action  = "ACCEPT"
-    source  = "+dc/${proxmox_virtual_environment_firewall_ipset.management.name}"
-    dport   = "22"
     proto   = "tcp"
     log     = "nolog"
   }
