@@ -1,0 +1,2 @@
+# The Proxmox cells the site's resolvers may run on
+proxmox: [alf-pve-01]

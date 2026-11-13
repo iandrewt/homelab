@@ -56,6 +56,11 @@ locals {
   }
   fetch_cluster = sort([for name, c in local.clusters : name if c.site == terraform.workspace])[0]
   cluster       = local.clusters[local.fetch_cluster]
+  tenants       = toset(flatten([for c in local.clusters : keys(c.tenants) if c.site == terraform.workspace]))
+}
+
+module "tenancy" {
+  source = "../../../../modules/tenancy"
 }
 
 provider "onepassword" {}

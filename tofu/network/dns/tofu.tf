@@ -55,13 +55,8 @@ locals {
   site = terraform.workspace
   team = "network"
 
-  # Every cluster at the site granting the team a share: a provider can't come from NetBox
-  proxmox = {
-    for f in fileset("${path.module}/../../platform/proxmox/clusters", "*.yaml") :
-    trimsuffix(f, ".yaml") => yamldecode(file("${path.module}/../../platform/proxmox/clusters/${f}"))
-    if yamldecode(file("${path.module}/../../platform/proxmox/clusters/${f}")).site == local.site &&
-    contains(keys(yamldecode(file("${path.module}/../../platform/proxmox/clusters/${f}")).tenants), local.team)
-  }
+  # A provider's for_each is static, so the cells can't come from NetBox
+  cells = toset(yamldecode(file("${path.module}/sites/${local.site}.yaml")).proxmox)
 }
 
 module "tenancy" {
@@ -84,18 +79,34 @@ provider "netbox" {
   api_token  = ephemeral.onepassword_item.netbox.credential
 }
 
+# What Platform vends a tenant of each cell: its grant, and its token
+data "onepassword_item" "grant" {
+  for_each = local.cells
+
+  vault = data.onepassword_vault.team.uuid
+  title = "Proxmox Grant - ${each.key}"
+}
+
 ephemeral "onepassword_item" "proxmox" {
-  for_each = local.proxmox
+  for_each = local.cells
 
   vault = data.onepassword_vault.team.uuid
   title = "Proxmox API Token - ${each.key} tenant-${local.team}"
 }
 
+locals {
+  grants = {
+    for cell, item in data.onepassword_item.grant : cell => {
+      for label, field in item.section_map["cell"].field_map : label => nonsensitive(field.value)
+    }
+  }
+}
+
 provider "proxmox" {
   alias    = "cluster"
-  for_each = local.proxmox
+  for_each = local.cells
 
-  endpoint  = each.value.endpoint
-  insecure  = try(each.value.insecure, false)
+  endpoint  = local.grants[each.key]["endpoint"]
+  insecure  = local.grants[each.key]["insecure"] == "true"
   api_token = ephemeral.onepassword_item.proxmox[each.key].password
 }

@@ -44,7 +44,17 @@ locals {
     }
   }
 
-  image = yamldecode(file("${path.module}/../../platform/proxmox/images/${local.site}.yaml")).images["ymir-amd64-vm"]
+}
+
+data "onepassword_item" "library" {
+  vault = data.onepassword_vault.team.uuid
+  title = "Proxmox Image Library - ${local.site}"
+}
+
+locals {
+  images = {
+    for label, field in data.onepassword_item.library.section_map["images"].field_map : label => nonsensitive(field.value)
+  }
 }
 
 data "onepassword_item" "ssh_key" {
@@ -72,11 +82,11 @@ module "resolver" {
   hostname    = each.key
   description = "DNS resolver."
 
-  image_file_id = "${local.proxmox[each.value.proxmox].image_storage}:${local.image.content_type}/${local.image.file_name}"
+  image_file_id = local.images["ymir-amd64-vm"]
   # ymir enrolls its own Secure Boot keys
   pre_enrolled_keys = false
 
-  disk_datastore_id = local.proxmox[each.value.proxmox].guest_defaults.disk_storage
+  disk_datastore_id = local.grants[each.value.proxmox]["disk storage"]
 
   cpu_cores    = each.value.cores
   memory_mb    = each.value.memory_mb
