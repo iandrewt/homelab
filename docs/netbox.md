@@ -77,8 +77,9 @@ its NetBox name is where it is, which the repo never needs.
   Regions stay geographic, as NetBox means them.
 - A Site Group per cloud region (`au1`), holding the site or sites its AZs are at. A site in
   none is a branch: a network people use, with nothing of the cloud's.
-- An AZ is a Location of its site, `<region>-az<n>` (`au1-az1`), numbered within its region,
-  holding the rooms with capacity in one failure domain. Other rooms stay directly under the site.
+- Locations are physical areas, nested as they are: a house's rooms at the top of its site. An AZ
+  is a Location inside the room it's in, `<region>-az<n>` (`au1-az1`), numbered within its region,
+  holding its racks and what's in them; a cell's hosts are in it, not in a Location below it.
 - A VLAN group per site, its slug the site's, scoped to the site, with `vid_ranges` the VIDs
   the site may have.
 - A VLAN per network, whose Role is its firewall zone, named for the network it is: a cluster's

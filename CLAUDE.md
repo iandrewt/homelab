@@ -48,7 +48,7 @@ where NetBox has nothing, and points at a built-in object rather than a choice:
 | what a speaker group may originate | Prefix, custom field `origin` → its ASN (a dynamic pool); IP, custom field `origins` (an assigned address, always a `/32` or `/128`) |
 | who changes a record, and whose capacity it is | NetBox's Owner (a team) and Tenant (the team it's carved out for) |
 | a cloud region | Site Group (`au1`), holding the site its AZs are at; a site in none is a branch. Regions stay geographic |
-| an AZ | Location, `<region>-az<n>` (`au1-az1`), numbered within its region, the rooms with capacity in one failure domain nested under it |
+| an AZ | Location, `<region>-az<n>` (`au1-az1`), numbered within its region: the DC's space inside the room it's in, holding its racks; a house's rooms stay at the top of its site |
 | a cluster | Virtualization Cluster: a Proxmox cell scoped to its AZ, named as gear (`alf-pve-01`); a Kubernetes cluster scoped to its region, `<region>-k8s-<purpose>` (`au1-k8s-shared`), its DNS path reversed (`shared.k8s.au1.sys`), custom field `number` its Cilium cluster ID, unique within a mesh. Its node or corosync network is the VLAN whose `cluster` names it |
 | a CPU family | the host's CPU module; a VM inherits its host's, under `cpu=host` |
 | the site's router | ASN, role `router`, assigned to the site; the Device, role `Router Firewall` (by name: the tofu provider can look a role up by nothing else) |
