@@ -70,6 +70,15 @@ data "netbox_devices" "nodes" {
   }
 }
 
+data "netbox_device_interfaces" "nodes" {
+  for_each = { for d in data.netbox_devices.nodes.devices : d.name => d.device_id }
+
+  filter {
+    name  = "device_id"
+    value = tostring(each.value)
+  }
+}
+
 module "netbox" {
   source = "../../../../modules/netbox-site"
 

@@ -13,9 +13,6 @@ mailto: pve@titmuss.house
 release: 9
 # Proxmox's OUI and a nibble per cell, the longest prefix Proxmox takes
 mac_prefix: "BC:24:11:1"
-sdn:
-  bridge: vmbr0
-  mtu: 9000
 
 storages:
   # The installer's, which the cluster layer adopts. Nothing a tenant writes is on a node

@@ -342,11 +342,16 @@ image's next release; ymir merges only images db's key signed.
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage definitions, access and guests are tofu's; the node's interfaces, resolvers,
 apt and ZFS are Ansible's, since Proxmox's API makes no dataset. Ansible never reads a cluster
-file - the trunk bridge's name and MTU are stated on both sides (NetBox for the node, `sdn` in
-the cluster file), and a mismatch fails in ifupdown2; so are a split storage's tenants (its
-`tenants` in the cluster file, a dataset with a quota each in `proxmox_node_datasets`), and a
-missing one leaves the storage inactive. SDN owns `<bridge>.<vid>` for every VNet, so a node joins a
+file: a split storage's tenants are stated on both sides (its `tenants` in the cluster file, a
+dataset with a quota each in `proxmox_node_datasets`), and a missing one leaves the storage
+inactive. The SDN zone is the nodes' tagged bridge in NetBox, its name and MTU the same on every
+node or the cluster layer fails. SDN owns `<bridge>.<vid>` for every VNet, so a node joins a
 VNet with an address on the VNet's bridge, and a host-only VLAN with a subinterface.
+
+**An MTU is the interface's own**, as large as it can run, on its NetBox interface: the switches
+carry 9216 on every VLAN (UniFi's jumbo frames are all or nothing), so nothing is stated per
+VLAN, and a guest's NIC takes its VNet bridge's (`mtu = 1`). Between hosts on one VLAN at
+different sizes, TCP's MSS settles it; across the router, PMTUD, so ICMP errors pass as related.
 
 Raspberry Pi OS is brought into line by `bootstrap pi` before first boot: its NetworkManager
 owns `/etc/netplan` (deleting every other file there) and netplan's NM backend drops

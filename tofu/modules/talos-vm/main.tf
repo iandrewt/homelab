@@ -76,8 +76,10 @@ resource "proxmox_virtual_environment_vm" "this" {
   dynamic "network_device" {
     for_each = var.vnets
     content {
-      bridge   = network_device.value
-      model    = "virtio"
+      bridge = network_device.value
+      model  = "virtio"
+      # The bridge's, so a guest runs as large as its VNet carries
+      mtu      = 1
       firewall = false
       queues   = 2 * var.cpu_cores
     }

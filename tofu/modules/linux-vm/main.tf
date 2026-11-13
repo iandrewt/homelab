@@ -73,7 +73,9 @@ resource "proxmox_virtual_environment_vm" "this" {
     bridge   = var.vnet
     firewall = var.enable_firewall
     model    = "virtio"
-    queues   = var.enable_multiqueue ? var.cpu_cores * var.cpu_sockets : 1
+    # The bridge's, so a guest runs as large as its VNet carries
+    mtu    = 1
+    queues = var.enable_multiqueue ? var.cpu_cores * var.cpu_sockets : 1
   }
 
   # Cloud images output to the serial console, not a VGA framebuffer.

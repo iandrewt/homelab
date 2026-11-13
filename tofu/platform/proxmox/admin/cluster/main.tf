@@ -31,6 +31,14 @@ module "node" {
 # --- SDN ---------------------------------------------------------------------------
 
 locals {
+  # The VLAN-aware bridge every node trunks its VNets on, as ifupdown2 builds it from NetBox
+  trunks = distinct(flatten([
+    for node, d in data.netbox_device_interfaces.nodes : [
+      for i in d.interfaces : { name = i.name, mtu = i.mtu } if i.type == "bridge" && try(i.mode.value, "") == "tagged"
+    ]
+  ]))
+  trunk = one(local.trunks)
+
   vnets = { for name, v in module.netbox.vlans : v.vnet => merge(v, { name = name }) if v.vnet != "" }
 
   subnets = merge([
@@ -44,10 +52,18 @@ resource "proxmox_sdn_applier" "finalizer" {
 
 resource "proxmox_sdn_zone_vlan" "this" {
   id     = local.cluster.site
-  bridge = local.cluster.sdn.bridge
-  mtu    = local.cluster.sdn.mtu
+  bridge = local.trunk.name
+  mtu    = local.trunk.mtu
 
   depends_on = [proxmox_sdn_applier.finalizer]
+
+  # A VNet's bridge sits on the zone's on every node, so they all have to be the same one
+  lifecycle {
+    precondition {
+      condition     = length(local.trunks) == 1 && length(data.netbox_device_interfaces.nodes) == length(local.cluster.nodes)
+      error_message = "Every node in ${terraform.workspace} needs one tagged bridge in NetBox, with the same name and MTU: ${jsonencode(local.trunks)}."
+    }
+  }
 }
 
 resource "proxmox_sdn_vnet" "this" {

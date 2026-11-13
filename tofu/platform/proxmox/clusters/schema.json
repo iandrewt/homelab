@@ -13,7 +13,6 @@
     "timezone",
     "mailto",
     "release",
-    "sdn",
     "storages",
     "guest_defaults",
     "backup",
@@ -48,25 +47,6 @@
       "description": "The Proxmox VE major release a new node installs, from its newest ISO.",
       "type": "integer",
       "minimum": 9
-    },
-    "sdn": {
-      "description": "The SDN VLAN zone every VNet is in.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "bridge",
-        "mtu"
-      ],
-      "properties": {
-        "bridge": {
-          "description": "The trunk bridge it runs on, on every node. proxmox_node builds it from NetBox.",
-          "type": "string"
-        },
-        "mtu": {
-          "type": "integer",
-          "minimum": 1280
-        }
-      }
     },
     "nodes": {
       "type": "object",
