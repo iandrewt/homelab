@@ -19,6 +19,15 @@
       a new extension reaches machines with its image's next release.
     quiet: true
 
+- name: Make each component's drop-in directory
+  ansible.builtin.file:
+    path: /etc/sysupdate.{{ item }}.component.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ extensions_available }}"
+
 - name: Enable each it takes, and disable the rest
   ansible.builtin.copy:
     dest: /etc/sysupdate.{{ item }}.component.d/50-enabled.conf
@@ -35,6 +44,17 @@
     src: /usr/lib/sysupdate.{{ item }}.d/{{ item }}.transfer
   loop: "{{ extensions_enabled if extensions_elsewhere else [] }}"
   register: extensions_transfers
+
+- name: Make the transfer's drop-in directory for each
+  ansible.builtin.file:
+    path: /etc/sysupdate.{{ item.item }}.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ extensions_transfers.results }}"
+  loop_control:
+    label: "{{ item.item }}"
 
 - name: Fetch each from there
   ansible.builtin.template:
