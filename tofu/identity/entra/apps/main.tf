@@ -15,7 +15,7 @@ locals {
         logo = "${path.module}/logos/proxmox.png"
         # The login page sends its origin exactly: no path, no trailing slash. A node's own name signs in nobody
         redirect_uris = [regex("^https://[^/]+", cluster.endpoint)]
-        groups = concat(["Administrators", "Security"], [for t in keys(cluster.tenants) : module.tenancy.teams[t].title])
+        groups        = concat(["Administrators", "Security"], [for t in keys(cluster.tenants) : module.tenancy.teams[t].title])
       }
     },
     {

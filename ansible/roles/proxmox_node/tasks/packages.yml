@@ -41,7 +41,6 @@
   ansible.builtin.apt:
     upgrade: dist
     update_cache: true
-  register: proxmox_node_upgrade
   when: not proxmox_node_clustered.stat.exists
 
 - name: Find the newest kernel it boots
@@ -51,10 +50,10 @@
   register: proxmox_node_newest_kernel
   changed_when: false
   check_mode: false
-  when: proxmox_node_upgrade is changed
+  when: not proxmox_node_clustered.stat.exists
 
 - name: Boot it before joining
   ansible.builtin.reboot:
   when:
-    - proxmox_node_upgrade is changed
+    - not proxmox_node_clustered.stat.exists
     - proxmox_node_newest_kernel.stdout != '/boot/vmlinuz-' ~ ansible_facts.kernel
