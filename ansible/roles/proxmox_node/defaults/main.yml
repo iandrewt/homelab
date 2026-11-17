@@ -5,9 +5,12 @@ proxmox_node_corosync: >-
   {{ netbox_site.vlans.values() | selectattr('cluster', 'eq', proxmox_node_cluster) | first }}
 proxmox_node_link0: "{{ interfaces | address_in(proxmox_node_corosync.ipv6) }}"
 
-# What the node holds an interface on: every other bridge is a VNet it doesn't join, even
-# one tofu made since this ran
-proxmox_node_held_bridges: "{{ interfaces | map(attribute='name') | sort }}"
+# Its own bridges and the VNets it joins: every other bridge is a VNet it doesn't, even one
+# tofu made since this ran
+proxmox_node_held_bridges: >-
+  {{ (interfaces | selectattr('type.value', 'eq', 'bridge') | map(attribute='name') | list
+      + interfaces | map(attribute='name') | select('in', netbox_site.vlans.values() | map(attribute='vnet') | select | list) | list)
+     | unique | sort }}
 
 proxmox_node_bond:
   miimon: 100
