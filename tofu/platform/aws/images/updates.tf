@@ -76,14 +76,25 @@ resource "aws_s3_bucket_policy" "updates" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "CloudFrontReads"
-      Effect    = "Allow"
-      Principal = { Service = "cloudfront.amazonaws.com" }
-      Action    = "s3:GetObject"
-      Resource  = "${aws_s3_bucket.updates.arn}/*"
-      Condition = { StringEquals = { "AWS:SourceArn" = aws_cloudfront_distribution.updates.arn } }
-    }]
+    Statement = [
+      {
+        Sid       = "CloudFrontReads"
+        Effect    = "Allow"
+        Principal = { Service = "cloudfront.amazonaws.com" }
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.updates.arn}/*"
+        Condition = { StringEquals = { "AWS:SourceArn" = aws_cloudfront_distribution.updates.arn } }
+      },
+      # systemd-pull tries each signature's name in turn, and only a 404 moves it on to the next
+      {
+        Sid       = "CloudFrontFindsNothing"
+        Effect    = "Allow"
+        Principal = { Service = "cloudfront.amazonaws.com" }
+        Action    = "s3:ListBucket"
+        Resource  = aws_s3_bucket.updates.arn
+        Condition = { StringEquals = { "AWS:SourceArn" = aws_cloudfront_distribution.updates.arn } }
+      },
+    ]
   })
 
   depends_on = [aws_s3_bucket_public_access_block.updates]
