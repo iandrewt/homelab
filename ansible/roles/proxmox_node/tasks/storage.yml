@@ -3,6 +3,7 @@
   ansible.builtin.command: zpool list -H -o name
   register: proxmox_node_imported
   changed_when: false
+  check_mode: false
 
 # A reinstall wipes only the boot disk, so the pools are still on theirs
 - name: Import the pools a reinstall left
@@ -12,6 +13,14 @@
   changed_when: proxmox_node_import.rc == 0
   failed_when: proxmox_node_import.rc not in [0, 1]
 
+- name: List the pools now imported
+  ansible.builtin.command: zpool list -H -o name
+  register: proxmox_node_pools
+  changed_when: false
+  check_mode: false
+
+# Creation only: the module reads a pool back by real device path, so by-id disks always look
+# missing and it adds them again. A pool grows by hand
 - name: Pools
   community.general.zpool:
     name: "{{ item.key }}"
@@ -20,7 +29,7 @@
       ashift: "{{ item.value.ashift | default(12) }}"
     filesystem_properties:
       compression: "{{ item.value.compression | default('on') }}"
-  loop: "{{ proxmox_node_zpools | dict2items }}"
+  loop: "{{ proxmox_node_zpools | dict2items | rejectattr('key', 'in', proxmox_node_pools.stdout_lines) }}"
   loop_control:
     label: "{{ item.key }}"
 
