@@ -34,7 +34,7 @@ def register(subparsers) -> None:
 
     ssh = targets.add_parser(
         "ssh", help="a host's Ed25519 host key, which Ansible connects by",
-        description="Scanned at its primary addresses, and recorded if it's the key your own "
+        description="Scanned at whichever of its primary addresses answer, and recorded if it's the key your own "
         "known_hosts already holds for it, or has the fingerprint you read from its console "
         "(`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`).",
     )
@@ -59,9 +59,16 @@ def _ssh(args) -> int:
         addresses = [str(ipaddress.ip_interface(p.address).ip) for p in (host.primary_ip6, host.primary_ip4) if p]
         if not addresses:
             raise PinError(f"{args.host} has no primary address to scan")
-        keys = {_scan(a) for a in addresses}
+        # A node being installed has only the address its installer gave it
+        scanned = {a: _scan(a) for a in addresses}
+        silent = [a for a, k in scanned.items() if k is None]
+        keys = {k for k in scanned.values() if k is not None}
+        if not keys:
+            raise PinError(f"no Ed25519 host key at {', '.join(addresses)}")
         if len(keys) != 1:
-            raise PinError(f"{args.host} answers with different keys at {', '.join(addresses)}")
+            raise PinError(f"{args.host} answers with different keys at {', '.join(a for a in addresses if a not in silent)}")
+        if silent:
+            print(f"{', '.join(silent)} didn't answer: pinned from the rest", file=sys.stderr)
         key = keys.pop()
         names = [p.dns_name for p in (host.primary_ip6, host.primary_ip4) if p and p.dns_name]
         _trust(key, args.fingerprint, addresses + names)
@@ -131,14 +138,12 @@ def _host(nb, name: str, site: str | None):
     return found[0]
 
 
-def _scan(address: str) -> str:
+def _scan(address: str) -> str | None:
     scanned = subprocess.run(["ssh-keyscan", "-T", "5", "-t", "ed25519", address],
                              capture_output=True, text=True, check=False).stdout
     # OpenSSH 10 prints its `# host:port banner` comment here too, not only to stderr
     keys = [line.split()[1:3] for line in scanned.splitlines() if line.split()[1:2] == ["ssh-ed25519"]]
-    if len(keys) != 1:
-        raise PinError(f"no Ed25519 host key at {address}")
-    return " ".join(keys[0])
+    return " ".join(keys[0]) if len(keys) == 1 else None
 
 
 def _fingerprint(key: str) -> str:
