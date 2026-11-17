@@ -28,6 +28,7 @@ resource "proxmox_virtual_environment_role" "tofu_access" {
     "User.Modify",
     "Group.Allocate",
     "Pool.Allocate",
+    "Pool.Audit",
   ]
 }
 

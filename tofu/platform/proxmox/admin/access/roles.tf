@@ -2,7 +2,7 @@ resource "proxmox_virtual_environment_role" "tofu_cluster" {
   role_id = "TofuCluster"
 
   privileges = [
-    "Sys.Modify", # cluster options, node firewall, ZFS pool creation
+    "Sys.Modify", # cluster options, node firewall
     "Sys.Audit",
     "Datastore.Allocate", # storage definitions
     "Datastore.Audit",
