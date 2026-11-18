@@ -50,7 +50,7 @@ def register(subparsers) -> None:
     unifi = subparsers.add_parser("unifi", help="the UniFi gateways' firewall, by API", description=__doc__)
     actions = unifi.add_subparsers(dest="action", required=True, title="actions")
 
-    status = actions.add_parser("status", help="Site Magic's tunnels and errors")
+    status = actions.add_parser("status", help="Site Magic's tunnels, and each site's Device Isolation")
     status.set_defaults(run=_status)
 
     export = actions.add_parser("export", help="every site's policies, zones and networks, as JSON")
@@ -91,7 +91,30 @@ def _status(args) -> int:
                         hub = by_host.get(link["hubId"].split("_")[0], link["hubId"])
                         for tunnel in link["tunnels"]:
                             print(f"  to {hub}: {tunnel['status']}")
+        for slug, host in consoles.items():
+            _isolation(key, host, slug, model["sites"][slug])
     return _run(run)
+
+
+def _isolation(key: str, host: str, slug: str, site: dict) -> None:
+    """Proxmox isolates a VNet's guests on one node, and Device Isolation (ACL) between them; only
+    the old API has it, a switch setting naming networks by their old IDs."""
+    base = f"{SITE_MANAGER}/v1/connector/consoles/{host}/proxy/network/api/s/default/rest"
+    try:
+        networks = {n["_id"]: n for n in _get(key, f"{base}/networkconf")}
+        switch = next(s for s in _get(key, f"{base}/setting") if s["key"] == "global_switch")
+    except UnifiError as e:
+        print(f"isolation {slug}: unread, {e}")
+        return
+    isolated = {networks[i].get("vlan") for i in switch.get("acl_device_isolation", []) if i in networks}
+    tagged = {v["vid"] for v in site["vlans"].values() if "isolate-ports" in v["tags"]}
+    names = {v["vid"]: n for n, v in site["vlans"].items()}
+    for vid in sorted(tagged - isolated):
+        print(f"isolation {slug}: {names[vid]} ({vid}) is tagged isolate-ports, but Device Isolation is off")
+    for vid in sorted(isolated - tagged, key=str):
+        print(f"isolation {slug}: {names.get(vid, 'untagged')} ({vid}) has Device Isolation, but no isolate-ports tag")
+    if tagged == isolated:
+        print(f"isolation {slug}: {len(tagged)} networks, as tagged")
 
 
 def _export(args) -> int:
