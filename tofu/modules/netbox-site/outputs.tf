@@ -6,12 +6,12 @@ output "vlans" {
       cluster = try(jsondecode(v.custom_fields.cluster).name, null)
       tags    = local.vlan_tags[v.name]
       subnets = [
-        for p in data.netbox_prefixes.vlan[v.name].prefixes : {
-          cidr = p.prefix
+        for cidr in local.vlan_subnets[v.name] : {
+          cidr = cidr
           # A VLAN-only network has no router interface, so none
           gateway = one([
-            for ip in local.router_ips_by_family[strcontains(p.prefix, ":") ? "ipv6" : "ipv4"] : ip
-            if cidrcontains(p.prefix, ip)
+            for ip in local.router_ips_by_family[strcontains(cidr, ":") ? "ipv6" : "ipv4"] : ip
+            if cidrcontains(cidr, ip)
           ])
         }
       ]
@@ -55,12 +55,11 @@ output "assigned" {
 output "trusted" {
   value = {
     for tag in var.trust_tags : tag => sort(distinct(concat(
-      data.netbox_prefixes.trusted[tag].prefixes[*].prefix,
-      flatten([for name, ids in data.netbox_prefixes.vlan : ids.prefixes[*].prefix if contains(local.vlan_tags[name], tag)]),
+      [for p in local.prefixes_all : p.prefix if contains(p.tags, tag)],
       [for h in local.host_sources : h.prefix if contains(h.tags, tag)],
     )))
   }
-  description = "Per trust tag: the site's prefixes carrying it, a VLAN's or a sub-pool's, and the addresses of the hosts carrying it, anywhere. A firewall names the tag, never an address."
+  description = "Per trust tag, anywhere: the prefixes carrying it, a VLAN's or a sub-pool's, and the addresses of the hosts carrying it. A firewall names the tag, never an address."
 }
 
 output "audiences" {

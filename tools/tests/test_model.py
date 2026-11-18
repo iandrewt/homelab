@@ -117,9 +117,9 @@ def test_a_vlan_only_network_has_no_gateway_and_may_have_no_ipv4(snapshot):
 
 def test_trust_collects_tagged_sub_pools_and_vlans_alike(snapshot):
     """A firewall rule names a tag; whatever carries it is trusted, VLAN or pod pool."""
-    trusted = loads(snapshot)["sites"][SITE]["trusted"]
-    assert trusted["proxmox-api"] == ["10.0.132.0/27"]
-    assert trusted["dns-api"] == ["10.0.30.0/24", "2001:db8:1:1300::/64"]
+    assert sources({"zones": [], "tags": ["proxmox-api"], "sites": []}, snapshot)["ipv4"] == ["10.0.132.0/27"]
+    found = sources({"zones": [], "tags": ["dns-api"], "sites": []}, snapshot)
+    assert (found["ipv4"], found["ipv6"]) == (["10.0.30.0/24"], ["2001:db8:1:1300::/64"])
 
 
 def test_a_public_copy_of_a_zone_is_not_the_one_the_resolvers_serve(snapshot):

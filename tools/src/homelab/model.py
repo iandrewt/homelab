@@ -98,7 +98,6 @@ def _site(raw: dict, snap: netbox.Snapshot, zones: dict) -> dict:
         "policies": _policies(snap),
         "segments": _segments(slug, snap),
         "speakers": {n: o for n, o in speakers.items() if o["role"] != ROUTER_ROLE},
-        "trusted": _trusted(slug, snap),
         "services": _services(hosts, addresses, snap),
         "dns": _dns(hosts, addresses, vlans, speakers, snap),
         "hosts": sorted(h["name"] for h in hosts),
@@ -299,20 +298,17 @@ def _segments(slug: str, snap: netbox.Snapshot) -> dict:
     return segments
 
 
-def _trusted(slug: str | None, snap: netbox.Snapshot) -> dict:
-    """Trust is a source: each tag names the sub-pools and VLANs' prefixes carrying it, and the
-    addresses of the devices and VMs carrying it. A site of None is every site."""
+def _trusted(snap: netbox.Snapshot) -> dict:
+    """Trust is a source, anywhere: each tag names the sub-pools and VLANs' prefixes carrying it,
+    and the addresses of the devices and VMs carrying it."""
     vids = {(_slug(v, "group"), v["vid"]): _tags(v) for v in snap.vlans}
-    prefixes = snap.prefixes if slug is None else _at(snap, slug)
     trusted: dict[str, list[str]] = {}
-    for p in prefixes:
+    for p in _stated(snap):
         vlan = (_site_of(p, snap), (p.get("vlan") or {}).get("vid"))
         for tag in set(_tags(p)) | set(vids.get(vlan, [])):
             trusted.setdefault(tag, []).append(p["prefix"])
     # A host's tag covers its primary addresses, the ones it's reached from
     for h in [*snap.devices, *snap.virtual_machines]:
-        if slug is not None and _slug(h, "site") != slug:
-            continue
         for primary in (h.get("primary_ip4"), h.get("primary_ip6")):
             for tag in _tags(h) if primary else []:
                 trusted.setdefault(tag, []).append(str(ipaddress.ip_interface(_ip(primary).exploded)))
@@ -332,10 +328,10 @@ def sources(audience: dict, snap: netbox.Snapshot) -> dict:
     so it stays a flag."""
     vlan_zones = {(_slug(v, "group"), v["vid"]): _slug(v, "role") for v in snap.vlans}
     sites = set(audience["sites"])
-    nets = [p["prefix"] for p in snap.prefixes
+    nets = [p["prefix"] for p in _stated(snap)
             if _zone(p, vlan_zones, snap) in audience["zones"]
             and (not sites or _site_of(p, snap) in sites | {None})]
-    trusted = _trusted(None, snap)
+    trusted = _trusted(snap)
     nets += [n for tag in audience["tags"] for n in trusted.get(tag, [])]
     nets = [ipaddress.ip_network(n) for n in nets]
 
@@ -456,7 +452,15 @@ def _site_of(p: dict, snap: netbox.Snapshot) -> str | None:
 
 
 def _gateway(net, gateways: list) -> str | None:
-    return next((str(ip) for ip in gateways if ip in net), None)
+    found = [str(ip) for ip in gateways if ip in net]
+    if len(found) > 1:
+        raise ValueError(f"the router holds {found} in {net}; a VLAN has one gateway per family")
+    return found[0] if found else None
+
+
+def _stated(snap: netbox.Snapshot) -> list[dict]:
+    """The prefixes a source can be: what's in use, never what's only reserved."""
+    return [p for p in snap.prefixes if p["status"]["value"] in ("active", "container")]
 
 
 def _tags(raw: dict) -> list[str]:

@@ -28,20 +28,6 @@ data "netbox_vlans" "site" {
 
 data "netbox_tags" "all" {}
 
-data "netbox_prefixes" "trusted" {
-  for_each = var.trust_tags
-
-  filter {
-    name  = "tag"
-    value = each.key
-  }
-
-  filter {
-    name  = "site_id"
-    value = tostring(data.netbox_site.this.id)
-  }
-}
-
 data "netbox_prefixes" "vlan" {
   for_each = { for v in data.netbox_vlans.site.vlans : v.name => v.id }
 
@@ -126,6 +112,19 @@ locals {
   }
 
   families = { ipv4 = false, ipv6 = true }
+
+  # A sub-pool naming its VLAN too is inside the VLAN's network, which stays; two apart fail here
+  vlan_subnets = {
+    for name, found in data.netbox_prefixes.vlan : name => [
+      for family in keys(local.families) : one([
+        for p in found.prefixes : p.prefix
+        if(strcontains(p.prefix, ":") ? "ipv6" : "ipv4") == family && !anytrue([
+          for q in found.prefixes : q.prefix != p.prefix && strcontains(q.prefix, ":") == strcontains(p.prefix, ":") && cidrcontains(q.prefix, p.prefix)
+        ])
+      ])
+      if anytrue([for p in found.prefixes : (strcontains(p.prefix, ":") ? "ipv6" : "ipv4") == family])
+    ]
+  }
 
   tag_slugs = { for t in data.netbox_tags.all.tags : t.tag_id => t.slug }
   vlan_tags = { for v in data.netbox_vlans.site.vlans : v.name => [for id in v.tag_ids : local.tag_slugs[id]] }

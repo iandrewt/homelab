@@ -12,12 +12,17 @@ data "netbox_vlans" "all" {
 
 data "netbox_devices" "all" {}
 
+data "netbox_locations" "all" {
+  limit = 10000
+}
+
 data "netbox_virtual_machines" "all" {}
 
 locals {
   # Prefixes and devices name their tags; VLANs and VMs give IDs
   tag_by_name = { for t in data.netbox_tags.all.tags : t.name => t.slug }
 
+  location_sites  = { for l in data.netbox_locations.all.locations : l.id => l.site_id }
   vlan_zones      = { for v in data.netbox_vlans.all.vlans : v.id => v.role }
   vlan_tags_by_id = { for v in data.netbox_vlans.all.vlans : v.id => [for id in v.tag_ids : local.tag_slugs[id]] }
 
@@ -26,9 +31,10 @@ locals {
       prefix = p.prefix
       family = strcontains(p.prefix, ":") ? "ipv6" : "ipv4"
       length = tonumber(split("/", p.prefix)[1])
-      site   = p.site_id
-      zone   = try(jsondecode(p.custom_fields.zone).id, lookup(local.vlan_zones, p.vlan_id, null))
-      tags   = setunion([for name in p.tags : local.tag_by_name[name]], lookup(local.vlan_tags_by_id, p.vlan_id, []))
+      # An AZ's prefix is scoped to its Location, which is at the site
+      site = p.site_id != 0 ? p.site_id : lookup(local.location_sites, tostring(p.location_id), 0)
+      zone = try(jsondecode(p.custom_fields.zone).id, lookup(local.vlan_zones, p.vlan_id, null))
+      tags = setunion([for name in p.tags : local.tag_by_name[name]], lookup(local.vlan_tags_by_id, p.vlan_id, []))
       audience = {
         zones = try([for z in jsondecode(p.custom_fields.audience) : z.id], [])
         tags  = try([for t in jsondecode(p.custom_fields.audience_tags) : t.slug], [])
