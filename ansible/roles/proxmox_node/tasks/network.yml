@@ -35,3 +35,21 @@
       nameserver {{ netbox_site.dns.recursor.ipv6 }}
       nameserver {{ netbox_site.dns.recursor.ipv4 }}
     mode: "0644"
+
+# UniFi draws a guest under its node when the neighbour it heard on the guest's port is a client
+# there: the bond's MAC, from the one member it treats as the LAG. lldpd takes a chassis only from
+# a physical interface, so it's named outright
+- name: Read the trunk's MAC
+  ansible.builtin.slurp:
+    src: /sys/class/net/{{ proxmox_node_lldp.chassis }}/address
+  register: proxmox_node_trunk_mac
+
+- name: Advertise the node on its trunk alone, by the trunk's MAC
+  ansible.builtin.copy:
+    dest: /etc/lldpd.d/homelab.conf
+    content: |
+      configure system chassisid {{ proxmox_node_trunk_mac.content | b64decode | trim }}
+      configure system interface pattern {{ proxmox_node_lldp.send }}
+      configure system bond-slave-src-mac-type zero
+    mode: "0644"
+  notify: Restart lldpd

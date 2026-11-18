@@ -12,6 +12,8 @@ proxmox_node_held_bridges: >-
       + interfaces | map(attribute='name') | select('in', netbox_site.vlans.values() | map(attribute='vnet') | select | list) | list)
      | unique | sort }}
 
+proxmox_node_lldp: "{{ interfaces | lldp_trunk }}"
+
 proxmox_node_bond:
   miimon: 100
   mode: 802.3ad

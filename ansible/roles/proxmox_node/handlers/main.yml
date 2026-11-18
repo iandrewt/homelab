@@ -18,3 +18,8 @@
     name: vnet-guard
     state: restarted
     daemon_reload: true
+
+- name: Restart lldpd
+  ansible.builtin.systemd_service:
+    name: lldpd
+    state: restarted
