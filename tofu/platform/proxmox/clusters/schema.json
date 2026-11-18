@@ -111,6 +111,35 @@
                 }
               }
             }
+          },
+          "backup": {
+            "description": "Its guests backed up, every pool under its own: a disk the tenant marks `backup = false` is left out.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "retention"
+            ],
+            "properties": {
+              "retention": {
+                "description": "Proxmox's prune options, applied after each run.",
+                "type": "object",
+                "minProperties": 1,
+                "propertyNames": {
+                  "enum": [
+                    "keep-last",
+                    "keep-hourly",
+                    "keep-daily",
+                    "keep-weekly",
+                    "keep-monthly",
+                    "keep-yearly"
+                  ]
+                },
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            }
           }
         }
       }
@@ -173,7 +202,7 @@
             "type": "boolean"
           },
           "tenants": {
-            "description": "zfspool only: a storage per tenant, `<id>-<tenant>` on `<pool>/<tenant>`, instead of one on the pool.",
+            "description": "A storage per tenant, `<id>-<tenant>`, instead of one: zfspool on `<pool>/<tenant>`, nfs on `<export>/<tenant>`.",
             "type": "boolean"
           },
           "nodes": {
@@ -304,41 +333,21 @@
       }
     },
     "backup": {
-      "description": "The one vzdump job, covering every guest on every node.",
+      "description": "When Platform backs up each tenant's guests: a vzdump job per pool, to the tenant's own split of `storage`.",
       "type": "object",
       "additionalProperties": false,
       "required": [
         "storage",
-        "schedule",
-        "retention"
+        "schedule"
       ],
       "properties": {
         "storage": {
-          "description": "An `nfs` key of `storages`, with `backup` in its content.",
+          "description": "An `nfs` key of `storages`, with `backup` in its content and `tenants`.",
           "type": "string"
         },
         "schedule": {
           "description": "systemd calendar event.",
           "type": "string"
-        },
-        "retention": {
-          "description": "Proxmox's prune options, applied after each run.",
-          "type": "object",
-          "minProperties": 1,
-          "propertyNames": {
-            "enum": [
-              "keep-last",
-              "keep-hourly",
-              "keep-daily",
-              "keep-weekly",
-              "keep-monthly",
-              "keep-yearly"
-            ]
-          },
-          "additionalProperties": {
-            "type": "integer",
-            "minimum": 1
-          }
         }
       }
     },

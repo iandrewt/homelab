@@ -52,6 +52,10 @@ locals {
     try(local.cluster.storages[local.disk_storage].tenants, false) ? "${local.disk_storage}-${tenant}" : local.disk_storage
   }
 
+  tenant_backup_storage = {
+    for tenant, grant in local.cluster.tenants : tenant => can(grant.backup) ? "${local.cluster.backup.storage}-${tenant}" : null
+  }
+
   # PVEPoolAdmin lets a tenant make its own workloads, as pools under this one
   tenant_identities = {
     for tenant, grant in local.cluster.tenants : "tenant-${tenant}" => {
@@ -76,6 +80,12 @@ locals {
           path    = "/storage/${local.cluster.image_storage}"
           role_id = "PVEDatastoreUser"
         },
+        ], [
+        # Restoring its own guests
+        for storage in compact([local.tenant_backup_storage[tenant]]) : {
+          path    = "/storage/${storage}"
+          role_id = "PVEDatastoreUser"
+        }
         ], [
         for vnet in try(grant.vnets, []) : {
           path    = "/sdn/zones/${local.cluster.site}/${vnet}"
@@ -231,6 +241,12 @@ resource "onepassword_item" "grant" {
       label = "disk storage"
       type  = "STRING"
       value = local.tenant_disk_storage[each.key]
+    }
+
+    field {
+      label = "backup storage"
+      type  = "STRING"
+      value = coalesce(local.tenant_backup_storage[each.key], "none")
     }
   }
 

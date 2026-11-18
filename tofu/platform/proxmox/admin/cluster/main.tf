@@ -113,36 +113,41 @@ resource "proxmox_storage_directory" "this" {
   shared  = false
 }
 
+locals {
+  # A storage marked `tenants` is one per tenant, on the tenant's own dataset
+  storages = { for split in flatten([
+    for id, s in local.cluster.storages : [
+      for tenant in try(s.tenants, false) ? keys(local.cluster.tenants) : [""] : {
+        id     = tenant == "" ? id : "${id}-${tenant}"
+        s      = s
+        suffix = tenant == "" ? "" : "/${tenant}"
+      }
+    ]
+  ]) : split.id => split }
+}
+
 resource "proxmox_storage_nfs" "this" {
-  for_each = { for id, s in local.cluster.storages : id => s if s.type == "nfs" }
+  for_each = { for id, split in local.storages : id => split if split.s.type == "nfs" }
 
   id      = each.key
-  server  = each.value.server
-  export  = each.value.export
-  content = each.value.content
-  options = try(each.value.options, null)
+  server  = each.value.s.server
+  export  = "${each.value.s.export}${each.value.suffix}"
+  content = each.value.s.content
+  options = try(each.value.s.options, null)
   nodes   = sort(keys(local.cluster.nodes))
 
   create_subdirs = true
 }
 
-locals {
-  zfs_storages = merge([
-    for id, s in local.cluster.storages : try(s.tenants, false) ? {
-      for tenant in keys(local.cluster.tenants) : "${id}-${tenant}" => merge(s, { pool = "${s.pool}/${tenant}" })
-    } : { (id) = s } if s.type == "zfspool"
-  ]...)
-}
-
 resource "proxmox_storage_zfspool" "this" {
-  for_each = local.zfs_storages
+  for_each = { for id, split in local.storages : id => split if split.s.type == "zfspool" }
 
   id       = each.key
-  zfs_pool = each.value.pool
-  nodes    = sort(try(each.value.nodes, keys(local.cluster.nodes)))
+  zfs_pool = "${each.value.s.pool}${each.value.suffix}"
+  nodes    = sort(try(each.value.s.nodes, keys(local.cluster.nodes)))
 
-  content        = each.value.content
-  thin_provision = try(each.value.thin_provision, true)
+  content        = each.value.s.content
+  thin_provision = try(each.value.s.thin_provision, true)
 }
 
 # --- Mappings ----------------------------------------------------------------------
@@ -166,16 +171,29 @@ resource "proxmox_hardware_mapping_pci" "this" {
 
 # --- Backup ------------------------------------------------------------------------
 
-resource "proxmox_backup_job" "this" {
-  id      = "guests"
-  comment = "Every guest. Managed by OpenTofu."
+data "proxmox_virtual_environment_pools" "all" {}
 
-  all      = true
-  storage  = proxmox_storage_nfs.this[local.cluster.backup.storage].id
+locals {
+  # vzdump takes a pool's own members, never its sub-pools', and a tenant makes its workloads as
+  # pools under its own: so a job per pool, and a pool a tenant makes waits for the next apply
+  backed_up = {
+    for pool in data.proxmox_virtual_environment_pools.all.pool_ids : pool => split("/", pool)[0]
+    if can(local.cluster.tenants[split("/", pool)[0]].backup)
+  }
+}
+
+resource "proxmox_backup_job" "this" {
+  for_each = local.backed_up
+
+  id      = "pool-${replace(each.key, "/", "-")}"
+  comment = "The ${each.key} pool's guests. Managed by OpenTofu."
+
+  pool     = each.key
+  storage  = proxmox_storage_nfs.this["${local.cluster.backup.storage}-${each.value}"].id
   schedule = local.cluster.backup.schedule
 
   mode           = "snapshot"
   compress       = "zstd"
   notes_template = "{{guestname}}"
-  prune_backups  = { for k, v in local.cluster.backup.retention : k => tostring(v) }
+  prune_backups  = { for k, v in local.cluster.tenants[each.value].backup.retention : k => tostring(v) }
 }

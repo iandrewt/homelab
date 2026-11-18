@@ -9,6 +9,8 @@ resource "proxmox_virtual_environment_role" "tofu_cluster" {
     "Mapping.Modify", # hardware mappings
     "Mapping.Audit",
     "SDN.Allocate", # the VLAN zone and its VNets
+    "Pool.Audit",   # which pools to back up
+    "VM.Backup",    # a job per pool
   ]
 }
 

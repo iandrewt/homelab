@@ -28,11 +28,13 @@ storages:
     options: vers=4.2
     content: [import, iso, vztmpl]
 
+  # A storage per tenant, on <export>/<tenant>: mimir exports each dataset, with its quota
   backups:
     type: nfs
     server: san.alf-pve-01.alfheim.infra.titmuss.zone
     export: /mnt/tank/backups/proxmox
     options: vers=4.2
+    tenants: true
     content: [backup]
 
   # A storage per tenant, on tank/<tenant>: Ansible makes the dataset and sets its quota
@@ -53,8 +55,6 @@ guest_defaults:
 backup:
   storage: backups
   schedule: sat 02:00
-  retention:
-    keep-weekly: 4
 
 # Their pools are the host's: Ansible's, in each node's host_vars
 nodes:
@@ -76,7 +76,13 @@ mappings:
 tenants:
   network:
     vnets: [services]
+    backup:
+      retention:
+        keep-weekly: 4
 
   platform:
     vnets: [shared, shrdsan]
     mappings: [arc-a40]
+    backup:
+      retention:
+        keep-weekly: 4

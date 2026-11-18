@@ -502,7 +502,7 @@ secrets are declared in each tree's `inventory/onepassword.yml` and resolved by
   and the cell's own to the cluster file's `onepassword_vault`.
 - **A tenant knows a cell only by what Platform vends to its vault**, never Platform's files:
   `Proxmox API Token - <cell> tenant-<team>`, read ephemerally; `Proxmox Grant - <cell>` (the
-  endpoint, `insecure`, its disk storage) from `admin/access`; and `Proxmox Image Library - <site>`
+  endpoint, `insecure`, its disk and backup storages) from `admin/access`; and `Proxmox Image Library - <site>`
   (each image's volume ID, once downloaded) from `admin/images`. Neither holds a secret, so a layer
   reads them into state. Which cells it uses is its own file, since a provider's `for_each` is static.
 - **An item is titled `<Subject> <Kind> - <variable>`** in Title Case, except what's lowercase
