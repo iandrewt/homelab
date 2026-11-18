@@ -338,7 +338,9 @@ enablement and configuration are the machine's. It may hold a role's own files (
 `extensions.toml`), the anycast loop and the resolvers' health check, which a package-managed host
 takes from the role. Each is a disabled
 sysupdate component in ymir, which a machine enables, so a new extension reaches machines with the
-image's next release; ymir merges only images db's key signed.
+image's next release; ymir merges only images db's key signed. A newer one takes over in the machine's reboot
+window (`extensions-refresh`, before sysupdate's reboot), which `try-restart`s only what it ships, never on
+sysupdate's own notification, which would restart them whenever an update lands.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage definitions, access and guests are tofu's; the node's interfaces, resolvers,

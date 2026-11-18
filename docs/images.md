@@ -25,7 +25,8 @@ qcow2 is beside its update files, `<image>/<channel>/<image>_<version>.qcow2`, f
 start from, until its channel keeps five newer.
 `systemd-sysupdate-update.timer` installs the newest of the image and of every component the machine
 has enabled, and `systemd-sysupdate-reboot.timer` reboots into a new version of the image daily at
-04:10 UTC, which a drop-in moves to a window of its own. A machine
+04:10 UTC, which a drop-in moves to a window of its own. Without a new image, the window takes over any
+extension newer than the one merged instead, restarting only the services it ships that were running. A machine
 following canary says so in `/etc/sysupdate.d/`, a copy of each `/usr/lib/sysupdate.d/*.transfer`
 with `stable` in its `Path=` changed to `canary`.
 

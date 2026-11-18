@@ -1,0 +1,24 @@
+#!/bin/sh
+# In the reboot window, not on sysupdate's own notification, which would restart them whenever an update lands.
+# A newer image reboots instead, and merges the newest of each then
+set -eu
+if /usr/lib/systemd/systemd-sysupdate pending >/dev/null 2>&1; then exit 0; fi
+changed=
+for dir in /var/lib/extensions/*.raw.v; do
+  [ -d "$dir" ] || continue
+  name=${dir##*/}
+  name=${name%.raw.v}
+  newest=$(ls "$dir" | sed -n "s/^${name}_\(.*\)\.raw\$/\1/p" | sort -V | tail -n 1)
+  merged=$(sed -n 's/^SYSEXT_VERSION_ID=//p' "/usr/lib/extension-release.d/extension-release.$name" 2>/dev/null || true)
+  if [ -n "$newest" ] && [ "$newest" != "$merged" ]; then changed="$changed $dir/${name}_$newest.raw"; fi
+done
+[ -n "$changed" ] || exit 0
+echo "refreshing for$changed"
+systemd-sysext refresh
+systemd-sysusers
+systemctl daemon-reload
+for image in $changed; do
+  systemd-dissect --list "$image" 2>/dev/null \
+    | sed -n 's|^usr/lib/systemd/system/\([^/@]*\.service\)$|\1|p' \
+    | xargs -r systemctl try-restart
+done

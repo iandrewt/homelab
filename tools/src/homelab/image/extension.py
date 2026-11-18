@@ -450,6 +450,7 @@ def _boot(image: Image, out: Path, disk: Path, names: list[str], built: dict[str
                 again = _play(vm, playbook, extra, out / f"{playbook.stem}.second.log")
                 failures += _check(f"{playbook.name} changes nothing run again", again == 0,
                                    f"{again} changed: see {out / f'{playbook.stem}.second.log'}")
+        failures += _refreshed(vm, names, built)
     finally:
         vm.remove()
         builder.run_in({out: "/out"}, "sh", "-c", "cp /out/test/serial.log /out/extensions.serial.log; rm -rf /out/test")
@@ -473,6 +474,30 @@ def _play(vm: Vm, playbook: Path, extra: dict, log: Path) -> int | None:
              "--extra-vars", json.dumps(extra)], env=env, stdout=stream, stderr=subprocess.STDOUT, check=False)
     recap = re.search(r"^build\s*:.*changed=(\d+)", log.read_text(), re.MULTILINE)
     return int(recap[1]) if result.returncode == 0 and recap else None
+
+
+def _refreshed(vm: Vm, names: list[str], built: dict[str, Path]) -> list[str]:
+    """A newer version of each, installed, taken over in the reboot window: what ran restarts, and nothing starts"""
+    units = {}
+    for name in names:
+        file = built[name].name
+        vm.ssh(f"sudo cp /var/lib/extensions/{name}.raw.v/{file} /var/lib/extensions/{name}.raw.v/{file[:-4]}.1.raw")
+        units.update(dict(line.split(maxsplit=1) for line in vm.ssh(
+            f"sudo systemd-dissect --list /var/lib/extensions/{name}.raw.v/{file} 2>/dev/null"
+            " | sed -n 's|^usr/lib/systemd/system/\\([^/@]*\\.service\\)$|\\1|p'"
+            " | while read -r unit; do echo \"$unit $(systemctl show -p MainPID --value \"$unit\")\"; done"
+        ).splitlines()))
+    vm.ssh("sudo systemctl start systemd-sysupdate-reboot.service")
+    log = vm.ssh("sudo journalctl -b -u systemd-sysupdate-reboot.service --no-pager -o cat")
+    failed = _check("the reboot window takes over a newer extension", "refreshing for" in log, log)
+    after = {unit: vm.ssh(f"systemctl show -p MainPID --value {unit}").strip() for unit in units}
+    failed += _check("what ran restarted on it, and what didn't stayed off",
+                     all((pid == "0") == (after[unit] == "0") and (pid == "0" or after[unit] != pid)
+                         for unit, pid in units.items()),
+                     "\n".join(f"{unit}: {pid} to {after[unit]}" for unit, pid in units.items()))
+    state = vm.ssh("systemctl is-system-running || true").strip()
+    return failed + _check("it's running after the refresh, with no unit failed", state == "running",
+                           state + "\n" + vm.ssh("systemctl --failed --no-legend --plain || true"))
 
 
 def _extension(vm: Vm, name: str, file: str, merged: str) -> list[str]:
