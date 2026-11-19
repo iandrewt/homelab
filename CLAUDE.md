@@ -325,7 +325,7 @@ forky. Whatever systemd reads before tmpfiles restores `/etc` on first boot move
 firmware loads U-Boot, from experimental since boot counting renames a file and 2025.07 is the first
 whose EFI can, and U-Boot's EFI loads systemd-boot: no TPM so nothing encrypted, no Secure Boot, its
 initrd's modules listed so two UKIs fit the ESP, its console the mini UART. `card.py` lays a card out
-whole before first boot from the image's own repart definitions, as `bootstrap pi` will, so nothing
+whole before first boot from the image's own repart definitions, as `bootstrap pi` does, so nothing
 repartitions it; its test boots qemu's raspi3b, which has no network, and reads its checks off the
 console, as the extension test does with each extension laid in its `/var`, so no playbook runs there.
 
@@ -362,10 +362,12 @@ carry 9216 on every VLAN (UniFi's jumbo frames are all or nothing), so nothing i
 VLAN, and a guest's NIC takes its VNet bridge's (`mtu = 1`). Between hosts on one VLAN at
 different sizes, TCP's MSS settles it; across the router, PMTUD, so ICMP errors pass as related.
 
-Raspberry Pi OS is brought into line by `bootstrap pi` before first boot: its NetworkManager
-owns `/etc/netplan` (deleting every other file there) and netplan's NM backend drops
-`dhcp4-overrides` and `ra-overrides`. So the bake purges NetworkManager, installs
-systemd-resolved, and shadows `rpi-cloud-init-mods`' NM default with a file of the same name.
+**`bootstrap pi` writes a card**: the newest `ymir-arm64-raspi3` in a channel (`IMAGES_UPDATE_URL`'s), its
+signed sums checked against `images/secure-boot/updates.pgp` by fingerprint, laid out by `card.py` at the
+card's size with the hybrid MBR the Pi's boot ROM reads, its identity as ESP credentials: a machine ID from
+the board's serial in NetBox (a reflash keeps it, a new board is a new machine), the hostname, the key, and
+networkd's own unit, a resolver's gateways its resolvers. ratatoskr runs Raspberry Pi OS until it's
+reflashed with it; the `raspberry_pi_os` role and group go then.
 
 ## cloud-init seeds
 
@@ -401,8 +403,6 @@ What we write ourselves, a Pi's or an installer's:
   and `/var` is bound to the ID; the hostname, the key, its network. It masks `seed-credentials`.
 - A mutable image keeps its host keys (`ssh_deletekeys: false`): Proxmox's instance ID changes with a
   VM's keys or network, and NetBox pins the keys.
-- Raspberry Pi OS needs `users: [default]` in vendor-data, or `cc_ssh` drops the keys silently;
-  `pi` already exists with `nologin`, so `runcmd` fixes its shell.
 
 ## Identity
 

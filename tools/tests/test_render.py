@@ -95,6 +95,9 @@ def test_a_resolver_asks_its_gateway_never_the_vip(snapshot):
     assert resolver["nameservers"]["addresses"] == ["10.0.30.1", "2001:db8:1:1300::1"]
     assert resolver["dhcp4-overrides"] == {"use-domains": True, "use-dns": False}
     assert resolver["ra-overrides"] == {"use-dns": False}
+    unit = seed.network_unit(site, resolver=site["dns"]["servers"]["ratatoskr"])
+    assert "DNS=10.0.30.1\nDNS=2001:db8:1:1300::1\n" in unit
+    assert unit.count("UseDNS=no") == 3
 
 
 @pytest.mark.skipif(shutil.which("vtysh") is None, reason="needs FRR's vtysh")

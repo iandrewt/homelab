@@ -15,7 +15,7 @@ def test_every_entry_point_renders_from_the_model(snapshot, monkeypatch, capsys)
     assert yaml.safe_load(capsys.readouterr().out)["network"]
 
     site = load(snapshot)["sites"][SITE]
-    assert pi.documents(site, "ratatoskr", "ssh-ed25519 AAAA", None)["network-config"]
+    assert len(pi.machine_id(snapshot, SITE, "ratatoskr")) == 32
 
     facts = {"site": SITE, "fqdn": "yggdrasil.one.test", "cidr": "2001:db8:1:1300::5/64",
              "mac": "AA:BB:CC:DD:EE:FF", "wwn": "0x5000", "serial": "S1"}

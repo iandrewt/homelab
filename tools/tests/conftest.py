@@ -110,13 +110,14 @@ def _id(name: str) -> int:
     return zlib.crc32(name.encode())
 
 
-def device(name, role, site_slug=SITE, tags=(), role_name=None, primary_ip6=None, id=None) -> dict:
+def device(name, role, site_slug=SITE, tags=(), role_name=None, primary_ip6=None, id=None, serial="") -> dict:
     return {
         "id": id or _id(name),
         "device_type": {"model": "test"},
         "name": name,
         "primary_ip6": primary_ip6 and {"address": primary_ip6},
         "role": {"slug": role, "name": role_name or role},
+        "serial": serial,
         "site": _site_ref(site_slug),
         "tags": [{"slug": t} for t in tags],
     }
@@ -226,7 +227,7 @@ def snapshot() -> netbox.Snapshot:
             record("one.test", "dns.one.test.", "A", "10.239.0.53"),
         ],
         devices=[
-            device("ratatoskr", "dns-resolver", tags=["dns-primary"]),
+            device("ratatoskr", "dns-resolver", tags=["dns-primary"], serial="00000000a1b2c3d4"),
             device("udm", "router-firewall", role_name="Router Firewall"),
             device("munin", "dns-resolver", OTHER),
             device("udm-two", "router-firewall", OTHER, role_name="Router Firewall"),

@@ -24,7 +24,7 @@ for p in json.load(sys.stdin)["partitiontable"]["partitions"]:
 # stays, and a first boot formats nothing
 LAY_OUT = PARTITION + """
 set -eu
-card=$1 size=$2 seed=$3 architecture=$4 usr=$5
+card=$1 size=$2 seed=$3 architecture=$4 usr=$5 esp=$6
 truncate -s "$size" "$card"
 sfdisk --quiet --relocate gpt-bak-std "$card"
 set -- $(part "$card" "$usr")
@@ -36,7 +36,20 @@ if [ -d /var-tree ]; then
   printf 'CopyFiles=/var-tree:/\n' >> /tmp/usr/lib/repart.d/60-var.conf
 fi
 systemd-repart --dry-run=no --offline=yes --no-pager --architecture="$architecture" --seed="$seed" \
-  --copy-source=/ --definitions=/tmp/usr/lib/repart.d "$card" >/dev/null
+  --copy-source=/ --definitions=/tmp/usr/lib/repart.d "$card" >/dev/null 2>/tmp/repart.log \
+  || { cat /tmp/repart.log >&2; exit 1; }
+# A hybrid MBR, since the Pi's boot ROM reads nothing else: the ESP as FAT, the one partition it looks for, then
+# the protective entry from LBA 1 that Linux and U-Boot take as a valid GPT's
+set -- $(part "$card" "$esp")
+python3 - "$card" "$1" "$2" <<'MBR'
+import struct, sys
+card, start, size = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+chs = bytes([0xFE, 0xFF, 0xFF])
+entry = lambda kind, first, count: struct.pack("<B3sB3sII", 0, chs, kind, chs, first, count)
+with open(card, "r+b") as f:
+    f.seek(446)
+    f.write(entry(0x0C, start, size) + entry(0xEE, 1, start - 1) + bytes(32) + bytes([0x55, 0xAA]))
+MBR
 """
 
 # The null key: nothing on a Pi is measured, so nothing could seal them, and none is a secret
@@ -57,7 +70,7 @@ done
 def lay_out(card: Path, size: str, machine_id: str, architecture: str, var: Path | None = None) -> None:
     """The card at its size, with every partition its image's definitions name, and var's tree in /var."""
     builder.run_in({card.parent: "/card", **({var: "/var-tree"} if var else {})}, "sh", "-c", LAY_OUT, "lay-out",
-                   f"/card/{card.name}", size, machine_id, architecture, USR[architecture])
+                   f"/card/{card.name}", size, machine_id, architecture, USR[architecture], ESP)
 
 
 def credentials(card: Path, credentials: Path) -> None:

@@ -1,4 +1,5 @@
-"""Seed documents: cloud-init's, for hosts installed from media."""
+"""Seed documents: cloud-init's, for hosts installed from media, and networkd's, for an image that reads
+credentials."""
 
 import uuid
 
@@ -34,13 +35,24 @@ def network_config(site, *, resolver=None) -> str:
 
     overrides = {"use-domains": True}
     if resolver:
-        vlan = site["vlans"][resolver["vlan"]]
-        ethernet["nameservers"] = {
-            "addresses": [g for g in (vlan["gateway_ipv4"], vlan["gateway_ipv6"]) if g]
-        }
+        ethernet["nameservers"] = {"addresses": _gateways(site, resolver)}
         overrides["use-dns"] = False
         ethernet["ra-overrides"] = {"use-dns": False}
     ethernet["dhcp4-overrides"] = dict(overrides)
     ethernet["dhcp6-overrides"] = dict(overrides)
 
     return _document({"network": {"version": 2, "ethernets": {"primary": ethernet}}})
+
+
+def _gateways(site, resolver) -> list[str]:
+    vlan = site["vlans"][resolver["vlan"]]
+    return [g for g in (vlan["gateway_ipv4"], vlan["gateway_ipv6"]) if g]
+
+
+def network_unit(site, *, resolver=None) -> str:
+    """The same network as networkd's own .network, for an image that reads no network-config."""
+    unit = "[Match]\nType=ether\nKind=!*\n\n[Network]\nDHCP=yes\nEmitLLDP=yes\nLinkLocalAddressing=ipv6\nUseDomains=yes\n"
+    if resolver:
+        unit += "".join(f"DNS={g}\n" for g in _gateways(site, resolver))
+        unit += "\n[DHCPv4]\nUseDNS=no\n\n[DHCPv6]\nUseDNS=no\n\n[IPv6AcceptRA]\nUseDNS=no\n"
+    return unit
