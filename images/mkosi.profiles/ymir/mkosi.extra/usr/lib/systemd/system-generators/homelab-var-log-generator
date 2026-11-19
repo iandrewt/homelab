@@ -1,6 +1,6 @@
 #!/bin/sh
 # Mounts /var/log and /var/log/audit as systemd-gpt-auto-generator does /var: from root's disk alone, each found
-# by a type of our own and a UUID hashed from it and the machine-id, unlocked by the TPM
+# by a type of our own and a UUID hashed from it and the machine-id, unlocked by the TPM where it's encrypted
 set -eu
 [ -e /etc/initrd-release ] && exit 0
 out=$1
@@ -21,7 +21,8 @@ partition() { # type, where
     crypt=systemd-cryptsetup@$(systemd-escape "$name").service
     mount=$(systemd-escape -p --suffix=mount "$2")
     dev=$(systemd-escape -p --suffix=device "$device")
-    cat > "$out/$crypt" <<UNIT
+    if [ "$(blkid -p -o value -s TYPE "$part")" = crypto_LUKS ]; then
+      cat > "$out/$crypt" <<UNIT
 [Unit]
 Description=Cryptography Setup for $2
 DefaultDependencies=no
@@ -36,14 +37,18 @@ RemainAfterExit=yes
 ExecStart=/usr/lib/systemd/systemd-cryptsetup attach $name $device - tpm2-device=auto,headless
 ExecStop=/usr/lib/systemd/systemd-cryptsetup detach $name
 UNIT
+      what=/dev/mapper/$name needs=$crypt
+    else
+      what=$device needs=$dev
+    fi
     cat > "$out/$mount" <<UNIT
 [Unit]
 Description=$2
-Requires=$crypt
-After=$crypt
+Requires=$needs
+After=$needs
 
 [Mount]
-What=/dev/mapper/$name
+What=$what
 Where=$2
 Type=ext4
 Options=nodev,nosuid,noexec

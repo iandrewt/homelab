@@ -5,16 +5,21 @@ import os
 import re
 import shutil
 import sys
+import uuid
 from pathlib import Path
 
 from ..bootstrap.shell import BootstrapError, run, say
-from . import build, builder, images as catalog, signing
+from . import build, builder, card, images as catalog, signing
 from .images import Image
 from .vm import LEASE_DOMAIN, Vm
 
 DISK = "16G"
 # The size an image-based VM starts at, which its owner may grow
 IMAGE_BASED_DISK = "4G"
+# A power of two, as qemu's SD card must be, with room for the B slot and 1G of /var
+CARD_SIZE = "8G"
+# Seconds a card's boot may take: emulated, the whole of it
+CARD_PATIENCE = 1800
 GROWN = "8G"
 
 # The hardening a boot brings up, to compare one boot's with the next
@@ -49,6 +54,53 @@ ln -s ../probe.service $x/systemd/system/multi-user.target.wants/probe.service
 """
 # A seed's own resolvers, as linux-vm pins a resolver's
 SEED_NAMESERVERS = ["10.0.2.3"]
+# A card's checks, run once it's booted and its counted entry blessed, reported on the console it has instead of a
+# network: a line each, then the end
+CARD_CHECKS = """
+check() { if sh -c "$2" >/dev/null 2>&1; then echo "homelab-check ok $1"; else echo "homelab-check FAIL $1"; fi; }
+check "its hostname is the credential's" '[ "$(hostname)" = test ]'
+check "its machine ID is the credential's" '[ "$(cat /etc/machine-id)" = @MACHINE_ID@ ]'
+check "no unit failed" '[ -z "$(systemctl --failed --no-legend --plain)" ]'
+check "/usr is verity's, read-only" 'findmnt -rno SOURCE,OPTIONS /usr | grep -q "^/dev/mapper/usr ro"'
+check "/var has nodev,nosuid" 'o=$(findmnt -rno OPTIONS /var); case $o in *nodev*) ;; *) exit 1;; esac; case $o in *nosuid*) ;; *) exit 1;; esac'
+check "/var/log and its audit are noexec" 'findmnt -rno OPTIONS /var/log | grep -q noexec && findmnt -rno OPTIONS /var/log/audit | grep -q noexec'
+check "/var's partition is bound to the machine ID" '[ "$(blkid -p -o value -s PART_ENTRY_UUID "$(findmnt -nvo SOURCE /var)")" = "$(systemd-id128 -u --app-specific=4d21b016-b534-45c2-a9fb-5c16e091fd2d machine-id)" ]'
+check "/etc is the image's, under the machine's own" 'systemd-confext status | grep -q base'
+check "the journal is on disk" 'journalctl --header -n0 | grep -q /var/log/journal/'
+check "the release file names the image" 'grep -qx IMAGE_ID=@IMAGE@ /usr/lib/homelab/image-release'
+check "the counted entry was blessed" '[ "$(/usr/lib/systemd/systemd-bless-boot status)" = good ] && ls "$(bootctl -p)/EFI/Linux" | grep -q "^@IMAGE@_.*[.]1[.]efi$"'
+echo homelab-checks-end
+"""
+CARD_CHECKS_UNIT = """[Unit]
+After=multi-user.target boot-complete.target systemd-bless-boot.service
+
+[Service]
+Type=oneshot
+StandardOutput=journal+console
+ImportCredential=homelab.checks
+ExecStart=/bin/sh ${CREDENTIALS_DIRECTORY}/homelab.checks
+"""
+# Booted by its own U-Boot, with a counted next version beside the first as sysupdate installs one, until the
+# checks report on the mini UART, qemu's second serial port
+CARD_BOOT = card.PARTITION + """
+set -eu
+cd /work
+set -- $(part card.raw "$1")
+at="card.raw@@$(($1 * 512))"
+mcopy -o -i "$at" ::u-boot.bin ::bcm2710-rpi-3-b.dtb .
+uki=$(mdir -b -i "$at" ::EFI/Linux | head -n 1)
+mcopy -o -i "$at" "$uki" next.efi
+mcopy -o -i "$at" next.efi "::EFI/Linux/$(basename "$uki" .efi).1+3.efi"
+rm next.efi
+qemu-system-aarch64 -M raspi3b -m 1G -kernel u-boot.bin -dtb bcm2710-rpi-3-b.dtb -drive file=card.raw,if=sd,format=raw \
+  -display none -monitor none -serial null -serial file:serial.log &
+qemu=$!
+for _ in $(seq "$2"); do
+  if grep -aq homelab-checks-end serial.log 2>/dev/null || ! kill -0 "$qemu" 2>/dev/null; then break; fi
+  sleep 5
+done
+kill "$qemu" 2>/dev/null || true
+"""
 # What differs between any two boots
 VOLATILE = re.compile(r"random|_seed|boot_id|ns_last_pid|fs\.(file|inode|dentry|quota)|tcp_fastopen_key"
                       r"|user_reserve_kbytes|admin_reserve_kbytes|nr_inodes=|pipe_ino=|fd=|pgrp=|stat_"
@@ -78,6 +130,8 @@ def _test(args) -> int:
     if not image.is_file():
         raise BootstrapError(f"no image at {image}: `homelab image build {base.name}`")
     out.mkdir(parents=True, exist_ok=True)
+    if base.boot.board:
+        return _report(args.image, _card(base, image, out))
     if base.image_based:
         return _report(args.image, _image_based(images, base, image, out, args.sign))
 
@@ -139,6 +193,32 @@ def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -
             builder.run_in({out: "/out"}, "sh", "-c", f"cp /out/test/serial.log /out/{boot}.serial.log; rm -rf /out/test")
     return failures + _check("each VM has its own host key and machine ID", identities[0] != identities[1],
                              f"{identities[0]} vs {identities[1]}")
+
+
+def _card(base: Image, image: Path, out: Path) -> list[str]:
+    """A card as `bootstrap pi` writes one, booted on the board qemu emulates, its checks reported on its console."""
+    work = _fresh(out)
+    machine_id = uuid.uuid4().hex
+    credentials = work / "credentials"
+    credentials.mkdir()
+    (credentials / "system.machine_id").write_text(machine_id)
+    (credentials / "system.hostname").write_text("test")
+    (credentials / "homelab.checks").write_text(CARD_CHECKS.replace("@MACHINE_ID@", machine_id)
+                                                .replace("@IMAGE@", base.name))
+    (credentials / "systemd.extra-unit.homelab-checks.service").write_text(CARD_CHECKS_UNIT)
+    (credentials / "systemd.unit-dropin.multi-user.target").write_text("[Unit]\nWants=homelab-checks.service\n")
+    builder.run_in({image.parent: "/image:ro", work: "/work"}, "cp", "--sparse=always", f"/image/{image.name}",
+                   "/work/card.raw")
+    card.lay_out(work / "card.raw", CARD_SIZE, machine_id, base.architecture)
+    card.credentials(work / "card.raw", credentials)
+    say(f"booting it on qemu's {base.boot.board}")
+    builder.run_in({work: "/work"}, "sh", "-c", CARD_BOOT, "boot", card.ESP, str(CARD_PATIENCE // 5))
+    log = (work / "serial.log").read_text(errors="replace")
+    builder.run_in({out: "/out"}, "sh", "-c", "cp /out/test/serial.log /out/first.serial.log; rm -rf /out/test")
+    results = re.findall(r"homelab-check (ok|FAIL) (.*)", log)
+    failures = [f for verdict, what in results for f in _check(what.strip(), verdict == "ok", "")]
+    return failures + _check("the checks ran to their end", "homelab-checks-end" in log and bool(results),
+                             f"see {out / 'first.serial.log'}")
 
 
 def _fresh(out: Path) -> Path:

@@ -1,0 +1,9 @@
+# U-Boot from experimental, and nothing else: 2025.07 is the first whose EFI renames a file, which
+# systemd-boot's boot counting needs, and no suite has one yet
+Package: *
+Pin: release a=experimental
+Pin-Priority: -1
+
+Package: u-boot-rpi
+Pin: release a=experimental
+Pin-Priority: 500

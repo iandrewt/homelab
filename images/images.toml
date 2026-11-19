@@ -32,3 +32,14 @@ cloud_init = false
 format = "qcow2"
 # Its disks are sealed to one
 tpm = true
+
+[ymir-arm64-raspi3]
+profiles = ["ymir", "raspi3"]
+architecture = "arm64"
+# By the U-Boot on its card, as the Pi's firmware loads it: qemu's raspi3b has no firmware of its own
+firmware = false
+board = "raspi3b"
+# Credentials on its ESP, which systemd-boot hands every stage
+seed = "credentials"
+cloud_init = false
+format = "raw"

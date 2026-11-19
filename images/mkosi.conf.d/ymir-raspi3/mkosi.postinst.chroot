@@ -1,0 +1,13 @@
+#!/bin/sh
+# What the Pi's firmware reads from the ESP, its one FAT partition: its blobs, the board's device tree,
+# and U-Boot in place of a kernel
+set -eu
+cp /usr/lib/raspi-firmware/bootcode.bin /usr/lib/raspi-firmware/start.elf /usr/lib/raspi-firmware/fixup.dat /efi/
+cp -r /usr/lib/raspi-firmware/overlays /efi/
+cp /usr/lib/linux-image-*/broadcom/bcm2837-rpi-3-b.dtb /efi/bcm2710-rpi-3-b.dtb
+cp /usr/lib/u-boot/rpi_arm64/u-boot.bin /efi/
+# No TPM to seal to: verity catches a rotting card, and nothing here is kept from whoever holds it
+sed -i '/^Encrypt=/d' /usr/lib/repart.d/*.conf
+# Its identity comes as credentials on the ESP, which systemd-boot hands to every stage: no seed drive
+ln -sfn /dev/null /usr/lib/systemd/system/seed-credentials.service
+rm -f /usr/lib/systemd/system/sysinit.target.wants/seed-credentials.service

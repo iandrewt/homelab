@@ -97,7 +97,7 @@ jobs:
           # What the resolver tests run on: their roles, what a ymir host takes, and ymir and its extensions
           resolvers_read = re.compile(r"ansible/(roles/(frr_bgp|powerdns_resolver)/|tests/|baseline"
                                       r"|collections/ansible_collections/homelab/linux/roles/(extensions|host|host_firewall)/)"
-                                      r"|images/(extensions\.|vendors/|mkosi\.conf$|mkosi\.conf\.d/(debian|packages|ymir)"
+                                      r"|images/(extensions\.|vendors/|mkosi\.conf$|mkosi\.conf\.d/(debian|packages|ymir-vm)"
                                       r"|mkosi\.profiles/(ymir|vm|%s)/)"
                                       r"|tools/src/homelab/image/|\.github/workflows/images\.yml$"
                                       % "|".join(map(re.escape, [*extensions, "sysext"])))

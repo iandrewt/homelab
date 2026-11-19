@@ -7,8 +7,9 @@ of your own from one.
 | Image | For | Kernel | Boots through | Its seed |
 | --- | --- | --- | --- | --- |
 | [`debian-13-amd64-vm`](../images/mkosi.conf.d/mutable-vm) | a VM on Proxmox | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys | a drive labelled `cidata` |
-| [`debian-13-raspi3`](../images/mkosi.conf.d/mutable-raspi3.conf) | a Raspberry Pi 3B | Debian's arm64 kernel | `raspi-firmware` | its own partition, labelled `CIDATA` |
+| [`debian-13-raspi3`](../images/mkosi.conf.d/mutable-raspi3) | a Raspberry Pi 3B | Debian's arm64 kernel | `raspi-firmware` | its own partition, labelled `CIDATA` |
 | [`ymir-amd64-vm`](../images/mkosi.conf.d/ymir-vm.conf) | a Platform appliance VM | Debian's cloud kernel | UEFI, Secure Boot with Platform's keys, from a signed UKI | Proxmox's cloud-init drive, which it reads itself |
+| [`ymir-arm64-raspi3`](../images/mkosi.conf.d/ymir-raspi3) | a Platform appliance on a Raspberry Pi 3B | Debian's arm64 kernel | its firmware, then U-Boot's EFI, then the same UKI chain, without Secure Boot | credentials on its ESP |
 
 **`ymir-amd64-vm` is image-based**: its `/usr`, and the `/etc` it starts from, are one signed,
 verity-checked image, updated whole and A/B by systemd-sysupdate, rolled back if a version can't
@@ -36,8 +37,21 @@ itself: the user-data's `hostname` names it, unless it has named itself in `/etc
 network-config names becomes networkd's own `50-seed-<name>.network`, matched by MAC, from the first
 boot: DHCPv4 or a static address, SLAAC, and the drive's nameservers in place of the lease's, keeping
 the lease's search domains. Proxmox gives a VM that names no nameservers its node's. A host's netplan
-sorts before the seed's units, and a NIC the drive doesn't name takes DHCPv4 and SLAAC. The rest of
-this page is the package-managed images', but for [its system extensions](#system-extensions).
+sorts before the seed's units, and a NIC the drive doesn't name takes DHCPv4 and SLAAC.
+
+**On a Pi, `ymir-arm64-raspi3`, its identity is credentials on the ESP**, under `/loader/credentials/`,
+which systemd-boot hands to the initrd and the system alike: `system.machine_id` (a Pi has no firmware
+UUID systemd will take, so the card carries one, and a reflash with the same keeps the machine),
+`system.hostname`, `ssh.authorized_keys.debian`, and a `network.network.<name>` if it wants more than
+DHCPv4 and SLAAC. Each is `systemd-creds encrypt --with-key=null`: nothing on a Pi is measured, so
+nothing could seal them, and none is a secret. A card is laid out whole before its first boot, every
+partition its image's own `/usr/lib/repart.d` names, so nothing repartitions it at boot. Its firmware
+loads U-Boot (from experimental: 2025.07 is the first whose EFI can rename the file boot counting
+counts with), whose EFI loads systemd-boot and the UKI. There's no TPM, so nothing is encrypted, and no
+Secure Boot: verity catches a rotting card, not a swapped one. Its console is the mini UART, `ttyS1`,
+and its Wi-Fi and Bluetooth drivers never load.
+
+The rest of this page is the package-managed images', but for [its system extensions](#system-extensions).
 
 ## System extensions
 
@@ -119,7 +133,7 @@ commit says; its `.packages` lists them. Installed, its apt is plain `deb.debian
 
 Its disk is laid out for CIS, the same on every image: on GPT by repart's
 [definitions](../images/mkosi.conf.d/mutable-vm/mkosi.extra/usr/lib/repart.d), and on a Pi's MBR by
-its [layout](../images/mkosi.profiles/raspi3/layout).
+its [layout](../images/mkosi.conf.d/mutable-raspi3/layout).
 
 | Mount | Size | Options |
 | --- | --- | --- |

@@ -19,6 +19,8 @@ sed -i '/^blacklist overlay$/d' /etc/modprobe.d/blacklist.conf
 
 # Where mkosi takes the kernel it builds the UKI from
 for k in /boot/vmlinuz-*; do cp "$k" "/usr/lib/modules/${k#/boot/vmlinuz-}/vmlinuz"; done
+# The UKI carries them, and the ESP holds /boot whole
+rm -f /boot/vmlinuz-* /boot/initrd.img-* /boot/System.map-* /boot/config-*
 
 # Nobody reads these on an appliance; each package's licence stays, since the image is distributed
 find /usr/share/doc -mindepth 1 ! -name copyright ! -type d -delete

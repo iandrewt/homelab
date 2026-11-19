@@ -90,7 +90,7 @@ def load(images: Path, name: str) -> Image:
                           if t["Source"].startswith("/images/")),
         boot=Boot(architecture=entry["architecture"], firmware=entry["firmware"], seed=entry["seed"],
                   cloud_init=entry.get("cloud_init", True), cmdline=entry.get("cmdline", ""),
-                  tpm=entry.get("tpm", False)),
+                  tpm=entry.get("tpm", False), board=entry.get("board", "")),
         format=entry["format"],
         snapshot=config["Snapshot"],
         sandbox_trees=tuple(images / Path(t["Source"]).relative_to("/images") for t in config["SandboxTrees"]

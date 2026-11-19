@@ -30,6 +30,8 @@ class Boot:
     # By its kernel, the command line it's booted with
     cmdline: str = ""
     tpm: bool = False
+    # A board qemu emulates by name, booted by the U-Boot on its card, with no network to reach it by
+    board: str = ""
 
 
 @dataclass(frozen=True)

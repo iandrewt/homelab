@@ -5,4 +5,4 @@ set -eu
 tree="$OUTPUTDIR/${IMAGE_ID}_${IMAGE_VERSION}"
 cp "$tree"/boot/vmlinuz-* "$tree.vmlinuz"
 cp "$tree"/boot/initrd.img-* "$tree.initrd"
-"$SRCDIR/mkosi.profiles/raspi3/layout" "$tree" "$tree.raw"
+"$SRCDIR/mkosi.conf.d/mutable-raspi3/layout" "$tree" "$tree.raw"

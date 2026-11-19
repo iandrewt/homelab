@@ -321,7 +321,13 @@ they don't want, and run no Ansible of their own. A mutable image is a tree laid
 target's disk; **ymir** is laid out as a signed image: a UKI, `/usr` on erofs under verity, its
 `/etc` a confext in `/usr` under the machine's own, updated A/B by sysupdate, with systemd from
 forky. Whatever systemd reads before tmpfiles restores `/etc` on first boot moves to `/usr`;
-`homelab image test` checks the first boot is hardened as the second is.
+`homelab image test` checks the first boot is hardened as the second is. **On a Pi** (`ymir-raspi3`) its
+firmware loads U-Boot, from experimental since boot counting renames a file and 2025.07 is the first
+whose EFI can, and U-Boot's EFI loads systemd-boot: no TPM so nothing encrypted, no Secure Boot, its
+initrd's modules listed so two UKIs fit the ESP, its console the mini UART. `card.py` lays a card out
+whole before first boot from the image's own repart definitions, as `bootstrap pi` will, so nothing
+repartitions it; its test boots qemu's raspi3b, which has no network, and reads its checks off the
+console.
 
 **A workload on ymir is a system extension**, on a cadence of its own: a profile in `mkosi.profiles/`
 with the `sysext` one, built `Overlay=yes` over the image's tree (`--format directory`, no boot chain),
@@ -389,7 +395,10 @@ What we write ourselves, a Pi's or an installer's:
   `ImportCredential=` (`system.hostname`, `ssh.authorized_keys.debian`; any user but `debian` fails
   it), and each NIC of the network-config as networkd's own `50-seed-<name>.network`, by MAC, its
   resolvers pinned and the lease's search list kept. It writes them to `/run/systemd/network`
-  itself, since `systemd-network-generator` runs before udev finds the drive.
+  itself, since `systemd-network-generator` runs before udev finds the drive. Its label is `cidata` or
+  `CIDATA`. **A Pi's identity is credentials on its ESP** (`/loader/credentials/`, the null key), which
+  systemd-boot hands every stage: `system.machine_id`, since systemd takes a firmware UUID only in a VM
+  and `/var` is bound to the ID; the hostname, the key, its network. It masks `seed-credentials`.
 - A mutable image keeps its host keys (`ssh_deletekeys: false`): Proxmox's instance ID changes with a
   VM's keys or network, and NetBox pins the keys.
 - Raspberry Pi OS needs `users: [default]` in vendor-data, or `cc_ssh` drops the keys silently;
