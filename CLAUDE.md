@@ -366,8 +366,7 @@ different sizes, TCP's MSS settles it; across the router, PMTUD, so ICMP errors 
 signed sums checked against `images/secure-boot/updates.pgp` by fingerprint, laid out by `card.py` at the
 card's size with the hybrid MBR the Pi's boot ROM reads, its identity as ESP credentials: a machine ID from
 the board's serial in NetBox (a reflash keeps it, a new board is a new machine), the hostname, the key, and
-networkd's own unit, a resolver's gateways its resolvers. ratatoskr runs Raspberry Pi OS until it's
-reflashed with it; the `raspberry_pi_os` role and group go then.
+networkd's own unit, a resolver's gateways its resolvers.
 
 ## cloud-init seeds
 

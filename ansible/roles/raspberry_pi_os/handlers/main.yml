@@ -1,3 +1,0 @@
----
-- name: Reboot into the new boot configuration
-  ansible.builtin.reboot:

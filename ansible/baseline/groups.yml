@@ -1,5 +1,4 @@
-# After a tree's own inventory: the groups the baseline varies by
+# After a tree's own inventory, so its group_vars reach the groups the baseline makes at run time
 plugin: ansible.builtin.constructed
 strict: true
-groups:
-  raspberry_pi_os: "platforms | default([]) | select('match', 'raspberry-pi-os-') | list | length > 0"
+groups: {}

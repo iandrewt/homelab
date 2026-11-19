@@ -1,12 +1,5 @@
 ---
 # Applied by every team's tree to its own hosts, by each one's OS
-- name: Raspberry Pi OS boot configuration
-  tags: [pi]
-  hosts: raspberry_pi_os
-  become: true
-  roles:
-    - raspberry_pi_os
-
 - name: Group by OS
   hosts: all
   tags: [always]

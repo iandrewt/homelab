@@ -1,7 +1,4 @@
 ---
-ansible_user: pi
+ansible_user: debian
 
 host_upgrade_schedule: "*-*-* 09:00 Australia/Sydney"  # staggered against hugin - see hugin.yml
-
-deb13cis_sudoers_exclude_nopasswd_list:
-  - pi
