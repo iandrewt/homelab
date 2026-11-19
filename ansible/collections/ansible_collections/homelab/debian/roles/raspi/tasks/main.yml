@@ -31,3 +31,20 @@
     mode: "0644"
     content: "{{ raspi_config }}"
   notify: Rewrite the firmware partition
+
+- name: Refuse the radios' drivers
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/raspi-radios.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      install brcmfmac /bin/false
+      install hci_uart /bin/false
+  when: not raspi_radios
+
+- name: Let the radios' drivers load
+  ansible.builtin.file:
+    path: /etc/modprobe.d/raspi-radios.conf
+    state: absent
+  when: raspi_radios
