@@ -19,7 +19,7 @@ import tomli_w
 
 from ..bootstrap.shell import BootstrapError, say
 from ..repo import Repo
-from . import build, builder, images as catalog, publish, signing, snapshot
+from . import build, builder, card, images as catalog, publish, signing, snapshot, test
 from .images import Image
 from .test import _check, _fresh, _report
 from .vm import Vm
@@ -407,10 +407,59 @@ def _test(args) -> int:
     names = args.names or sorted(built)
     if missing := [n for n in names if n not in built]:
         raise BootstrapError(f"not built for {image.name}: {missing}")
+    if image.boot.board:
+        if args.playbook:
+            raise BootstrapError(f"qemu's {image.boot.board} has no network, so no playbook can reach it")
+        return _report(f"{image.name} with {', '.join(names)}", _card(image, out, disk, names, built))
     failures = []
     for playbook in args.playbook or [None]:
         failures += _boot(image, out, disk, names, built, playbook)
     return _report(f"{image.name} with {', '.join(names)}", failures)
+
+
+# What an extension on a card keeps, which the card's own checks report: each one's, in /var/lib/extensions
+CARD_CHECKS = r"""
+units() {
+  systemd-dissect --list "$1" \
+    | sed -n 's#^usr/lib/systemd/system/\([^/]*\.\(service\|socket\|timer\|path\|target\|mount\)\)$#\1#p' \
+    | sed 's/@\./@check./' | while read -r unit; do echo "$unit $(systemctl show -P LoadState "$unit")"; done
+}
+unlinked() {
+  systemd-dissect --mtree "$1" \
+    | awk '$2 == "type=file" && ($3 ~ /mode=0?[0-7]*[1357]$/ || $1 ~ /\.so(\.|$)/) { sub(/^\./, "", $1); print $1 }' \
+    | while read -r f; do ldd "$f" 2>/dev/null | sed "s#^#$f: #"; done | grep "not found"
+}
+users() {
+  awk '$1 == "u" { print "passwd", $2 } $1 == "g" { print "group", $2 }' "/usr/lib/sysusers.d/$1.conf" 2>/dev/null \
+    | while read -r db name; do getent "$db" "$name" >/dev/null || echo "$name"; done
+}
+check "it's running with them merged, with no unit failed" '[ -z "$(systemctl --failed --no-legend --plain)" ]'
+for raw in /var/lib/extensions/*.raw.v/*.raw; do
+  name=${raw##*/}; name=${name%%_*}
+  check "$name is merged at boot" "systemd-sysext status | grep -qw $name"
+  check "$name's users and groups exist" "[ -z \"\$(users $name)\" ]"
+  check "$name's units load" "[ -n \"\$(units $raw)\" ] && ! units $raw | grep -qv ' loaded\$'"
+  check "$name's executables and libraries link" "[ -z \"\$(unlinked $raw)\" ]"
+done
+"""
+
+
+def _card(image: Image, out: Path, disk: Path, names: list[str], built: dict[str, Path]) -> list[str]:
+    """A card with the extensions in /var, as sysupdate installs them, booted on the board qemu emulates, its checks
+    reported on its console."""
+    work = _fresh(out)
+    var = work / "var"
+    for name in names:
+        into = var / "lib" / "extensions" / f"{name}.raw.v"
+        into.mkdir(parents=True)
+        shutil.copyfile(built[name], into / built[name].name)
+    say(f"booting it on qemu's {image.boot.board} with {', '.join(names)}")
+    verdicts, ended = card.checked(work, disk, image.architecture, image.boot.board, CARD_CHECKS, test.CARD_SIZE,
+                                   test.CARD_PATIENCE, var=var)
+    builder.run_in({out: "/out"}, "sh", "-c", "cp /out/test/serial.log /out/extensions.serial.log; rm -rf /out/test")
+    failures = [f for ok, what in verdicts for f in _check(what, ok, "")]
+    return failures + _check("the checks ran to their end", ended and bool(verdicts),
+                             f"see {out / 'extensions.serial.log'}")
 
 
 def _boot(image: Image, out: Path, disk: Path, names: list[str], built: dict[str, Path],

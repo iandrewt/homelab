@@ -111,8 +111,10 @@ jobs:
               inputs_of_images.match(p) and not only_theirs.match(p) for p in changed)
           resolvers = []
           if not ref.startswith("refs/tags/") and (changed is None or any(resolvers_read.match(p) for p in changed)):
+              # Only where a playbook can reach: a board qemu emulates has no network
               resolvers = [{"image": image, "extensions": " ".join(n for n, e in extensions.items() if image in e["images"])}
-                           for image in sorted({i for e in extensions.values() for i in e["images"]})]
+                           for image in sorted({i for e in extensions.values() for i in e["images"]})
+                           if not catalog[image].get("board")]
 
           builds = []
           for image, entry in catalog.items():
@@ -409,9 +411,14 @@ jobs:
           tag=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' \
             | grep "^image/$IMAGE/" | sort -V | tail -1)
           echo "testing on $tag"
-          mkdir -p ~/.cache/homelab/images/"$IMAGE"
-          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$IMAGE-*.${{ matrix.format }}" \
-            --output ~/.cache/homelab/images/"$IMAGE/$IMAGE.${{ matrix.format }}"
+          disk=~/.cache/homelab/images/"$IMAGE/$IMAGE.${{ matrix.format }}"
+          mkdir -p "$(dirname "$disk")"
+          # A raw image, for a card, ships compressed
+          if [ "${{ matrix.format }}" = raw ]; then
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$IMAGE-*.raw.xz" --output - | xz -d > "$disk"
+          else
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$IMAGE-*.${{ matrix.format }}" --output "$disk"
+          fi
       - run: ls -l /dev/kvm || echo "no KVM here"
       - run: uv run homelab image extension test "$IMAGE" "$EXTENSION"
       - env:

@@ -66,7 +66,7 @@ class Channel:
 
 
 def image_channel(image: str) -> Channel:
-    return Channel(image, rf"{re.escape(image)}_(.+?)\.(?:efi|usr-.*|qcow2)", r"\d+(\.\d+)*")
+    return Channel(image, rf"{re.escape(image)}_(.+?)\.(?:efi|usr-.*|qcow2|raw\.xz)", r"\d+(\.\d+)*")
 
 
 def merge(old: str, new: str, channel: Channel, keep: int = KEEP) -> tuple[str, list[str]]:
@@ -94,9 +94,13 @@ def _publish(args) -> int:
     channel = image_channel(image.name)
     sums = (out / "updates" / "SHA256SUMS").read_text()
     files = local(sums, out / "updates")
-    # What a cell imports a new machine from, kept as long as its version is
-    disk = f"{image.name}_{channel.version_of(next(iter(files)))}.{image.format}"
-    files[disk] = out / f"{image.name}.{image.format}"
+    # What a new machine starts from, kept as long as its version is: a cell's import, or a card's, compressed
+    suffix = image.format
+    if image.format == "raw":
+        builder.run_in({out: "/out"}, "xz", "--threads=0", "--keep", "--force", f"/out/{image.name}.raw")
+        suffix = "raw.xz"
+    disk = f"{image.name}_{channel.version_of(next(iter(files)))}.{suffix}"
+    files[disk] = out / f"{image.name}.{suffix}"
     with files[disk].open("rb") as stream:
         sums += f"{hashlib.file_digest(stream, 'sha256').hexdigest()}  {disk}\n"
     work = signing.prepare(images, builder.CACHE / "signing")

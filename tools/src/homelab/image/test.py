@@ -5,7 +5,6 @@ import os
 import re
 import shutil
 import sys
-import uuid
 from pathlib import Path
 
 from ..bootstrap.shell import BootstrapError, run, say
@@ -54,10 +53,8 @@ ln -s ../probe.service $x/systemd/system/multi-user.target.wants/probe.service
 """
 # A seed's own resolvers, as linux-vm pins a resolver's
 SEED_NAMESERVERS = ["10.0.2.3"]
-# A card's checks, run once it's booted and its counted entry blessed, reported on the console it has instead of a
-# network: a line each, then the end
+# What a card of an image-based image keeps, which its own checks report: @IMAGE@ is the image
 CARD_CHECKS = """
-check() { if sh -c "$2" >/dev/null 2>&1; then echo "homelab-check ok $1"; else echo "homelab-check FAIL $1"; fi; }
 check "its hostname is the credential's" '[ "$(hostname)" = test ]'
 check "its machine ID is the credential's" '[ "$(cat /etc/machine-id)" = @MACHINE_ID@ ]'
 check "no unit failed" '[ -z "$(systemctl --failed --no-legend --plain)" ]'
@@ -69,37 +66,6 @@ check "/etc is the image's, under the machine's own" 'systemd-confext status | g
 check "the journal is on disk" 'journalctl --header -n0 | grep -q /var/log/journal/'
 check "the release file names the image" 'grep -qx IMAGE_ID=@IMAGE@ /usr/lib/homelab/image-release'
 check "the counted entry was blessed" '[ "$(/usr/lib/systemd/systemd-bless-boot status)" = good ] && ls "$(bootctl -p)/EFI/Linux" | grep -q "^@IMAGE@_.*[.]1[.]efi$"'
-echo homelab-checks-end
-"""
-CARD_CHECKS_UNIT = """[Unit]
-After=multi-user.target boot-complete.target systemd-bless-boot.service
-
-[Service]
-Type=oneshot
-StandardOutput=journal+console
-ImportCredential=homelab.checks
-ExecStart=/bin/sh ${CREDENTIALS_DIRECTORY}/homelab.checks
-"""
-# Booted by its own U-Boot, with a counted next version beside the first as sysupdate installs one, until the
-# checks report on the mini UART, qemu's second serial port
-CARD_BOOT = card.PARTITION + """
-set -eu
-cd /work
-set -- $(part card.raw "$1")
-at="card.raw@@$(($1 * 512))"
-mcopy -o -i "$at" ::u-boot.bin ::bcm2710-rpi-3-b.dtb .
-uki=$(mdir -b -i "$at" ::EFI/Linux | head -n 1)
-mcopy -o -i "$at" "$uki" next.efi
-mcopy -o -i "$at" next.efi "::EFI/Linux/$(basename "$uki" .efi).1+3.efi"
-rm next.efi
-qemu-system-aarch64 -M raspi3b -m 1G -kernel u-boot.bin -dtb bcm2710-rpi-3-b.dtb -drive file=card.raw,if=sd,format=raw \
-  -display none -monitor none -serial null -serial file:serial.log &
-qemu=$!
-for _ in $(seq "$2"); do
-  if grep -aq homelab-checks-end serial.log 2>/dev/null || ! kill -0 "$qemu" 2>/dev/null; then break; fi
-  sleep 5
-done
-kill "$qemu" 2>/dev/null || true
 """
 # What differs between any two boots
 VOLATILE = re.compile(r"random|_seed|boot_id|ns_last_pid|fs\.(file|inode|dentry|quota)|tcp_fastopen_key"
@@ -196,29 +162,16 @@ def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -
 
 
 def _card(base: Image, image: Path, out: Path) -> list[str]:
-    """A card as `bootstrap pi` writes one, booted on the board qemu emulates, its checks reported on its console."""
+    """A card as `bootstrap pi` writes one, a counted next version beside the first, booted on the board qemu
+    emulates, its checks reported on its console."""
     work = _fresh(out)
-    machine_id = uuid.uuid4().hex
-    credentials = work / "credentials"
-    credentials.mkdir()
-    (credentials / "system.machine_id").write_text(machine_id)
-    (credentials / "system.hostname").write_text("test")
-    (credentials / "homelab.checks").write_text(CARD_CHECKS.replace("@MACHINE_ID@", machine_id)
-                                                .replace("@IMAGE@", base.name))
-    (credentials / "systemd.extra-unit.homelab-checks.service").write_text(CARD_CHECKS_UNIT)
-    (credentials / "systemd.unit-dropin.multi-user.target").write_text("[Unit]\nWants=homelab-checks.service\n")
-    builder.run_in({image.parent: "/image:ro", work: "/work"}, "cp", "--sparse=always", f"/image/{image.name}",
-                   "/work/card.raw")
-    card.lay_out(work / "card.raw", CARD_SIZE, machine_id, base.architecture)
-    card.credentials(work / "card.raw", credentials)
     say(f"booting it on qemu's {base.boot.board}")
-    builder.run_in({work: "/work"}, "sh", "-c", CARD_BOOT, "boot", card.ESP, str(CARD_PATIENCE // 5))
-    log = (work / "serial.log").read_text(errors="replace")
+    verdicts, ended = card.checked(work, image, base.architecture, base.boot.board,
+                                   CARD_CHECKS.replace("@IMAGE@", base.name), CARD_SIZE, CARD_PATIENCE,
+                                   next_version=True)
     builder.run_in({out: "/out"}, "sh", "-c", "cp /out/test/serial.log /out/first.serial.log; rm -rf /out/test")
-    results = re.findall(r"homelab-check (ok|FAIL) (.*)", log)
-    failures = [f for verdict, what in results for f in _check(what.strip(), verdict == "ok", "")]
-    return failures + _check("the checks ran to their end", "homelab-checks-end" in log and bool(results),
-                             f"see {out / 'first.serial.log'}")
+    failures = [f for ok, what in verdicts for f in _check(what, ok, "")]
+    return failures + _check("the checks ran to their end", ended and bool(verdicts), f"see {out / 'first.serial.log'}")
 
 
 def _fresh(out: Path) -> Path:

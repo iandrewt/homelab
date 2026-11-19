@@ -2,23 +2,23 @@
 # upstream version it's released at, and the files of our own it holds, by where, from the role that uses them
 
 [dnsdist]
-images = ["ymir-amd64-vm"]
+images = ["ymir-amd64-vm", "ymir-arm64-raspi3"]
 package = "dnsdist"
 files = { "/usr/libexec/homelab/dns-health" = "ansible/roles/powerdns_resolver/files/dns-health" }
 
 [frr]
-images = ["ymir-amd64-vm"]
+images = ["ymir-amd64-vm", "ymir-arm64-raspi3"]
 package = "frr"
 files = { "/usr/libexec/homelab/anycast-check" = "ansible/roles/frr_bgp/files/anycast-check" }
 
 [haproxy]
-images = ["ymir-amd64-vm"]
+images = ["ymir-amd64-vm", "ymir-arm64-raspi3"]
 package = "haproxy"
 
 [pdns]
-images = ["ymir-amd64-vm"]
+images = ["ymir-amd64-vm", "ymir-arm64-raspi3"]
 package = "pdns-server"
 
 [pdns-recursor]
-images = ["ymir-amd64-vm"]
+images = ["ymir-amd64-vm", "ymir-arm64-raspi3"]
 package = "pdns-recursor"

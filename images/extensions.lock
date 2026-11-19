@@ -1,7 +1,7 @@
 # What each extension was last released from: `homelab image extension lock` writes it
 
 [dnsdist]
-version = "2.1.3-3"
+version = "2.1.3-4"
 
 [dnsdist.ymir-amd64-vm]
 inputs = "158e3caa9cb4909a508cdaf6f03ade8e00783a1f6c17440b70c3b7a8c74d2413"
@@ -36,8 +36,41 @@ packages = [
     "perl-modules-5.40=5.40.1-6+deb13u1",
 ]
 
+[dnsdist.ymir-arm64-raspi3]
+inputs = "158e3caa9cb4909a508cdaf6f03ade8e00783a1f6c17440b70c3b7a8c74d2413"
+packages = [
+    "bind9-dnsutils=1:9.20.30-1~deb13u1",
+    "bind9-host=1:9.20.30-1~deb13u1",
+    "bind9-libs=1:9.20.30-1~deb13u1",
+    "dnsdist=2.1.3-1pdns.debian13",
+    "libabsl20240722=20240722.0-4",
+    "libcdb1=0.81-2",
+    "libfstrm0=0.6.1-1+b3",
+    "libgdbm-compat4t64=1.24-2",
+    "libgdbm6t64=1.24-2",
+    "libjemalloc2=5.3.0-3",
+    "liblmdb0=0.9.31-1+b2",
+    "libluajit-5.1-2=2.1.0+openresty20250117-2",
+    "libluajit-5.1-common=2.1.0+openresty20250117-2",
+    "libmaxminddb0=1.12.2-1",
+    "libpci3=1:3.13.0-2",
+    "libperl5.40=5.40.1-6+deb13u1",
+    "libprotobuf-c1=1.5.1-1",
+    "libre2-11=20240702-3+b1",
+    "libsensors-config=1:3.6.2-2",
+    "libsensors5=1:3.6.2-2",
+    "libsnmp-base=5.9.4+dfsg-2+deb13u1",
+    "libsnmp40t64=5.9.4+dfsg-2+deb13u1",
+    "libsodium23=1.0.18-1+deb13u1",
+    "liburcu8t64=0.15.2-2",
+    "libuv1t64=1.50.0-2",
+    "libxdp1=1.5.4-1",
+    "pci.ids=0.0~2025.06.09-1",
+    "perl-modules-5.40=5.40.1-6+deb13u1",
+]
+
 [frr]
-version = "10.7.1-3"
+version = "10.7.1-4"
 
 [frr.ymir-amd64-vm]
 inputs = "292410508950ba56fb7b12de9ef3e4ce8aa81c4041dfeac5e55568a06bd12c48"
@@ -51,8 +84,20 @@ packages = [
     "lsof=4.99.4+dfsg-2",
 ]
 
+[frr.ymir-arm64-raspi3]
+inputs = "292410508950ba56fb7b12de9ef3e4ce8aa81c4041dfeac5e55568a06bd12c48"
+packages = [
+    "frr=10.7.1-0~deb13u1",
+    "libcares2=1.34.5-1+deb13u1",
+    "liblsof0=4.99.4+dfsg-2",
+    "libpcre2-posix3=10.46-1~deb13u3",
+    "libyang3=3.13.6-1~deb13u1",
+    "logrotate=3.22.0-1+b2",
+    "lsof=4.99.4+dfsg-2",
+]
+
 [haproxy]
-version = "3.0.11-3"
+version = "3.0.11-4"
 
 [haproxy.ymir-amd64-vm]
 inputs = "2648594b65c673c0e56a3df303a0de4b16d16367152709738d4150cf4498cad7"
@@ -64,8 +109,18 @@ packages = [
     "libopentracing1=1.6.0-4+b2",
 ]
 
+[haproxy.ymir-arm64-raspi3]
+inputs = "2648594b65c673c0e56a3df303a0de4b16d16367152709738d4150cf4498cad7"
+packages = [
+    "haproxy=3.0.11-1+deb13u4",
+    "libjemalloc2=5.3.0-3",
+    "liblua5.4-0=5.4.7-1+b2",
+    "libopentracing-c-wrapper0t64=1.1.3-3.1+b1",
+    "libopentracing1=1.6.0-4+b2",
+]
+
 [pdns]
-version = "5.1.5-3"
+version = "5.1.5-4"
 
 [pdns.ymir-amd64-vm]
 inputs = "267b4901e03393cec6e4543ba702bbb54e4ff3ba58ba550f25baa4b3ff58c648"
@@ -80,10 +135,46 @@ packages = [
     "pdns-server=5.1.5-1pdns.debian13",
 ]
 
+[pdns.ymir-arm64-raspi3]
+inputs = "267b4901e03393cec6e4543ba702bbb54e4ff3ba58ba550f25baa4b3ff58c648"
+packages = [
+    "libboost-program-options1.83.0=1.83.0-4.2",
+    "libboost-serialization1.83.0=1.83.0-4.2",
+    "liblmdb0=0.9.31-1+b2",
+    "libluajit-5.1-2=2.1.0+openresty20250117-2",
+    "libluajit-5.1-common=2.1.0+openresty20250117-2",
+    "libsodium23=1.0.18-1+deb13u1",
+    "pdns-backend-lmdb=5.1.5-1pdns.debian13",
+    "pdns-server=5.1.5-1pdns.debian13",
+]
+
 [pdns-recursor]
-version = "5.4.9-3"
+version = "5.4.9-4"
 
 [pdns-recursor.ymir-amd64-vm]
+inputs = "baeb798996e557fb19023af18a64822129ac3e781827ab08a7fdc6fa895fe0ec"
+packages = [
+    "dns-root-data=2025080400~deb13u1",
+    "libboost-context1.83.0=1.83.0-4.2",
+    "libboost-filesystem1.83.0=1.83.0-4.2",
+    "libfstrm0=0.6.1-1+b3",
+    "libgdbm-compat4t64=1.24-2",
+    "libgdbm6t64=1.24-2",
+    "libluajit-5.1-2=2.1.0+openresty20250117-2",
+    "libluajit-5.1-common=2.1.0+openresty20250117-2",
+    "libpci3=1:3.13.0-2",
+    "libperl5.40=5.40.1-6+deb13u1",
+    "libsensors-config=1:3.6.2-2",
+    "libsensors5=1:3.6.2-2",
+    "libsnmp-base=5.9.4+dfsg-2+deb13u1",
+    "libsnmp40t64=5.9.4+dfsg-2+deb13u1",
+    "libsodium23=1.0.18-1+deb13u1",
+    "pci.ids=0.0~2025.06.09-1",
+    "pdns-recursor=5.4.9-1pdns.debian13",
+    "perl-modules-5.40=5.40.1-6+deb13u1",
+]
+
+[pdns-recursor.ymir-arm64-raspi3]
 inputs = "baeb798996e557fb19023af18a64822129ac3e781827ab08a7fdc6fa895fe0ec"
 packages = [
     "dns-root-data=2025080400~deb13u1",

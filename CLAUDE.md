@@ -327,7 +327,7 @@ whose EFI can, and U-Boot's EFI loads systemd-boot: no TPM so nothing encrypted,
 initrd's modules listed so two UKIs fit the ESP, its console the mini UART. `card.py` lays a card out
 whole before first boot from the image's own repart definitions, as `bootstrap pi` will, so nothing
 repartitions it; its test boots qemu's raspi3b, which has no network, and reads its checks off the
-console.
+console, as the extension test does with each extension laid in its `/var`, so no playbook runs there.
 
 **A workload on ymir is a system extension**, on a cadence of its own: a profile in `mkosi.profiles/`
 with the `sysext` one, built `Overlay=yes` over the image's tree (`--format directory`, no boot chain),
@@ -553,7 +553,8 @@ signed keylessly by the workflow (`docs/images.md` says how to check one). An im
 `alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`): mkosi's
 signing tools have no network, so its PKCS#11 module runs behind `p11-kit server`, which `mkosi box`
 starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, issued by KEK
-(`homelab image db`). Its release publishes its update files and its qcow2 to the `canary` channel
+(`homelab image db`). Its release publishes its update files and its disk (a qcow2, or a card's raw image as
+`.raw.xz`) to the `canary` channel
 of the update bucket (`homelab image publish`), which a site's image library pins from `stable`,
 behind CloudFront on the Free flat-rate plan, whose WAF admits every site's public aggregates from NetBox; promoting to `stable` is `gh workflow run images.yml
 --ref image/<image>/<version> -f promote=true`. Each channel keeps five versions, its `SHA256SUMS`
