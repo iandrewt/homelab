@@ -530,15 +530,15 @@ wheels = [
 
 [[package]]
 name = "octodns-netbox-dns"
-version = "0.3.19"
+version = "0.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "dnspython" },
     { name = "pynetbox" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ac/32/fb76ed2e426a472bc79d6e856dd50a99f0a1822123e1fc73ac2abe37a13e/octodns_netbox_dns-0.3.19.tar.gz", hash = "sha256:93048bf9e61de43d88f82127d154badbc9c40d9824fa1bea596cfb79949dacdf", size = 13250, upload-time = "2026-07-11T08:27:06.93Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/12/42/5a3d8cb183feaec4d579805c0d1aa849d8685efa7b179bb5df2da6b67640/octodns_netbox_dns-0.4.0.tar.gz", hash = "sha256:87d622b4821f2281e9c01b967ff333817e896b1ff0e5b8a2597ffa0a85d32954", size = 12581, upload-time = "2026-11-08T12:21:29.745Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f6/e0/b83a98d48e7b41e631c51339941bc3f89e84ef05fbc2a64f9f6c30e1f42d/octodns_netbox_dns-0.3.19-py3-none-any.whl", hash = "sha256:8acc8162d9b52b5a98966070253abdcc38bd41f0e2da03d53041e122a9aaf62b", size = 11371, upload-time = "2026-07-11T08:27:07.739Z" },
+    { url = "https://files.pythonhosted.org/packages/bf/4a/6d966a05eb2b831344ff2cd2bb410cf098e8faec318ddd18d9416cec84a4/octodns_netbox_dns-0.4.0-py3-none-any.whl", hash = "sha256:667f6c3c9900093386bc9a455825c33780504a9b84992d953cc86087cc2c5d62", size = 11600, upload-time = "2026-11-08T12:21:28.858Z" },
 ]
 
 [[package]]
