@@ -70,13 +70,13 @@ packages = [
 ]
 
 [frr]
-version = "10.7.1-4"
+version = "10.7.1-5"
 
 [frr.ymir-amd64-vm]
 inputs = "292410508950ba56fb7b12de9ef3e4ce8aa81c4041dfeac5e55568a06bd12c48"
 packages = [
     "frr=10.7.1-0~deb13u1",
-    "libcares2=1.34.5-1+deb13u1",
+    "libcares2=1.34.9-1~deb13u1",
     "liblsof0=4.99.4+dfsg-2",
     "libpcre2-posix3=10.46-1~deb13u3",
     "libyang3=3.13.6-1~deb13u1",
@@ -88,7 +88,7 @@ packages = [
 inputs = "292410508950ba56fb7b12de9ef3e4ce8aa81c4041dfeac5e55568a06bd12c48"
 packages = [
     "frr=10.7.1-0~deb13u1",
-    "libcares2=1.34.5-1+deb13u1",
+    "libcares2=1.34.9-1~deb13u1",
     "liblsof0=4.99.4+dfsg-2",
     "libpcre2-posix3=10.46-1~deb13u3",
     "libyang3=3.13.6-1~deb13u1",
@@ -97,12 +97,12 @@ packages = [
 ]
 
 [haproxy]
-version = "3.0.11-4"
+version = "3.0.11-5"
 
 [haproxy.ymir-amd64-vm]
 inputs = "2648594b65c673c0e56a3df303a0de4b16d16367152709738d4150cf4498cad7"
 packages = [
-    "haproxy=3.0.11-1+deb13u4",
+    "haproxy=3.0.11-1+deb13u5",
     "libjemalloc2=5.3.0-3",
     "liblua5.4-0=5.4.7-1+b2",
     "libopentracing-c-wrapper0t64=1.1.3-3.1+b1",
@@ -112,7 +112,7 @@ packages = [
 [haproxy.ymir-arm64-raspi3]
 inputs = "2648594b65c673c0e56a3df303a0de4b16d16367152709738d4150cf4498cad7"
 packages = [
-    "haproxy=3.0.11-1+deb13u4",
+    "haproxy=3.0.11-1+deb13u5",
     "libjemalloc2=5.3.0-3",
     "liblua5.4-0=5.4.7-1+b2",
     "libopentracing-c-wrapper0t64=1.1.3-3.1+b1",
