@@ -107,7 +107,6 @@ provider "netbox" {
   api_token  = ephemeral.onepassword_item.netbox.credential
 }
 
-# Reads only
 provider "azuread" {}
 
 ephemeral "onepassword_item" "proxmox" {

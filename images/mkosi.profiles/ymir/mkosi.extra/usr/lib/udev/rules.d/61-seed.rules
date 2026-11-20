@@ -1,2 +1,1 @@
-# NoCloud's label in either case: Proxmox writes an ISO's in lower case, and FAT's is upper
 SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="cidata|CIDATA", SYMLINK+="disk/seed"

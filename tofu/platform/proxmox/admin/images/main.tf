@@ -15,7 +15,6 @@ resource "proxmox_download_file" "this" {
   checksum_algorithm = each.value.checksum_algorithm
 }
 
-# What a tenant may boot, by volume, from where every cell at the site mounts it
 data "onepassword_vault" "tenant" {
   for_each = local.tenants
 

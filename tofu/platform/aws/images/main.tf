@@ -8,12 +8,10 @@ locals {
   signing_algorithm = "RSASSA_PKCS1_V1_5_SHA_256"
 }
 
-# baseline's, in every member account
 data "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 }
 
-# One key: whoever may sign with one could sign with any other, since a release signs with all at once
 resource "aws_kms_key" "signing" {
   description              = "Signs Platform's UKIs, the verity of its images and extensions, the PCR 11 values they expect, and their update manifests"
   customer_master_key_spec = "RSA_2048"
@@ -68,16 +66,6 @@ resource "aws_kms_key" "signing" {
 resource "aws_kms_alias" "signing" {
   name          = "alias/images"
   target_key_id = aws_kms_key.signing.key_id
-}
-
-moved {
-  from = aws_kms_key.image["secure-boot"]
-  to   = aws_kms_key.signing
-}
-
-moved {
-  from = aws_kms_alias.image["secure-boot"]
-  to   = aws_kms_alias.signing
 }
 
 # Only a job in the release environment, which takes an image/* or extension/* tag and its reviewer's approval

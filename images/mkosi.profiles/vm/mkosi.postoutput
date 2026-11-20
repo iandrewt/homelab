@@ -1,7 +1,5 @@
 #!/bin/sh
-# What a release ships, and Proxmox imports
 set -eu
 raw="$OUTPUTDIR/${IMAGE_ID}_${IMAGE_VERSION}.raw"
-# A tree, as extensions are built over, has no disk
 [ -f "$raw" ] || exit 0
 qemu-img convert -O qcow2 -c "$raw" "${raw%.raw}.qcow2"

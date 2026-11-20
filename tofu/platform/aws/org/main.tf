@@ -67,7 +67,6 @@ resource "aws_organizations_organizational_unit" "top" {
   parent_id = local.root_id
 }
 
-# A third level is a third resource
 resource "aws_organizations_organizational_unit" "nested" {
   for_each = {
     for path in local.organizational_units : path => regex("^(.+)/([^/]+)$", path) if strcontains(path, "/")
@@ -113,14 +112,11 @@ resource "aws_account_region" "this" {
     "${pair[0]}/${pair[1]}" => { account = pair[0], region = pair[1] }
   }
 
-  # The Account API refuses the management account's own ID
   account_id  = each.value.account == "Management" ? null : local.account_ids[each.value.account]
   region_name = each.value.region
   enabled     = true
 }
 
-# Management's own is set by hand, so no personal detail is in the repo; every other account
-# copies it
 data "aws_account_primary_contact" "management" {}
 
 locals {

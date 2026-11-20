@@ -16,7 +16,6 @@ terraform {
     }
   }
 
-  # A workspace per site
   backend "s3" {
     bucket               = "tofu-state-877127520873-ap-southeast-2-an"
     region               = "ap-southeast-2"
@@ -55,7 +54,6 @@ locals {
   site = terraform.workspace
   team = "network"
 
-  # A provider's for_each is static, so the cells can't come from NetBox
   cells = toset(yamldecode(file("${path.module}/sites/${local.site}.yaml")).proxmox)
 }
 
@@ -79,7 +77,6 @@ provider "netbox" {
   api_token  = ephemeral.onepassword_item.netbox.credential
 }
 
-# What Platform vends a tenant of each cell: its grant, and its token
 data "onepassword_item" "grant" {
   for_each = local.cells
 

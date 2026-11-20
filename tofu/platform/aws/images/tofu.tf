@@ -10,7 +10,6 @@ terraform {
       source  = "1Password/onepassword"
       version = "~> 3.3"
     }
-    # 6.0, which alone reads aggregates; the other layers stay on 5.8 until it settles
     netbox = {
       source  = "e-breuninger/netbox"
       version = "6.0.1"

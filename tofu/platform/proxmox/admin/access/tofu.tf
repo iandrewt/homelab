@@ -58,7 +58,6 @@ module "tenancy" {
   source = "../../../../modules/tenancy"
 }
 
-# Reads only: the groups and this cluster's app, which identity/entra makes
 provider "azuread" {}
 
 provider "onepassword" {}

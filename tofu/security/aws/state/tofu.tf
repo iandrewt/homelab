@@ -55,7 +55,6 @@ locals {
   state_account = one([for a in data.aws_organizations_organization.this.non_master_accounts : a.id if a.name == "State"])
 }
 
-# The key and the bucket are administered by the bootstrap role alone, so it applies them
 provider "aws" {
   region  = "ap-southeast-2"
   profile = "homelab-management"

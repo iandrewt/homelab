@@ -41,7 +41,6 @@ terraform {
   }
 }
 
-# An admin's `az login`, never unattended: assignments need AppRoleAssignment.ReadWrite.All
 provider "azuread" {}
 
 module "tenancy" {

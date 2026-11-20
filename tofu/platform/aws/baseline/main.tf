@@ -63,8 +63,6 @@ check "no_default_vpcs" {
   }
 }
 
-# GitHub Actions' tokens, for a role of the account's own to trust; the provider alone grants nothing.
-# Not management's, where nothing runs.
 resource "aws_iam_openid_connect_provider" "github" {
   for_each = setsubtract(local.accounts, ["Management"])
   provider = aws.account[each.key]

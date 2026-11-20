@@ -58,8 +58,6 @@ locals {
   }
 }
 
-# Through the bootstrap role rather than a permission set: what grants access can't depend
-# on it
 provider "aws" {
   region  = "ap-southeast-2"
   profile = "homelab-management"

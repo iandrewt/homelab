@@ -232,7 +232,6 @@ resource "aws_wafv2_web_acl" "updates" {
   }
 }
 
-# Cancelling a Free plan takes effect at once, and the distribution can be deleted only after
 resource "aws_pricingplanmanager_subscription" "updates" {
   plan_family   = "CloudFront"
   plan_tier     = "FREE"

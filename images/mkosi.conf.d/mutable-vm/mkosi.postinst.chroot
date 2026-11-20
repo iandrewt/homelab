@@ -1,6 +1,5 @@
 #!/bin/sh
-# The image's one bootloader install, into the /efi repart makes its ESP of; every kernel after it
-# goes through Debian's kernel-install hook
+# Install the bootloader and kernels into the ESP, which repart makes on a VM's GPT, so the firmware can boot it
 set -eu
 # bootctl installs only to a file system's root, and its other checks are of a real ESP
 mount --bind /efi /efi

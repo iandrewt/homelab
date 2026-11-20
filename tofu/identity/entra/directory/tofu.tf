@@ -45,7 +45,6 @@ terraform {
   }
 }
 
-# An admin's `az login`
 provider "azuread" {}
 
 provider "msgraph" {

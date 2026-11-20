@@ -10,7 +10,6 @@ locals {
 
   state_teams = toset([for team in module.tenancy.teams : team.title])
 
-  # security/aws/logging's
   trail_bucket = "arn:aws:s3:::cloudtrail-${local.account_ids["Log Archive"]}-ap-southeast-2-an"
 
   permission_sets = {

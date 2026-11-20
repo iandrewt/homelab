@@ -1,6 +1,3 @@
-# What mkosi has no setting for: the profiles each released image is built with, for which architecture,
-# and how the boot test boots it in qemu
-
 [debian-13-amd64-vm]
 profiles = ["mutable", "vm"]
 architecture = "x86-64"
