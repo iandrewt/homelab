@@ -13,7 +13,7 @@ terraform {
     # 6.0, which alone reads aggregates; the other layers stay on 5.8 until it settles
     netbox = {
       source  = "e-breuninger/netbox"
-      version = "6.0.0"
+      version = "6.0.1"
     }
   }
 
