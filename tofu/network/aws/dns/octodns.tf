@@ -9,7 +9,7 @@ locals {
   # Each writes `*.<cluster>.titmuss.au` with a role of its own
   clusters = sort([
     for c in data.netbox_clusters.all.clusters : c.name
-    if c.cluster_type_id == data.netbox_cluster_type.kubernetes.cluster_type_id
+    if c.cluster_type_id == data.netbox_cluster_type.kubernetes.id
   ])
 }
 

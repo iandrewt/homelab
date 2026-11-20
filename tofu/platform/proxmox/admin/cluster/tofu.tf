@@ -64,19 +64,17 @@ data "netbox_cluster" "this" {
 }
 
 data "netbox_devices" "nodes" {
-  filter {
-    name  = "cluster_id"
-    value = data.netbox_cluster.this.id
-  }
+  filters = [{ name = "cluster_id", value = tostring(data.netbox_cluster.this.id) }]
 }
 
 data "netbox_device_interfaces" "nodes" {
-  for_each = { for d in data.netbox_devices.nodes.devices : d.name => d.device_id }
+  for_each = { for d in data.netbox_devices.nodes.devices : d.name => d.id }
 
-  filter {
-    name  = "device_id"
-    value = tostring(each.value)
-  }
+  filters = [{ name = "device_id", value = tostring(each.value) }]
+}
+
+data "netbox_ip_addresses" "management" {
+  filters = [{ name = "id", value = tostring(data.netbox_devices.nodes.devices[0].primary_ip6_id) }]
 }
 
 module "netbox" {
@@ -85,7 +83,7 @@ module "netbox" {
   site_slug  = local.cluster.site
   trust_tags = ["proxmox-api"]
   # The nodes' management network states who may manage them
-  destinations = { management = split("/", data.netbox_devices.nodes.devices[0].primary_ipv6)[0] }
+  destinations = { management = split("/", one(data.netbox_ip_addresses.management.ip_addresses).ip_address)[0] }
 }
 
 provider "onepassword" {}

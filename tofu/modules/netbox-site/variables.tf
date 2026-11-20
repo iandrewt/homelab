@@ -1,7 +1,7 @@
 variable "prefix_roles" {
   type        = list(string)
   default     = []
-  description = "Prefix roles to read, by name: the provider can look a role up by nothing else."
+  description = "Prefix role slugs to read."
 }
 
 variable "origin_asn" {
@@ -30,5 +30,5 @@ variable "destinations" {
 variable "audience_roles" {
   type        = set(string)
   default     = []
-  description = "Prefix role slugs, each of them in `prefix_roles` by name: `audiences` gives each the sources its prefixes' audience admits."
+  description = "Prefix role slugs, each of them in `prefix_roles`: `audiences` gives each the sources its prefixes' audience admits."
 }

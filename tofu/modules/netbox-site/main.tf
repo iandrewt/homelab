@@ -15,31 +15,28 @@ data "netbox_site" "this" {
 }
 
 data "netbox_vlans" "site" {
-  filter {
-    name  = "group"
-    value = var.site_slug
-  }
-
-  filter {
-    name  = "status"
-    value = "active"
-  }
+  filters = [
+    { name = "group", value = var.site_slug },
+    { name = "status", value = "active" },
+  ]
 }
 
 data "netbox_tags" "all" {}
 
+# Object custom fields hold the related object's ID
+data "netbox_asns" "all" {
+  limit = 10000
+}
+
+data "netbox_clusters" "all" {}
+
 data "netbox_prefixes" "vlan" {
   for_each = { for v in data.netbox_vlans.site.vlans : v.name => v.id }
 
-  filter {
-    name  = "vlan_id"
-    value = tostring(each.value)
-  }
-
-  filter {
-    name  = "status"
-    value = "active"
-  }
+  filters = [
+    { name = "vlan_id", value = tostring(each.value) },
+    { name = "status", value = "active" },
+  ]
 }
 
 data "netbox_device_role" "router" {
@@ -47,59 +44,34 @@ data "netbox_device_role" "router" {
 }
 
 data "netbox_devices" "routers" {
-  filter {
-    name  = "site_id"
-    value = data.netbox_site.this.id
-  }
-
-  filter {
-    name  = "role_id"
-    value = data.netbox_device_role.router.id
-  }
+  filters = [
+    { name = "site_id", value = tostring(data.netbox_site.this.id) },
+    { name = "role_id", value = tostring(data.netbox_device_role.router.id) },
+  ]
 }
 
 data "netbox_ip_addresses" "router" {
-  for_each = { for d in data.netbox_devices.routers.devices : d.name => d.device_id }
+  for_each = { for d in data.netbox_devices.routers.devices : d.name => d.id }
 
-  filter {
-    name  = "device_id"
-    value = tostring(each.value)
-  }
-}
-
-data "netbox_ipam_role" "prefix" {
-  for_each = toset(var.prefix_roles)
-
-  name = each.key
+  filters = [{ name = "device_id", value = tostring(each.value) }]
 }
 
 data "netbox_prefixes" "role" {
-  for_each = data.netbox_ipam_role.prefix
+  for_each = toset(var.prefix_roles)
 
-  filter {
-    name  = "site_id"
-    value = tostring(data.netbox_site.this.id)
-  }
-
-  filter {
-    name  = "role_id"
-    value = tostring(each.value.id)
-  }
+  filters = [
+    { name = "site_id", value = tostring(data.netbox_site.this.id) },
+    { name = "role", value = each.key },
+  ]
 }
 
-# The provider returns object custom fields, like an address's origins, as JSON
 data "netbox_ip_addresses" "role" {
   for_each = toset(flatten([for r in data.netbox_prefixes.role : r.prefixes[*].prefix]))
 
-  filter {
-    name  = "parent_prefix"
-    value = each.key
-  }
-
-  filter {
-    name  = "status"
-    value = "active"
-  }
+  filters = [
+    { name = "parent", value = each.key },
+    { name = "status", value = "active" },
+  ]
 }
 
 locals {
@@ -126,15 +98,16 @@ locals {
     ]
   }
 
-  tag_slugs = { for t in data.netbox_tags.all.tags : t.tag_id => t.slug }
-  vlan_tags = { for v in data.netbox_vlans.site.vlans : v.name => [for id in v.tag_ids : local.tag_slugs[id]] }
+  tag_slugs = { for t in data.netbox_tags.all.tags : t.id => t.slug }
+  asns      = { for a in data.netbox_asns.all.asns : a.id => a.asn }
+  clusters  = { for c in data.netbox_clusters.all.clusters : c.id => c.name }
 
   role_prefixes = {
-    for name, r in data.netbox_prefixes.role : data.netbox_ipam_role.prefix[name].slug => [
+    for role, r in data.netbox_prefixes.role : role => [
       for p in r.prefixes : {
         prefix = p.prefix
         family = strcontains(p.prefix, ":") ? "ipv6" : "ipv4"
-        origin = try(jsondecode(p.custom_fields["origin"]).asn, null)
+        origin = try(local.asns[p.custom_fields["origin"]], null)
       }
       if contains(["active", "container"], p.status)
     ]
@@ -146,6 +119,6 @@ locals {
       family   = strcontains(a.ip_address, ":") ? "ipv6" : "ipv4"
       dns_name = a.dns_name
     }
-    if var.origin_asn != null && contains(try([for o in jsondecode(a.custom_fields["origins"]) : o.asn], []), var.origin_asn)
+    if var.origin_asn != null && contains([for id in try(jsondecode(a.custom_fields["origins"]), []) : local.asns[id]], var.origin_asn)
   ]
 }
