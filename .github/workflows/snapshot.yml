@@ -1,7 +1,8 @@
 name: snapshot
 
-# The images' Debian snapshot, bumped weekly: a PR you merge by hand, so its images build when you dispatch
-# them at its branch. A PR opened with GITHUB_TOKEN starts no workflow of its own.
+# The images' Debian snapshot, bumped weekly, with each extension's lock where a library it bundles moved: a PR
+# you merge by hand, so its images build when you dispatch them at its branch. A PR opened with GITHUB_TOKEN
+# starts no workflow of its own.
 on:
   schedule:
     - cron: "0 18 * * 0"
@@ -16,13 +17,16 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-      pull-requests: write
+    outputs:
+      branch: ${{ steps.bump.outputs.branch }}
+      pinned: ${{ steps.bump.outputs.pinned }}
+      latest: ${{ steps.bump.outputs.latest }}
     env:
       CONF: images/mkosi.conf.d/debian/mkosi.conf
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - run: |
+      - id: bump
+        run: |
           set -euo pipefail
           pinned=$(sed -n 's/^Snapshot=//p' "$CONF")
           latest=$(curl -sSf "https://snapshot.debian.org/mr/timestamp/?archive=debian&after=$pinned" \
@@ -42,7 +46,38 @@ jobs:
           git switch -c "$branch"
           git commit -q -am "chore(images): Debian snapshot $latest"
           git push -q origin "$branch"
-          gh pr create --base main --head "$branch" --title "chore(images): Debian snapshot $latest" --body \
-            "Every image's packages from Debian's snapshot of $latest, not $pinned: both architectures bake again.
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
 
-          Its images build when you dispatch them: \`gh workflow run images.yml --ref $branch\`. It lands by squash."
+  lock:
+    needs: bump
+    if: needs.bump.outputs.branch != ''
+    permissions:
+      contents: write
+    uses: ./.github/workflows/lock.yml
+    with:
+      ref: ${{ needs.bump.outputs.branch }}
+      branch: ${{ needs.bump.outputs.branch }}
+
+  pr:
+    needs: [bump, lock]
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+    env:
+      BRANCH: ${{ needs.bump.outputs.branch }}
+      PINNED: ${{ needs.bump.outputs.pinned }}
+      LATEST: ${{ needs.bump.outputs.latest }}
+      MOVED: ${{ needs.lock.outputs.moved }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - run: |
+          set -euo pipefail
+          locked="${MOVED:+ $MOVED moved with it, so will be rebuilt once each releases by its tag.}"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base main --head "$BRANCH" \
+            --title "chore(images): Debian snapshot $LATEST" --body \
+            "Every image's packages from Debian's snapshot of $LATEST, not $PINNED: both architectures bake again.$locked
+
+          Its images build when you dispatch them: \`gh workflow run images.yml --ref $BRANCH\`. It lands by squash."

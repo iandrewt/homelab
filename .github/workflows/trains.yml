@@ -18,13 +18,13 @@ jobs:
     timeout-minutes: 5
     outputs:
       moved: ${{ steps.check.outputs.moved }}
-      architecture: ${{ steps.check.outputs.architecture }}
+      branch: ${{ steps.check.outputs.branch }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - id: check
         shell: python3 {0}
         run: |
-          import os, pathlib, sys, tomllib, urllib.request
+          import datetime, os, pathlib, subprocess, tomllib, urllib.request
 
           catalog = tomllib.loads(pathlib.Path("images/images.toml").read_text())
           extensions = tomllib.loads(pathlib.Path("images/extensions.toml").read_text())
@@ -35,11 +35,10 @@ jobs:
               for stanza in path.read_text().strip().split("\n\n"):
                   yield dict(line.split(": ", 1) for line in stanza.splitlines())
 
-          moved, architectures = [], set()
+          moved = []
           for name, entry in extensions.items():
               sources = pathlib.Path(f"images/mkosi.profiles/{name}/sandbox/etc/apt/sources.list.d")
               for image in entry["images"]:
-                  architectures.add(catalog[image]["architecture"])
                   locked = dict(line.split("=", 1) for line in lock[name][image]["packages"])
                   for path in sorted(sources.glob("*.sources")):
                       for source in stanzas(path):
@@ -53,62 +52,45 @@ jobs:
                                       if fields.get("Package") in locked and fields["Version"] != locked[fields["Package"]]:
                                           print(f"{name} over {image}: {fields['Package']} {locked[fields['Package']]} -> {fields['Version']}")
                                           moved.append(name)
-          if len(architectures) > 1:
-              sys.exit(f"::error::locking again takes one runner, so one architecture: {sorted(architectures)}")
+          branch = f"extensions/{datetime.datetime.now(datetime.UTC):%Y%m%d}"
+          if moved and subprocess.run(["git", "ls-remote", "--exit-code", "--heads", "origin", branch],
+                                      capture_output=True).returncode == 0:
+              print(f"{branch} is already open")
+              moved = []
           with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-              out.write(f"moved={'true' if moved else 'false'}\narchitecture={architectures.pop()}\n")
+              out.write(f"moved={'true' if moved else 'false'}\nbranch={branch}\n")
 
-  # Over the images' trees, as `homelab image extension lock` locks them anywhere
   lock:
     needs: check
     if: needs.check.outputs.moved == 'true'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 30
     permissions:
       contents: write
+    uses: ./.github/workflows/lock.yml
+    with:
+      ref: ${{ github.sha }}
+      branch: ${{ needs.check.outputs.branch }}
+
+  pr:
+    needs: [check, lock]
+    if: needs.lock.outputs.moved != ''
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      contents: read
       pull-requests: write
     env:
-      ARCHITECTURE: ${{ needs.check.outputs.architecture }}
+      BRANCH: ${{ needs.check.outputs.branch }}
+      MOVED: ${{ needs.lock.outputs.moved }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
-          enable-cache: true
-      - id: bake
-        run: echo "inputs=$(uv run homelab image bake --inputs "$ARCHITECTURE")" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: |
-            ~/.cache/homelab/images/output/bake_${{ env.ARCHITECTURE }}.tar
-            ~/.cache/homelab/images/output/bake_${{ env.ARCHITECTURE }}.inputs
-          key: bake-${{ env.ARCHITECTURE }}-${{ steps.bake.outputs.inputs }}
-          fail-on-cache-miss: true
-      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: ~/.cache/homelab/images/packages/cache/apt/archives/*.deb
-          key: packages-${{ env.ARCHITECTURE }}-${{ hashFiles('images/mkosi.conf.d/debian/mkosi.conf') }}
-          restore-keys: packages-${{ env.ARCHITECTURE }}-
+          ref: ${{ needs.check.outputs.branch }}
+          fetch-depth: 2
       - run: |
           set -euo pipefail
-          uv run homelab image extension lock 2>&1 | tee lock.log
-          if git diff --quiet images/extensions.lock; then
-            echo "the lock holds what the trains do"
-            exit 0
-          fi
-          moved=$(sed -n 's/^==> \(.*\) moved$/\1/p' lock.log)
-          branch="extensions/$(date -u +%Y%m%d)"
-          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
-            echo "$branch is already open"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git switch -c "$branch"
-          git commit -q -am "chore(images): lock $moved again"
-          git push -q origin "$branch"
-          gh pr create --base main --head "$branch" --title "chore(images): lock $moved again" --body \
-            "A vendor's train moved, so $moved will be rebuilt:
+          gh pr create --base main --head "$BRANCH" --title "chore(images): lock $MOVED again" --body \
+            "A vendor's train moved, so $MOVED will be rebuilt:
 
           \`\`\`diff
           $(git diff --unified=0 HEAD~1 -- images/extensions.lock | tail -n +5)

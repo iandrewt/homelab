@@ -209,6 +209,11 @@ def read_lock(images: Path) -> dict:
     return tomllib.loads(path.read_text()) if path.exists() else {}
 
 
+def write_lock(images: Path, lock: dict) -> None:
+    header = "# What each extension was last released from: `homelab image extension lock` writes it\n\n"
+    _lockfile(images).write_text(header + tomli_w.dumps(dict(sorted(lock.items())), multiline_strings=True))
+
+
 def tree(images: Path, image: Image) -> Path:
     """The image's tree as its build lays it out, before any boot chain, built again unless its inputs are
     unchanged: what an extension is built over."""
@@ -305,8 +310,7 @@ def _lock(args) -> int:
     if args.check:
         return 1 if moved else 0
     if moved:
-        header = "# What each extension was last released from: `homelab image extension lock` writes it\n\n"
-        _lockfile(images).write_text(header + tomli_w.dumps(dict(sorted(lock.items())), multiline_strings=True))
+        write_lock(images, lock)
     say(f"{', '.join(moved)} moved" if moved else "nothing moved")
     return 0
 

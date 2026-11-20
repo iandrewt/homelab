@@ -312,8 +312,8 @@ image a pair of them, which a `mkosi.conf.d` file matching both names; `images.t
 mkosi has no setting for. **Every package a build takes is Debian's snapshot's** (`Snapshot=` in
 `mkosi.conf.d/debian/`, a bake input), the tools tree's too; a source mkosi doesn't make (ymir's forky,
 the bake's apt while the baseline runs) is rewritten to the snapshot, or refused, since apt falls back to
-the live archive without a word. The snapshot workflow opens its weekly bump as a PR, whose images
-build when dispatched at its branch, and the kernel is the bake's, so it moves with the snapshot. **A distribution is baked once per architecture**: the `bake` profile,
+the live archive without a word. The snapshot workflow opens its weekly bump as a PR, the lock with it,
+whose images build when dispatched at its branch, and the kernel is the bake's, so it moves with the snapshot. **A distribution is baked once per architecture**: the `bake` profile,
 booted by `mkosi vm` with a login its credentials make, `baseline.yml` run against it with no
 NetBox or 1Password loaded, then sealed into a tar every image takes as `BaseTrees=`. A family and
 target lay themselves over it with mkosi alone, adding what CIS doesn't touch or taking away what
@@ -338,7 +338,7 @@ its own files' hash. Only a moved lock rebuilds one, at upstream's version and a
 Arch's pkgrel): the base's libraries move with the base, under Debian's ABI and the release file's
 `VERSION_ID`, but a bundled one is a copy. A build refuses a lock that no longer resolves, and an
 extension that installs anything else; CI checks the lock on every change, and `trains.yml` locks a
-vendor's release again in a PR. What a package's scripts write in `/etc` and `/var` is gone: its users
+vendor's release again in a PR, each image on a runner of its architecture (`lock.yml`). What a package's scripts write in `/etc` and `/var` is gone: its users
 and their groups become `sysusers.d`, the directories its packages hold in `/var` tmpfiles, and its
 enablement and configuration are the machine's. It may hold a role's own files (`files` in
 `extensions.toml`), the anycast loop and the resolvers' health check, which a package-managed host
