@@ -65,6 +65,7 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 5
     permissions:
+      contents: read
       pull-requests: write
     env:
       BRANCH: ${{ needs.bump.outputs.branch }}
