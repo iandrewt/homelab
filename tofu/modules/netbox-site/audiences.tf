@@ -18,13 +18,15 @@ data "netbox_locations" "all" {
 
 data "netbox_virtual_machines" "all" {}
 
-locals {
-  # Prefixes and devices name their tags; VLANs and VMs give IDs
-  tag_by_name = { for t in data.netbox_tags.all.tags : t.name => t.slug }
+data "netbox_ip_addresses" "primaries" {
+  count = length(flatten(local.tagged_hosts[*].addresses)) > 0 ? 1 : 0
 
-  location_sites  = { for l in data.netbox_locations.all.locations : l.id => l.site_id }
-  vlan_zones      = { for v in data.netbox_vlans.all.vlans : v.id => v.role }
-  vlan_tags_by_id = { for v in data.netbox_vlans.all.vlans : v.id => [for id in v.tag_ids : local.tag_slugs[id]] }
+  filters = [for id in flatten(local.tagged_hosts[*].addresses) : { name = "id", value = tostring(id) }]
+}
+
+locals {
+  location_sites = { for l in data.netbox_locations.all.locations : l.id => l.site_id }
+  vlans_by_id    = { for v in data.netbox_vlans.all.vlans : v.id => v }
 
   prefixes_all = [
     for p in data.netbox_prefixes.all.prefixes : {
@@ -32,33 +34,35 @@ locals {
       family = strcontains(p.prefix, ":") ? "ipv6" : "ipv4"
       length = tonumber(split("/", p.prefix)[1])
       # An AZ's prefix is scoped to its Location, which is at the site
-      site = p.site_id != 0 ? p.site_id : lookup(local.location_sites, tostring(p.location_id), 0)
-      zone = try(jsondecode(p.custom_fields.zone).id, lookup(local.vlan_zones, p.vlan_id, null))
-      tags = setunion([for name in p.tags : local.tag_by_name[name]], lookup(local.vlan_tags_by_id, p.vlan_id, []))
+      site = coalesce(p.site_id, try(local.location_sites[p.location_id], null), 0)
+      zone = try(tonumber(p.custom_fields.zone), local.vlans_by_id[p.vlan_id].role_id, null)
+      tags = setunion(coalesce(p.tags, []), coalesce(try(local.vlans_by_id[p.vlan_id].tags, null), []))
       audience = {
-        zones = try([for z in jsondecode(p.custom_fields.audience) : z.id], [])
-        tags  = try([for t in jsondecode(p.custom_fields.audience_tags) : t.slug], [])
-        sites = try([for s in jsondecode(p.custom_fields.audience_sites) : s.id], [])
+        zones = try(jsondecode(p.custom_fields.audience), [])
+        tags  = [for id in try(jsondecode(p.custom_fields.audience_tags), []) : local.tag_slugs[id]]
+        sites = try(jsondecode(p.custom_fields.audience_sites), [])
       }
     }
     if contains(["active", "container"], p.status)
   ]
 
   # A host's tag covers its primary addresses, the ones it's reached from
-  tagged_primaries = concat(
-    [for d in data.netbox_devices.all.devices : { tags = [for name in d.tags : local.tag_by_name[name]], addresses = [d.primary_ipv4, d.primary_ipv6] }],
-    [for v in data.netbox_virtual_machines.all.vms : { tags = [for id in v.tag_ids : local.tag_slugs[id]], addresses = [v.primary_ip4, v.primary_ip6] }],
-  )
+  tagged_hosts = [
+    for h in concat(
+      [for d in data.netbox_devices.all.devices : { tags = d.tags, ids = [d.primary_ip4_id, d.primary_ip6_id] }],
+      [for v in data.netbox_virtual_machines.all.virtual_machines : { tags = v.tags, ids = [v.primary_ip4_id, v.primary_ip6_id] }],
+    ) : { tags = h.tags, addresses = compact(h.ids) }
+    if h.tags != null
+  ]
+  primaries = { for a in try(data.netbox_ip_addresses.primaries[0].ip_addresses, []) : a.id => a.ip_address }
   host_sources = flatten([
-    for h in local.tagged_primaries : [
-      for a in h.addresses : {
-        prefix = "${split("/", a)[0]}/${strcontains(a, ":") ? 128 : 32}"
-        family = strcontains(a, ":") ? "ipv6" : "ipv4"
+    for h in local.tagged_hosts : [
+      for id in h.addresses : {
+        prefix = "${split("/", local.primaries[id])[0]}/${strcontains(local.primaries[id], ":") ? 128 : 32}"
+        family = strcontains(local.primaries[id], ":") ? "ipv6" : "ipv4"
         tags   = h.tags
       }
-      if a != null && a != ""
     ]
-    if length(h.tags) > 0
   ])
 
   destination_holders = {

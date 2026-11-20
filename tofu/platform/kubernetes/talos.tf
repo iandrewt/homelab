@@ -32,7 +32,7 @@ module "talos" {
     asn          = local.asn.fabric
     workload_asn = local.asn.workload
     cilium_asn   = local.asn.cilium
-    import       = flatten([for purpose in keys(merge(local.blocks, local.pools)) : values(local.owned[purpose])])
+    import       = flatten([for purpose in concat(local.blocks, keys(local.pools)) : values(local.owned[purpose])])
   }
 
   oidc = {

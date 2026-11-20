@@ -46,27 +46,35 @@ data "netbox_cluster" "this" {
 }
 
 data "netbox_devices" "metal" {
-  filter {
-    name  = "cluster_id"
-    value = tostring(data.netbox_cluster.this.cluster_id)
-  }
+  filters = [{ name = "cluster_id", value = tostring(data.netbox_cluster.this.id) }]
 }
 
 data "netbox_device_interfaces" "metal" {
-  for_each = { for d in data.netbox_devices.metal.devices : d.name => d.device_id }
+  for_each = { for d in data.netbox_devices.metal.devices : d.name => d.id }
 
-  filter {
-    name  = "device_id"
-    value = tostring(each.value)
-  }
+  filters = [{ name = "device_id", value = tostring(each.value) }]
+}
+
+data "netbox_mac_addresses" "metal" {
+  for_each = { for d in data.netbox_devices.metal.devices : d.name => d.id }
+
+  filters = [{ name = "device_id", value = tostring(each.value) }]
 }
 
 locals {
   metal = {
     for name, found in data.netbox_device_interfaces.metal : name => {
-      class      = one([for d in data.netbox_devices.metal.devices : d.custom_fields["class"] if d.name == name])
-      secured    = one([for d in data.netbox_devices.metal.devices : try(d.custom_fields["secure_boot"], "") == "true" && try(d.custom_fields["tpm"], "") == "true" if d.name == name])
-      interfaces = { for vnet, v in local.subnets : vnet => one([for i in found.interfaces : i if anytrue([for u in i.untagged_vlan : u.vid == (vnet == local.node_vlan.vnet ? local.node_vlan.vid : local.vlan_by_vnet[vnet].vid)])]) }
+      class   = one([for d in data.netbox_devices.metal.devices : d.custom_fields["class"] if d.name == name])
+      secured = one([for d in data.netbox_devices.metal.devices : try(d.custom_fields["secure_boot"], "") == "true" && try(d.custom_fields["tpm"], "") == "true" if d.name == name])
+      interfaces = {
+        for vnet, v in local.subnets : vnet => one([
+          for i in found.device_interfaces : {
+            name        = i.name
+            mac_address = one([for m in data.netbox_mac_addresses.metal[name].mac_addresses : m.mac_address if m.device_interface_id == i.id])
+          }
+          if i.untagged_vlan_id == (vnet == local.node_vlan.vnet ? local.node_vlan.id : local.vlan_by_vnet[vnet].id)
+        ])
+      }
     }
   }
 

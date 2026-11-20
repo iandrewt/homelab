@@ -6,41 +6,38 @@ module "netbox" {
 
 # NetBox is the record of each: where it runs, its size and its VLAN. Hardware is `bootstrap pi`'s.
 data "netbox_virtual_machines" "resolvers" {
-  filter {
-    name  = "site"
-    value = local.site
-  }
-
-  filter {
-    name  = "role"
-    value = "dns-resolver"
-  }
+  filters = [
+    { name = "site", value = local.site },
+    { name = "role", value = "dns-resolver" },
+  ]
 }
 
 data "netbox_clusters" "all" {}
 
-data "netbox_interfaces" "resolver" {
-  for_each = { for vm in data.netbox_virtual_machines.resolvers.vms : vm.name => vm.vm_id }
+data "netbox_devices" "site" {
+  filters = [{ name = "site", value = local.site }]
+}
 
-  filter {
-    name  = "vm_id"
-    value = tostring(each.value)
-  }
+data "netbox_virtual_machine_interfaces" "resolver" {
+  for_each = { for vm in data.netbox_virtual_machines.resolvers.virtual_machines : vm.name => vm.id }
+
+  filters = [{ name = "virtual_machine_id", value = tostring(each.value) }]
 }
 
 locals {
-  clusters = { for c in data.netbox_clusters.all.clusters : c.cluster_id => c.name }
-  by_vid   = { for name, v in module.netbox.vlans : v.vid => v }
+  clusters = { for c in data.netbox_clusters.all.clusters : c.id => c.name }
+  hosts    = { for d in data.netbox_devices.site.devices : d.id => d.name }
+  by_id    = { for name, v in module.netbox.vlans : v.id => v }
 
   resolvers = {
-    for vm in data.netbox_virtual_machines.resolvers.vms : vm.name => {
+    for vm in data.netbox_virtual_machines.resolvers.virtual_machines : vm.name => {
       proxmox   = local.clusters[vm.cluster_id]
-      host      = vm.device_name
+      host      = local.hosts[vm.device_id]
       cores     = vm.vcpus
       memory_mb = vm.memory_mb
       disk_gb   = ceil(vm.disk_size_mb / 1024)
       # The interface that's on a VLAN, besides lo and anycast0
-      vlan = local.by_vid[one(flatten([for i in data.netbox_interfaces.resolver[vm.name].interfaces : i.untagged_vlan[*].vid]))]
+      vlan = local.by_id[one(compact(data.netbox_virtual_machine_interfaces.resolver[vm.name].virtual_machine_interfaces[*].untagged_vlan_id))]
     }
   }
 

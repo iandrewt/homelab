@@ -34,7 +34,7 @@ locals {
   # The VLAN-aware bridge every node trunks its VNets on, as ifupdown2 builds it from NetBox
   trunks = distinct(flatten([
     for node, d in data.netbox_device_interfaces.nodes : [
-      for i in d.interfaces : { name = i.name, mtu = i.mtu } if i.type == "bridge" && try(i.mode.value, "") == "tagged"
+      for i in d.device_interfaces : { name = i.name, mtu = i.mtu } if i.type == "bridge" && i.mode == "tagged"
     ]
   ]))
   trunk = one(local.trunks)

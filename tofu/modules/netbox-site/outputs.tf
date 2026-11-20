@@ -1,10 +1,11 @@
 output "vlans" {
   value = {
     for v in data.netbox_vlans.site.vlans : v.name => {
+      id      = v.id
       vid     = v.vid
       vnet    = try(v.custom_fields.vnet, "")
-      cluster = try(jsondecode(v.custom_fields.cluster).name, null)
-      tags    = local.vlan_tags[v.name]
+      cluster = try(local.clusters[v.custom_fields.cluster], null)
+      tags    = v.tags == null ? [] : sort(v.tags)
       subnets = [
         for cidr in local.vlan_subnets[v.name] : {
           cidr = cidr
@@ -17,7 +18,7 @@ output "vlans" {
       ]
     }
   }
-  description = "The site's VLANs by name: vid, `vnet` and `cluster`, tag slugs, and a prefix per family with the router's address in it (null on a VLAN-only network)."
+  description = "The site's VLANs by name: its ID within this plan, vid, `vnet` and `cluster`, tag slugs, and a prefix per family with the router's address in it (null on a VLAN-only network)."
 }
 
 output "prefixes" {

@@ -52,7 +52,7 @@ where NetBox has nothing, and points at a built-in object rather than a choice:
 | a cluster | Virtualization Cluster: a Proxmox cell scoped to its AZ, named as gear (`alf-pve-01`); a Kubernetes cluster scoped to its region, `<region>-k8s-<purpose>` (`au1-k8s-shared`), its DNS path reversed (`shared.k8s.au1.sys`), custom field `number` its Cilium cluster ID, unique within a mesh. Its node or corosync network is the VLAN whose `cluster` names it |
 | a CPU family | the host's CPU module; a VM inherits its host's, under `cpu=host` |
 | a host's GPU | its module, profile `GPU`, in a PCIe bay: a node keeps its maker's drivers off, for passthrough |
-| the site's router | ASN, role `router`, assigned to the site; the Device, role `Router Firewall` (by name: the tofu provider can look a role up by nothing else) |
+| the site's router | ASN, role `router`, assigned to the site; the Device, role `Router Firewall` |
 | the VIDs a site may have | its VLAN group's `vid_ranges`: below 100 anywhere, 200-399 and the lab's trunks at a hub |
 | a VLAN's gateway | the IP on the router's interface inside the VLAN's prefix; none on a VLAN-only network |
 | how the router peers | the BGP plugin: a peer group per listen range, holding its timers and export policy (`NOTHING`); a session per speaker group allowed on a range - the router's device and address there, the group's ASN, the range as remote prefix, the group's prefix limit |

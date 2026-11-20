@@ -1,20 +1,19 @@
 locals {
   family_order = ["ipv6", "ipv4"]
 
-  # Each pool a cluster can originate, by purpose. `role` is its name in NetBox, since the
-  # provider can look a role up by nothing else. A cluster gets a pool by NetBox giving it
-  # one: the pools component makes what it's given.
+  # Each pool a cluster can originate, by purpose, its NetBox role. A cluster gets a pool by
+  # NetBox giving it one: the pools component makes what it's given.
   pools = {
-    pods-default  = { role = "Pods Default", kind = "pod", name = "default", mask4 = 28 }
-    pods-storage  = { role = "Pods Storage", kind = "pod", name = "storage", mask4 = 30 }
-    pods-internet = { role = "Pods Internet", kind = "pod", name = "internet", mask4 = 30 }
-    lb-site       = { role = "Load Balancer Site", kind = "lb", name = "lb-site", exposure = "site" }
-    lb-home       = { role = "Load Balancer Home", kind = "lb", name = "lb-home", exposure = "home" }
-    lb-internet   = { role = "Load Balancer Internet", kind = "lb", name = "lb-internet", exposure = "internet" }
+    pods-default  = { kind = "pod", name = "default", mask4 = 28 }
+    pods-storage  = { kind = "pod", name = "storage", mask4 = 30 }
+    pods-internet = { kind = "pod", name = "internet", mask4 = 30 }
+    lb-site       = { kind = "lb", name = "lb-site", exposure = "site" }
+    lb-home       = { kind = "lb", name = "lb-home", exposure = "home" }
+    lb-internet   = { kind = "lb", name = "lb-internet", exposure = "internet" }
   }
   # The router accepts routes inside these: the site's block holds its pod pools
-  blocks = { pods-site = "Pods Site" }
-  roles  = merge({ for p, pool in local.pools : p => pool.role }, local.blocks, { kubernetes-api = "Kubernetes API" })
+  blocks = ["pods-site"]
+  roles  = concat(keys(local.pools), local.blocks, ["kubernetes-api"])
 
   asn = { fabric = local.cluster.asn, workload = local.cluster.asn + 1, cilium = local.cluster.asn + 2 }
 }
@@ -24,7 +23,7 @@ module "netbox" {
 
   site_slug      = local.cluster.site
   origin_asn     = local.cluster.asn
-  prefix_roles   = values(local.roles)
+  prefix_roles   = local.roles
   audience_roles = ["kubernetes-api"]
 }
 
@@ -38,7 +37,7 @@ locals {
   }
 
   owned = {
-    for purpose in keys(local.roles) : purpose => {
+    for purpose in local.roles : purpose => {
       for f in local.family_order : f => one(module.netbox.owned[purpose][f]) if length(module.netbox.owned[purpose][f]) > 0
     }
   }
