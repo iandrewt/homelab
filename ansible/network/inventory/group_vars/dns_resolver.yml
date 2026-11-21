@@ -15,6 +15,12 @@ dns_resolver_vlan: "{{ netbox_site.vlans[dns_resolver.vlan] }}"
 # On an image-based host, what it runs
 extensions_enabled: [frr, pdns, pdns-recursor, dnsdist, haproxy]
 
+# An update is kept once this serves as anycast-check would have it serve
+host_upgrade_check: >-
+  systemctl is-active --quiet frr.service anycast-check.service
+  {{ ([frr_bgp_anycast_service] + frr_bgp_anycast_needs) | join(' ') }} && {{ frr_bgp_anycast_check }}
+host_upgrade_check_timeout: 600
+
 frr_bgp_local_asn: "{{ dns_resolver.asn }}"
 frr_bgp_peer_asn: "{{ netbox_site.router_asn }}"
 frr_bgp_peer_address: "{{ dns_resolver_vlan.gateway_ipv4 }}"

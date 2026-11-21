@@ -1,0 +1,17 @@
+#!/bin/sh
+# Each extension version this boot tries, as sysupdate names one with a try left: kept ($1 good), or out of tries
+# (bad), which reboots into the ones before, as it does a counted boot entry, which systemd-boot has already
+# counted down
+set -u
+tried=
+for raw in /var/lib/extensions/*.raw.v/*+[1-9]*.raw; do
+  [ -e "$raw" ] || continue
+  if [ "$1" = good ]; then mv "$raw" "${raw%%+*}.raw"; else mv "$raw" "${raw%%+*}+0-1.raw"; fi
+  tried="$tried ${raw##*/}"
+done
+[ "$1" = bad ] || exit 0
+[ ! -e /sys/firmware/efi/efivars/LoaderBootCountPath-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f ] \
+  || tried="$tried, this boot's entry"
+[ -n "$tried" ] || exit 0
+echo "unhealthy trying$tried: booting the ones before"
+systemctl reboot --no-block

@@ -7,6 +7,10 @@
   ansible.builtin.import_tasks: upgrade_schedule.yml
   tags: [upgrades]
 
+- name: Upgrade channel and assessment
+  ansible.builtin.import_tasks: upgrade_assessment.yml
+  tags: [upgrades]
+
 - name: Service accounts
   ansible.builtin.import_tasks: service_accounts.yml
   tags: [service_accounts]

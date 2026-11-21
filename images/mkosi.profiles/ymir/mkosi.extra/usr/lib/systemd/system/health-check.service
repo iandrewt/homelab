@@ -1,0 +1,14 @@
+[Unit]
+Description=Keep what this boot tries only once the host does its job
+Documentation=https://systemd.io/AUTOMATIC_BOOT_ASSESSMENT/
+After=multi-user.target
+Before=boot-complete.target
+OnFailure=health-check-failed.service
+
+[Service]
+Type=oneshot
+# The host's own, as a shell runs it, in a drop-in, with the time it takes to pass
+Environment=HEALTH_CHECK=true
+ExecStart=/bin/sh -c 'until sh -c "$$HEALTH_CHECK" >/dev/null 2>&1; do sleep 5; done'
+ExecStartPost=/usr/lib/homelab/assess good
+TimeoutStartSec=300

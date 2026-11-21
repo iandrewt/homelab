@@ -227,10 +227,10 @@ class Vm:
         self.ssh("sudo sh -c '/usr/lib/homelab/seal && systemd-run --on-active=2 systemctl poweroff' >/dev/null")
         self.wait_until_stopped()
 
-    def reboot(self, timeout: int = 600) -> None:
-        """Reboots it, and waits until it's back from a boot of its own."""
+    def reboot(self, command: str = "sudo systemctl reboot", timeout: int = 600) -> None:
+        """Reboots it, by a command of its own if it's given one, and waits until it's back from a boot of its own."""
         before = self.ssh("cat /proc/sys/kernel/random/boot_id").strip()
-        subprocess.run(["ssh", *self.ssh_args, "debian@127.0.0.1", "sudo systemctl reboot"],
+        subprocess.run(["ssh", *self.ssh_args, "debian@127.0.0.1", command],
                        capture_output=True, check=False)
         timeout *= self.patience
         deadline = time.monotonic() + timeout
@@ -263,6 +263,16 @@ class Vm:
             if time.monotonic() > deadline:
                 raise BootstrapError(f"no SSH in {timeout}s: see {self.log}")
             time.sleep(5)
+
+    def wait_until(self, check: str, timeout: int = 600) -> bool:
+        """Whether a command exits 0 on it within the timeout, through whatever reboots it makes on the way."""
+        deadline = time.monotonic() + timeout * self.patience
+        while subprocess.run(["ssh", *self.ssh_args, "debian@127.0.0.1", check],
+                             capture_output=True, check=False).returncode:
+            if time.monotonic() > deadline:
+                return False
+            time.sleep(5)
+        return True
 
     def wait_until_stopped(self, timeout: int = 300) -> None:
         timeout *= self.patience

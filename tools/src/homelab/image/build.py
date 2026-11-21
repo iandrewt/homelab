@@ -74,9 +74,13 @@ MatchPattern={name}_@v.raw
 [Target]
 Type=regular-file
 Path=/var/lib/extensions/{name}.raw.v
-MatchPattern={name}_@v.raw
+MatchPattern={name}_@v+@l-@d.raw {name}_@v+@l.raw {name}_@v.raw
 Mode=0444
-InstancesMax=2
+# Tried once: health-check keeps it, or marks it bad and takes the one before
+TriesLeft=1
+TriesDone=0
+# A bad one keeps its slot until a newer one, which mustn't take the slot of the last good one
+InstancesMax=3
 """
 
 

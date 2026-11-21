@@ -1,0 +1,7 @@
+[Unit]
+Description=Boot what came before what this boot tries
+Documentation=https://systemd.io/AUTOMATIC_BOOT_ASSESSMENT/
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/homelab/assess bad

@@ -67,6 +67,11 @@ done
 for timer in systemd-sysupdate-update.timer systemd-sysupdate-reboot.timer; do
   ln -sfn "../$timer" "/usr/lib/systemd/system/timers.target.wants/$timer"
 done
+# Every boot assesses what it tries, and a counted one is blessed only once that passes
+for target in multi-user.target.wants boot-complete.target.requires; do
+  mkdir -p "/usr/lib/systemd/system/$target"
+  ln -sfn ../health-check.service "/usr/lib/systemd/system/$target/health-check.service"
+done
 
 # Users and groups, as sysusers makes them at boot
 mkdir -p /usr/lib/sysusers.d

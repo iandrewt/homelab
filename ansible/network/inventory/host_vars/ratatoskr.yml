@@ -1,4 +1,2 @@
 ---
 ansible_user: debian
-
-host_upgrade_schedule: "*-*-* 09:00 Australia/Sydney"  # staggered against hugin - see hugin.yml

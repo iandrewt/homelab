@@ -3,6 +3,12 @@
 # e.g. `*-*-* 03:00 Australia/Sydney`
 host_upgrade_timer: "{{ host_os_upgrade_timer }}"
 host_upgrade_schedule: ~
+# The channel an image-based host's image updates from: stable, or canary
+host_upgrade_channel: stable
+# A command a shell runs, exiting 0 while the host does its job: an image-based host keeps an update, or an
+# extension's, only once it passes within the timeout's seconds, and takes the one before otherwise
+host_upgrade_check: ~
+host_upgrade_check_timeout: 300
 
 # Machine accounts: {name, ssh_key, comment?, shell?, sudo_commands?, directories?}.
 host_service_accounts: []

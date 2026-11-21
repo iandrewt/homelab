@@ -1,0 +1,71 @@
+---
+- name: Find the image's transfers
+  ansible.builtin.find:
+    paths: /usr/lib/sysupdate.d
+    patterns: "*.transfer"
+  register: host_transfers
+
+- name: Read each, to follow another channel
+  ansible.builtin.slurp:
+    src: "{{ item.path }}"
+  loop: "{{ host_transfers.files if host_upgrade_channel != 'stable' else [] }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  register: host_transfers_read
+
+- name: Make the transfers' drop-in directory
+  ansible.builtin.file:
+    path: /etc/sysupdate.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: host_transfers_read.results | length > 0
+
+- name: Follow the host's channel
+  ansible.builtin.copy:
+    dest: /etc/sysupdate.d/{{ item.source | basename }}
+    content: "{{ item.content | b64decode | replace('/stable/', '/' ~ host_upgrade_channel ~ '/') }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ host_transfers_read.results }}"
+  loop_control:
+    label: "{{ item.source | basename }}"
+
+- name: Follow the image's own channel otherwise
+  ansible.builtin.file:
+    path: /etc/sysupdate.d/{{ item.path | basename }}
+    state: absent
+  loop: "{{ host_transfers.files if host_upgrade_channel == 'stable' else [] }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: Make the health check's drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/health-check.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: host_upgrade_check is not none
+
+- name: Assess an update by the host's own check
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/health-check.service.d/50-check.conf
+    content: |
+      [Service]
+      Environment="HEALTH_CHECK={{ host_upgrade_check | replace('%', '%%') }}"
+      TimeoutStartSec={{ host_upgrade_check_timeout }}
+    owner: root
+    group: root
+    mode: "0644"
+  when: host_upgrade_check is not none
+  notify: Reload units
+
+- name: Or by none
+  ansible.builtin.file:
+    path: /etc/systemd/system/health-check.service.d/50-check.conf
+    state: absent
+  when: host_upgrade_check is none
+  notify: Reload units

@@ -1,7 +1,8 @@
 ---
 ansible_user: debian
 
-host_upgrade_schedule: "*-*-* 03:00 Australia/Sydney"  # staggered against ratatoskr - see ratatoskr.yml
+# A release reaches the primary only once promoted, so only once a resolver has served on it
+host_upgrade_channel: canary
 
 deb13cis_sudoers_exclude_nopasswd_list:
   - debian

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Exits 0 while something installed is yet to be tried: an extension version with a try left, or a newer image
+# whose boot entry wasn't marked bad
+for raw in /var/lib/extensions/*.raw.v/*+[1-9]*.raw; do [ ! -e "$raw" ] || exit 0; done
+/usr/lib/systemd/systemd-sysupdate pending >/dev/null 2>&1 || exit 1
+for entry in "$(bootctl --print-boot-path)"/EFI/Linux/*+0.efi "$(bootctl --print-boot-path)"/EFI/Linux/*+0-*.efi; do
+  [ ! -e "$entry" ] || exit 1
+done

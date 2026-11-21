@@ -481,10 +481,13 @@ def _boot(image: Image, out: Path, disk: Path, names: list[str], built: dict[str
         for name in names:
             vm.ssh(INSTALL.format(name=name, url=f"{url}{name}/"))
             installed = vm.ssh(f"sudo ls /var/lib/extensions/{name}.raw.v 2>&1 || true").split()
-            failures += _check(f"sysupdate installs {name} once its component is enabled",
-                               installed == [built[name].name], " ".join(installed))
+            failures += _check(f"sysupdate installs {name} once its component is enabled, to be tried",
+                               installed == [_tried(built[name].name)], " ".join(installed))
         vm.reboot()
         vm.ssh("systemctl is-system-running --wait >/dev/null || true")
+        for name in names:
+            kept = vm.ssh(f"sudo ls /var/lib/extensions/{name}.raw.v 2>&1 || true").split()
+            failures += _check(f"{name} is kept once the host is healthy", kept == [built[name].name], " ".join(kept))
         merged = vm.ssh("systemd-sysext status --no-pager")
         for name in names:
             failures += _extension(vm, name, built[name].name, merged)
@@ -529,28 +532,57 @@ def _play(vm: Vm, playbook: Path, extra: dict, log: Path) -> int | None:
     return int(recap[1]) if result.returncode == 0 and recap else None
 
 
+def _tried(file: str) -> str:
+    """An extension's file as sysupdate installs it, with one try left until health-check keeps it."""
+    return f"{file.removesuffix('.raw')}+1-0.raw"
+
+
+WINDOW = "sudo systemctl start --no-block systemd-sysupdate-reboot.service"
+
+FAILING = ("sudo sh -c 'mkdir -p /etc/systemd/system/health-check.service.d"
+           " && printf \"[Service]\\nEnvironment=HEALTH_CHECK=false\\nTimeoutStartSec=5\\n\""
+           " > /etc/systemd/system/health-check.service.d/50-check.conf && systemctl daemon-reload'")
+
+
 def _refreshed(vm: Vm, names: list[str], built: dict[str, Path]) -> list[str]:
-    """A newer version of each, installed, taken over in the reboot window: what ran restarts, and nothing starts"""
-    units = {}
+    """A newer version of each, installed, taken by the reboot window, and each kept once the host is healthy.
+    Then one after that its check fails, rejected for the one before"""
     for name in names:
         file = built[name].name
-        vm.ssh(f"sudo cp /var/lib/extensions/{name}.raw.v/{file} /var/lib/extensions/{name}.raw.v/{file[:-4]}.1.raw")
-        units.update(dict(line.split(maxsplit=1) for line in vm.ssh(
-            f"sudo systemd-dissect --list /var/lib/extensions/{name}.raw.v/{file} 2>/dev/null"
-            " | sed -n 's|^usr/lib/systemd/system/\\([^/@]*\\.service\\)$|\\1|p'"
-            " | while read -r unit; do echo \"$unit $(systemctl show -p MainPID --value \"$unit\")\"; done"
-        ).splitlines()))
-    vm.ssh("sudo systemctl start systemd-sysupdate-reboot.service")
-    log = vm.ssh("sudo journalctl -b -u systemd-sysupdate-reboot.service --no-pager -o cat")
-    failed = _check("the reboot window takes over a newer extension", "refreshing for" in log, log)
-    after = {unit: vm.ssh(f"systemctl show -p MainPID --value {unit}").strip() for unit in units}
-    failed += _check("what ran restarted on it, and what didn't stayed off",
-                     all((pid == "0") == (after[unit] == "0") and (pid == "0" or after[unit] != pid)
-                         for unit, pid in units.items()),
-                     "\n".join(f"{unit}: {pid} to {after[unit]}" for unit, pid in units.items()))
-    state = vm.ssh("systemctl is-system-running || true").strip()
-    return failed + _check("it's running after the refresh, with no unit failed", state == "running",
-                           state + "\n" + vm.ssh("systemctl --failed --no-legend --plain || true"))
+        vm.ssh(f"sudo cp /var/lib/extensions/{name}.raw.v/{file} "
+               f"/var/lib/extensions/{name}.raw.v/{_tried(file.removesuffix('.raw') + '.1.raw')}")
+    vm.reboot(WINDOW)
+    state = vm.ssh("systemctl is-system-running --wait || true").strip()
+    failed = _check("the reboot window takes a newer extension, with no unit failed", state == "running",
+                    state + "\n" + vm.ssh("systemctl --failed --no-legend --plain || true"))
+    versions = {name: built[name].name.removesuffix(".raw") for name in names}
+    kept = {name: vm.ssh(f"sudo ls /var/lib/extensions/{name}.raw.v").split() for name in names}
+    failed += _check("each newer one is kept once the host is healthy",
+                     all(f"{v}.1.raw" in kept[name] for name, v in versions.items()), str(kept))
+    return failed + _rejected(vm, versions)
+
+
+def _rejected(vm: Vm, versions: dict[str, str]) -> list[str]:
+    """A newer version again, which the host's check fails: marked bad, and the one before merged by the next boot."""
+    for name, version in versions.items():
+        vm.ssh(f"sudo cp /var/lib/extensions/{name}.raw.v/{version}.1.raw "
+               f"/var/lib/extensions/{name}.raw.v/{_tried(version + '.2.raw')}")
+    vm.ssh(FAILING)
+    boots = len(vm.ssh("sudo journalctl --list-boots --no-pager").splitlines())
+    vm.reboot(WINDOW)
+    back = vm.wait_until(f"[ $(sudo journalctl --list-boots --no-pager | wc -l) -ge {boots + 2} ]"
+                         " && { systemctl is-system-running --wait >/dev/null; true; }")
+    found = {name: vm.ssh(f"sudo ls /var/lib/extensions/{name}.raw.v").split() for name in versions}
+    log = vm.ssh("sudo journalctl -b -1 -u health-check-failed.service --no-pager -o cat || true")
+    failed = _check("a newer one the host's check fails is marked bad, and the host reboots",
+                    back and all(f"{v}.2+0-1.raw" in found[name] for name, v in versions.items())
+                    and "booting the ones before" in log, f"{found}\n{log}")
+    merged = vm.ssh("sudo journalctl -b --no-pager -o cat -t '(sd-merge)' | grep 'Using extensions' || true")
+    failed += _check("and the one before it merged again",
+                     all(f"{v}.1.raw" in merged for v in versions.values()), merged)
+    vm.ssh("sudo sh -c 'rm /etc/systemd/system/health-check.service.d/50-check.conf && systemctl daemon-reload"
+           " && systemctl reset-failed health-check.service'")
+    return failed
 
 
 def _extension(vm: Vm, name: str, file: str, merged: str) -> list[str]:

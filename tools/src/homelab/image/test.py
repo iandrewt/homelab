@@ -120,14 +120,16 @@ def _report(name: str, failures: list[str]) -> int:
 
 
 def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -> list[str]:
-    """Two new VMs: the first checked, rebooted to compare its hardening, and updated A/B to a next version."""
+    """Two new VMs: the first checked, rebooted to compare its hardening, updated A/B to a next version, and
+    offered one after that which its check fails."""
     version, = {re.sub(rf"^{base.name}_(.*)\.efi$", r"\1", p.name) for p in (out / "updates").glob("*.efi")}
-    following = f"{version}.1"
-    # The build's keys, in out, sign its next version too
-    work = signing.prepare(images, builder.CACHE / "signing") if sign == "kms" else None
-    build.lay_out(images, base, out, following, work)
+    following, rejected = f"{version}.1", f"{version}.2"
+    # The build's keys, in out, sign its next versions too
+    signer = signing.prepare(images, builder.CACHE / "signing") if sign == "kms" else None
+    build.lay_out(images, base, out, following, signer)
     builder.run_in({out: "/out"}, "sh", "-ec", "rm -rf /out/next\ncp -a /out/updates /out/next")
-    build.updates(base, out, following, work, into="/out/next")
+    build.updates(base, out, following, signer, into="/out/next")
+    build.lay_out(images, base, out, rejected, signer)
 
     failures = []
     identities = []
@@ -150,6 +152,8 @@ def _image_based(images: Path, base: Image, image: Path, out: Path, sign: str) -
                 failures += _rebooted(vm)
                 failures += _extended(vm)
                 failures += _updated(vm, base, following)
+                build.updates(base, out, rejected, signer, into="/out/next")
+                failures += _rejected(vm, base, following, rejected)
                 failures += _grown(vm)
             else:
                 failures += _seeded_network(vm)
@@ -289,6 +293,34 @@ def _updated(vm: Vm, base: Image, version: str) -> list[str]:
     failed += _check(f"it booted {version}", running == version, running)
     entries = vm.ssh("sudo ls /boot/EFI/Linux")
     return failed + _check(f"{version} was blessed", f"{base.name}_{version}.efi" in entries.split(), entries)
+
+
+def _rejected(vm: Vm, base: Image, running: str, rejected: str) -> list[str]:
+    """A next version the host's check fails: its entry is marked bad and the one before booted again, which the
+    reboot window then keeps."""
+    vm.ssh("sudo sh -c 'mkdir -p /etc/systemd/system/health-check.service.d"
+           " && printf \"[Service]\\nEnvironment=HEALTH_CHECK=false\\nTimeoutStartSec=5\\n\""
+           " > /etc/systemd/system/health-check.service.d/50-check.conf && systemctl daemon-reload"
+           " && systemctl start systemd-sysupdate-update.service"
+           " && while systemctl is-active -q systemd-sysupdate-update.service; do sleep 2; done'")
+    entries = vm.ssh("sudo ls /boot/EFI/Linux")
+    failed = _check(f"sysupdate installed {rejected}", f"{base.name}_{rejected}+" in entries, entries)
+    boots = len(vm.ssh("sudo journalctl --list-boots --no-pager").splitlines())
+    vm.reboot()
+    back = vm.wait_until(f". /usr/lib/os-release && [ \"$IMAGE_VERSION\" = {running} ]")
+    tried = len(vm.ssh("sudo journalctl --list-boots --no-pager").splitlines()) - boots
+    failed += _check(f"it booted {rejected}, then {running} again once {rejected} failed its check", back and tried == 2,
+                    vm.ssh(". /usr/lib/os-release && echo $IMAGE_VERSION || true"))
+    entries = vm.ssh("sudo ls /boot/EFI/Linux")
+    failed += _check(f"{rejected}'s entry is marked bad",
+                     re.search(rf"^{re.escape(base.name)}_{re.escape(rejected)}\+0-\d+\.efi$", entries, re.M) is not None,
+                     entries)
+    boot = vm.ssh("cat /proc/sys/kernel/random/boot_id")
+    window = vm.ssh("sudo systemctl start systemd-sysupdate-reboot.service && echo ok || true").strip()
+    stayed = vm.ssh("cat /proc/sys/kernel/random/boot_id") == boot
+    vm.ssh("sudo sh -c 'rm /etc/systemd/system/health-check.service.d/50-check.conf && systemctl daemon-reload"
+           " && systemctl reset-failed health-check.service'")
+    return failed + _check("the reboot window doesn't take it again", window == "ok" and stayed, window)
 
 
 def _boot(base: Image, image: Path, out: Path, boot: str) -> tuple[tuple[str, str], list[str]]:

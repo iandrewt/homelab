@@ -4,6 +4,8 @@ image_roles: []
 
 # Updated A/B by sysupdate, which reboots into a new version in the host's window
 host_upgrade_timer: systemd-sysupdate-reboot.timer
+# Its extensions follow its image's channel
+extensions_channel: "{{ host_upgrade_channel | default('stable') }}"
 
 # What it runs is the image's, or an extension's
 host_firewall_install: false

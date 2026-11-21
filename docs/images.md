@@ -25,11 +25,20 @@ release goes to a `canary` channel, and is promoted to `stable`, which a machine
 qcow2 is beside its update files, `<image>/<channel>/<image>_<version>.qcow2`, for a new machine to
 start from, until its channel keeps five newer.
 `systemd-sysupdate-update.timer` installs the newest of the image and of every component the machine
-has enabled, and `systemd-sysupdate-reboot.timer` reboots into a new version of the image daily at
-04:10 UTC, which a drop-in moves to a window of its own. Without a new image, the window takes over any
-extension newer than the one merged instead, restarting only the services it ships that were running. A machine
+has enabled, and `systemd-sysupdate-reboot.timer` reboots into whatever's new, the image or an extension,
+daily at 04:10 UTC; a machine is staggered by its channel, not its time. A machine
 following canary says so in `/etc/sysupdate.d/`, a copy of each `/usr/lib/sysupdate.d/*.transfer`
 with `stable` in its `Path=` changed to `canary`.
+
+**An update is kept only once the machine does its job.** `health-check.service` runs after
+`multi-user.target` and before `boot-complete.target`, and passes once `HEALTH_CHECK`, a shell command
+in a drop-in of yours, exits 0 within its `TimeoutStartSec=` (`true` and 300 unless you say). A new
+image's boot entry has one try, as [boot assessment](https://systemd.io/AUTOMATIC_BOOT_ASSESSMENT/)
+counts it, and is blessed once that passes. A new extension is installed with one too
+(`<name>_<version>+1-0.raw`), and renamed to `<name>_<version>.raw` once it passes. If it fails, a
+tried extension is renamed with none left, which `systemd-sysext` passes over, and the machine reboots,
+which takes the entry and the extensions it had before. A bad version stays installed, and isn't taken
+again, until a newer one replaces it.
 
 **ymir has no cloud-init.** It reads the drive Proxmox writes from a VM's cloud-init settings
 itself: the user-data's `hostname` names it, unless it has named itself in `/etc/hostname`, and its
