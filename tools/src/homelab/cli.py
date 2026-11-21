@@ -36,13 +36,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     network_config = subparsers.add_parser(
         "network-config",
-        help="print a site's cloud-init network config",
-        description="For seeding install media. DHCP and SLAAC; nothing is per-host "
-        "except whether the host is a resolver, which is not pointed at itself.",
-    )
-    network_config.add_argument("site", help="site slug")
-    network_config.add_argument(
-        "--resolver", metavar="HOST", help="the seed is for this resolver, not an ordinary host"
+        help="print the cloud-init network config",
+        description="For seeding install media: DHCP and SLAAC, the lease's resolvers and search list, "
+        "the same for every host.",
     )
     network_config.set_defaults(run=_network_config)
 
@@ -116,28 +112,7 @@ def _generate(args) -> int:
 
 
 def _network_config(args) -> int:
-    try:
-        model = load()
-    except netbox.Unreachable as bad:
-        print(f"FAIL: {bad}", file=sys.stderr)
-        return 1
-
-    site = model["sites"].get(args.site)
-    if site is None:
-        known = ", ".join(sorted(model["sites"]))
-        print(f"{args.site!r} is not a site in NetBox. Known: {known}", file=sys.stderr)
-        return 1
-
-    resolver = None
-    if args.resolver:
-        resolver = site["dns"]["servers"].get(args.resolver)
-        if resolver is None:
-            known = ", ".join(sorted(site["dns"]["servers"])) or "none"
-            print(f"{args.resolver!r} is not a resolver at {args.site}. Known: {known}",
-                  file=sys.stderr)
-            return 1
-
-    print(seed.network_config(site, resolver=resolver), end="")
+    print(seed.network_config(), end="")
     return 0
 
 

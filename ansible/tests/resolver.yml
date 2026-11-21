@@ -24,7 +24,6 @@
     frr_bgp_peer_asn: 4200000000
     frr_bgp_peer_address: 10.0.2.2
     frr_bgp_gateways: [10.0.2.2]
-    frr_bgp_uplink_nameservers: [10.0.2.3]
     frr_bgp_service_addresses: "{{ service }}"
     frr_bgp_anycast_addresses: "{{ anycast }}"
     frr_bgp_anycast_service: dnsdist.service
@@ -69,13 +68,13 @@
       changed_when: false
       failed_when: "'router bgp ' ~ frr_bgp_local_asn not in running.stdout"
 
-    - name: Where it declares its uplink, it keeps its own resolvers and the lease's search list
+    - name: Where it declares its uplink, it keeps the lease's resolvers and search list
       when: frr_bgp_uplink_dhcp
       ansible.builtin.command: resolvectl status {{ ansible_facts['default_ipv4']['interface'] }}
       register: uplink
       changed_when: false
       failed_when: >-
-        uplink.stdout is not search('DNS Servers: 10.0.2.3$', multiline=true)
+        uplink.stdout is not search('DNS Servers: 10.0.2.3( |$)', multiline=true)
         or 'lease.test' not in uplink.stdout
 
     - name: Read the firewall

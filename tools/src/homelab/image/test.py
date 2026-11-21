@@ -51,8 +51,8 @@ printf "[Service]\\nType=oneshot\\nRemainAfterExit=yes\\nUser=probe\\nExecStart=
 ln -s ../probe.service $x/systemd/system/multi-user.target.wants/probe.service
 '
 """
-# A seed's own resolvers, as linux-vm pins a resolver's
-SEED_NAMESERVERS = ["10.0.2.3"]
+# What Proxmox seeds a VM that pins none, its node's resolvers, which ymir ignores for the lease's
+SEED_NAMESERVERS = ["192.0.2.53"]
 # What a card of an image-based image keeps, which its own checks report: @IMAGE@ is the image
 CARD_CHECKS = """
 check "its hostname is the credential's" '[ "$(hostname)" = test ]'
@@ -241,10 +241,10 @@ def _contract_image_based(base: Image, vm: Vm, host_key: str) -> list[str]:
 
 
 def _seeded_network(vm: Vm) -> list[str]:
-    """A seed's network, taken before udev finds the drive that holds it"""
-    status = vm.ssh("networkctl status --no-pager $(ip -o route show default | awk '{print $5; exit}')")
-    return _check("networkd took the seed's network from first boot",
-                  "/run/systemd/network/50-seed-eth0.network" in status, status)
+    """The lease's resolvers, whatever the seed says, as a resolver's network hands out its gateway"""
+    dns = vm.ssh("resolvectl dns $(ip -o route show default | awk '{print $5; exit}')")
+    return _check("it asks the lease's resolvers, not the seed's",
+                  "10.0.2.3" in dns and SEED_NAMESERVERS[0] not in dns, dns)
 
 
 def _hardening(vm: Vm) -> list[str]:

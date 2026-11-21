@@ -10,7 +10,7 @@ def test_every_entry_point_renders_from_the_model(snapshot, monkeypatch, capsys)
     """Each reads the model's keys itself, and only a rebuild runs them: a key renamed under
     them is found mid-reinstall, or here."""
     monkeypatch.setattr(netbox, "fetch", lambda item=None: snapshot)
-    args = cli.build_parser().parse_args(["network-config", SITE, "--resolver", "ratatoskr"])
+    args = cli.build_parser().parse_args(["network-config"])
     assert args.run(args) == 0
     assert yaml.safe_load(capsys.readouterr().out)["network"]
 

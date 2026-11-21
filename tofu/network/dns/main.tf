@@ -91,9 +91,6 @@ module "resolver" {
 
   vnet = each.value.vlan.vnet
 
-  # Nothing a resolver needs to build itself may come from the VIP it will serve
-  dns_servers = compact(each.value.vlan.subnets[*].gateway)
-
   ssh_public_keys = [data.onepassword_item.ssh_key.public_key]
 }
 

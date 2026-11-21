@@ -77,7 +77,7 @@ export NETBOX_API=https://netbox.example
 ```
 uv run homelab netbox plan              # what NetBox's schema lacks; `apply` adds it
 uv run homelab generate                 # rewrite unifi/generated/; --check reports drift instead
-uv run homelab network-config alfheim   # the network-config for a site's install media
+uv run homelab network-config           # the network-config for install media
 uv run homelab unifi apply alfheim vpn  # a step of the gateways' firewall; dry-run until --apply
 ```
 

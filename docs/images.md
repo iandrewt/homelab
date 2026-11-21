@@ -42,11 +42,10 @@ again, until a newer one replaces it.
 
 **ymir has no cloud-init.** It reads the drive Proxmox writes from a VM's cloud-init settings
 itself: the user-data's `hostname` names it, unless it has named itself in `/etc/hostname`, and its
-`ssh_authorized_keys` let you in as `debian`, once; any other user fails the seed. Each NIC the
-network-config names becomes networkd's own `50-seed-<name>.network`, matched by MAC, from the first
-boot: DHCPv4 or a static address, SLAAC, and the drive's nameservers in place of the lease's, keeping
-the lease's search domains. Proxmox gives a VM that names no nameservers its node's. A host's netplan
-sorts before the seed's units, and a NIC the drive doesn't name takes DHCPv4 and SLAAC.
+`ssh_authorized_keys` let you in as `debian`, once; any other user fails the seed. Its network-config
+is ignored: every Ethernet NIC takes DHCPv4 and SLAAC, and the lease's resolvers and search domains, as
+networkd's own `89-ethernet.network` in `/usr` says, until a host's netplan, which sorts before it, says
+otherwise. A machine that needs other resolvers is on a network whose lease names them.
 
 **On a Pi, `ymir-arm64-raspi3`, its identity is credentials on the ESP**, under `/loader/credentials/`,
 which systemd-boot hands to the initrd and the system alike: `system.machine_id` (a Pi has no firmware

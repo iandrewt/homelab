@@ -97,12 +97,6 @@ variable "ipv6_gateway" {
   default     = null
 }
 
-variable "dns_servers" {
-  description = "DNS servers to use instead of the lease's. Unset, Proxmox seeds its node's, the recursor."
-  type        = list(string)
-  default     = []
-}
-
 variable "enable_multiqueue" {
   description = "Whether to enable multiqueue for the network interface. This can improve network performance for VMs with multiple CPU cores."
   type        = bool

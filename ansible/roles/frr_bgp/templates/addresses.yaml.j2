@@ -26,14 +26,7 @@ network:
 {% for overrides in ['dhcp4-overrides', 'dhcp6-overrides', 'ra-overrides'] %}
       {{ overrides }}:
         use-domains: true
-{% if frr_bgp_uplink_nameservers %}
-        use-dns: false
-{% endif %}
 {% endfor %}
-{% if frr_bgp_uplink_nameservers %}
-      nameservers:
-        addresses: {{ frr_bgp_uplink_nameservers | to_json }}
-{% endif %}
 {% endif %}
       routes:
 {% for gateway in frr_bgp_gateways %}

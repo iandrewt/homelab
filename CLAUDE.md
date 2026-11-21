@@ -132,11 +132,10 @@ computes; what a prefix must satisfy is NetBox's own containment. The design is 
   `hugin.titmuss.zone` and `ratatoskr.titmuss.zone`, and each delegates its children the same
   way, so a new site, region or team never touches Cloudflare.
 - **The default is DHCP**: DHCPv4 and SLAAC, resolvers and search list from the lease, so an
-  install seed is the same for every host at a site; a Proxmox guest's resolvers are its seed's,
-  the recursor unless it pins its own, until IMDS. A resolver alone ignores the lease's
-  servers and asks its VLAN's gateway, since nothing it needs to build itself may come from the
-  VIP it will serve; `linux-vm` gives hugin the same, and on ymir `frr_bgp`'s netplan, which
-  replaces the seed's (`frr_bgp_uplink_nameservers`).
+  install seed is the same for every host; a mutable Proxmox guest's resolvers are its seed's, its
+  node's, the recursor, until IMDS, and ymir's the lease's. **A network's resolvers are its DHCP's**:
+  the resolvers' VLAN, `DNS`, hands out its gateway, since nothing a resolver needs to build itself
+  may come from the VIP it will serve, so no host pins any.
 - **A leased address is status `dhcp`**, recorded once leased, never decided ahead; `active` is
   what a host configures itself, `reserved` held and unused. The only static addresses are
   Proxmox nodes', gateways and routed service addresses; on a VLAN-only network each interface's
@@ -275,9 +274,8 @@ node is open from boot until Flux applies the policies.
 ## Host networking
 
 Every host is **netplan → systemd-networkd, with systemd-resolved**, and every interface it has
-is in netplan, but for ymir's default, networkd's own in `/usr` (`89-ethernet.network`), and its
-seed's (`50-seed-*`): on first boot netplan's generator runs before sysusers makes the group networkd
-reads its output as. Roles write netplan and assume networkd; an OS's quirks belong to its bootstrap
+is in netplan, but for ymir's default, networkd's own in `/usr` (`89-ethernet.network`): on first
+boot netplan's generator runs before sysusers makes the group networkd reads its output as. Roles write netplan and assume networkd; an OS's quirks belong to its bootstrap
 or its own role.
 Proxmox is the exception: ifupdown2, which `proxmox_node` writes from the node's NetBox
 interfaces, with a static `resolv.conf`.
@@ -375,9 +373,9 @@ networkd's own unit, a resolver's gateways its resolvers.
 ## cloud-init seeds
 
 **A VM's seed is Proxmox's own**, written from its config (`linux-vm`'s `initialization`): its name,
-its keys, `ip=dhcp` and `ip6=auto`, and a resolver's pinned resolvers. Nothing uploads a snippet, so
-no tenant writes anything a node reads. A VM that pins no resolvers is seeded with its node's, the
-recursor's, and the node's `resolv.conf` has no search list to leak. Tenants have no user-data until
+its keys, `ip=dhcp` and `ip6=auto`. Nothing uploads a snippet, so no tenant writes anything a node
+reads. Its resolvers are its node's, the recursor's, and the node's `resolv.conf` has no search list
+to leak. Tenants have no user-data until
 IMDS replaces the drive.
 
 What we write ourselves, a Pi's or an installer's:
@@ -387,7 +385,7 @@ What we write ourselves, a Pi's or an installer's:
 | `meta-data` | identity: `instance-id`, `local-hostname`, `public-keys`, `region` |
 | `vendor-data` | what is true of the *image* |
 | `user-data` | only what is host-specific |
-| `network-config` | DHCP and SLAAC; a resolver pins its own resolvers |
+| `network-config` | DHCP and SLAAC, the same for every host |
 
 - The hostname comes from `local-hostname` alone. Nothing sets a timezone: UTC, and a schedule
   meant in local time names its zone (`OnCalendar=*-*-* 03:00 Australia/Sydney`).
@@ -398,12 +396,10 @@ What we write ourselves, a Pi's or an installer's:
 - **ymir has no cloud-init**: `seed-credentials` reads Proxmox's drive as `Cloudinit.pm` writes it,
   the user-data's `hostname` and `ssh_authorized_keys` into `/run/credstore` for
   `ImportCredential=` (`system.hostname`, `ssh.authorized_keys.debian`; any user but `debian` fails
-  it), and each NIC of the network-config as networkd's own `50-seed-<name>.network`, by MAC, its
-  resolvers pinned and the lease's search list kept. It writes them to `/run/systemd/network`
-  itself, since `systemd-network-generator` runs before udev finds the drive. Its label is `cidata` or
-  `CIDATA`. **A Pi's identity is credentials on its ESP** (`/loader/credentials/`, the null key), which
+  it). It ignores the network-config: networkd's own default takes the lease. Its label is `cidata`
+  or `CIDATA`. **A Pi's identity is credentials on its ESP** (`/loader/credentials/`, the null key), which
   systemd-boot hands every stage: `system.machine_id`, since systemd takes a firmware UUID only in a VM
-  and `/var` is bound to the ID; the hostname, the key, its network. It masks `seed-credentials`.
+  and `/var` is bound to the ID; the hostname, and the key. It masks `seed-credentials`.
 - A mutable image keeps its host keys (`ssh_deletekeys: false`): Proxmox's instance ID changes with a
   VM's keys or network, and NetBox pins the keys.
 

@@ -78,26 +78,11 @@ def ethernet(config: str) -> dict:
     return yaml.safe_load(config)["network"]["ethernets"]["primary"]
 
 
-def test_both_families_override_alike(snapshot):
+def test_both_families_override_alike():
     """networkd shares one [DHCP] section between them, so netplan rejects the whole file
     when the two disagree - and a missing one counts as disagreeing."""
-    site = site_of(snapshot)
-    for resolver in (None, site["dns"]["servers"]["ratatoskr"]):
-        host = ethernet(seed.network_config(site, resolver=resolver))
-        assert host["dhcp4-overrides"] == host["dhcp6-overrides"]
-
-
-def test_a_resolver_asks_its_gateway_never_the_vip(snapshot):
-    """Nothing a resolver needs to build itself may come from the VIP it will serve, and
-    the lease will hand out the VIP by DHCP and RA alike."""
-    site = site_of(snapshot)
-    resolver = ethernet(seed.network_config(site, resolver=site["dns"]["servers"]["ratatoskr"]))
-    assert resolver["nameservers"]["addresses"] == ["10.0.30.1", "2001:db8:1:1300::1"]
-    assert resolver["dhcp4-overrides"] == {"use-domains": True, "use-dns": False}
-    assert resolver["ra-overrides"] == {"use-dns": False}
-    unit = seed.network_unit(site, resolver=site["dns"]["servers"]["ratatoskr"])
-    assert "DNS=10.0.30.1\nDNS=2001:db8:1:1300::1\n" in unit
-    assert unit.count("UseDNS=no") == 3
+    host = ethernet(seed.network_config())
+    assert host["dhcp4-overrides"] == host["dhcp6-overrides"]
 
 
 @pytest.mark.skipif(shutil.which("vtysh") is None, reason="needs FRR's vtysh")

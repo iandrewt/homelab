@@ -12,8 +12,6 @@ from pathlib import Path
 
 from .. import netbox
 from ..image import builder, card
-from ..model import load
-from ..render import seed
 from ..repo import Repo
 from . import blockdev
 from .download import fetch, get
@@ -39,7 +37,7 @@ def register(subparsers) -> None:
         "pi", help="write a Raspberry Pi's card",
         description=f"Writes the newest {IMAGE} release in a channel to a card at its own size, every partition made, "
         "its identity as credentials on its ESP: its machine ID from its serial number in NetBox, its hostname, the "
-        "key, and its network, a resolver's own resolvers pinned. The channel is IMAGES_UPDATE_URL's.",
+        "key. Its network is the image's own. The channel is IMAGES_UPDATE_URL's.",
     )
     parser.add_argument("--device", required=True, help="the card, e.g. /dev/sdb")
     parser.add_argument("--hostname", required=True, help="the Pi's device in NetBox, e.g. ratatoskr")
@@ -61,9 +59,6 @@ def main(args: argparse.Namespace) -> int:
         snap = netbox.fetch()
     except netbox.Unreachable as bad:
         raise BootstrapError(str(bad)) from None
-    site = load(snap)["sites"].get(args.site)
-    if site is None:
-        raise BootstrapError(f"{args.site!r} is not a site in NetBox")
     device = Path(args.device)
     if not args.dry_run:
         _check_device(device)
@@ -77,7 +72,6 @@ def main(args: argparse.Namespace) -> int:
         "system.machine_id": machine_id(snap, args.site, args.hostname),
         "system.hostname": args.hostname,
         "ssh.authorized_keys.debian": _ssh_key(args),
-        "network.network.50-seed": seed.network_unit(site, resolver=site["dns"]["servers"].get(args.hostname)),
     }
     if args.dry_run:
         for credential, value in credentials.items():

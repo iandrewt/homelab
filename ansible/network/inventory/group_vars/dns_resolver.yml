@@ -25,8 +25,6 @@ frr_bgp_local_asn: "{{ dns_resolver.asn }}"
 frr_bgp_peer_asn: "{{ netbox_site.router_asn }}"
 frr_bgp_peer_address: "{{ dns_resolver_vlan.gateway_ipv4 }}"
 frr_bgp_gateways: "{{ [dns_resolver_vlan.gateway_ipv4, dns_resolver_vlan.gateway_ipv6] | select | list }}"
-# Nothing a resolver needs to build itself may come from the VIP it will serve
-frr_bgp_uplink_nameservers: "{{ frr_bgp_gateways }}"
 
 frr_bgp_service_addresses: "{{ [dns_resolver.ipv4, dns_resolver.ipv6] | select | list }}"
 frr_bgp_anycast_addresses: >-
