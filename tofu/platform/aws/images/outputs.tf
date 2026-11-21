@@ -8,6 +8,11 @@ output "key" {
   value       = aws_kms_alias.signing.arn
 }
 
+output "publish_role" {
+  description = "What images.yml assumes to publish a release, IMAGES_PUBLISH_ROLE"
+  value       = aws_iam_role.publish.arn
+}
+
 output "bucket" {
   description = "Where a release publishes its updates"
   value       = aws_s3_bucket.updates.id

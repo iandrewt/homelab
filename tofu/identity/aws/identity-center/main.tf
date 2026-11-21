@@ -52,8 +52,8 @@ locals {
   members = keys(local.account_ids)
 
   assignments = concat(
-    # No one administers State but the bootstrap role
-    [for account in local.members : { set = "Administrator", group = "Administrators", account = account } if account != "State"],
+    # No one administers State or Signing but the bootstrap role
+    [for account in local.members : { set = "Administrator", group = "Administrators", account = account } if !contains(["State", "Signing"], account)],
     [for account in local.members : { set = "SecurityAudit", group = "Security", account = account }],
     [{ set = "LogReader", group = "Security", account = "Log Archive" }],
     [

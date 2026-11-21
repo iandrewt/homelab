@@ -16,6 +16,7 @@ locals {
     "Network"     = "Infrastructure"
     "Platform"    = "Infrastructure"
     "Sandbox"     = "Sandbox"
+    "Signing"     = "Security"
   }
 }
 

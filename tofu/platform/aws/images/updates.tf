@@ -100,8 +100,29 @@ resource "aws_s3_bucket_policy" "updates" {
   depends_on = [aws_s3_bucket_public_access_block.updates]
 }
 
-resource "aws_iam_role_policy" "release_publishes" {
-  role = aws_iam_role.release.id
+# A release's, which platform/aws/signing's role signs: only a job in the release environment
+resource "aws_iam_role" "publish" {
+  name = "images-publish"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Federated = data.aws_iam_openid_connect_provider.github.arn }
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+          "token.actions.githubusercontent.com:sub" = "repo:${local.repository}:environment:release"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "publishes" {
+  for_each = { release = aws_iam_role.release.id, publish = aws_iam_role.publish.id }
+  role     = each.value
 
   policy = jsonencode({
     Version = "2012-10-17"

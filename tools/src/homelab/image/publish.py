@@ -18,6 +18,9 @@ from .images import Image
 
 KEEP = 5
 
+# Platform's role, which writes the bucket; the release key is the environment's, Signing's role
+PROFILE = "images-publish"
+
 # The release key's keyring is the build's, which also verifies what the channel has
 SIGN = """
 set -eu
@@ -32,8 +35,8 @@ def register(verbs) -> None:
     publish = verbs.add_parser(
         "publish", help="publish an image-based release to its canary channel",
         description="Adds the release built in the cache to the image's canary channel of the update bucket, "
-        f"keeping its newest {KEEP} versions, its sums signed with the release key. The bucket is IMAGES_BUCKET; "
-        "AWS's credentials are the release role's.",
+        f"keeping its newest {KEEP} versions, its sums signed with the release key. The bucket is IMAGES_BUCKET, "
+        f"written as AWS profile {PROFILE}; the release role signs.",
     )
     publish.add_argument("image", help="an image-based image in images/images.toml, e.g. ymir-amd64-vm")
     publish.set_defaults(run=_publish)
@@ -154,20 +157,21 @@ def _update(channel: Channel, out: Path, work: Path, ring: str, sums: str, sourc
         builder.run_in({work_dir: "/work", out: "/out", **signing.mounts(work)}, "sh", "-c", SIGN, env=signing.env())
         say(f"publishing {', '.join(sorted({channel.version_of(n) for n in sources}))} to {prefix}")
         for name, source in sources.items():
-            # Not the source's tags, the CLI's default for a copy within the bucket, which the release role may not read
+            # Not the source's tags, the CLI's default for a copy within the bucket, which the publish role may not read
             props = ["--copy-props", "metadata-directive"] if source.startswith("s3://") else []
-            run("aws", "s3", "cp", "--only-show-errors", *props, source, f"{prefix}/{name}")
+            run("aws", "s3", "cp", "--profile", PROFILE, "--only-show-errors", *props, source, f"{prefix}/{name}")
         for name in ("SHA256SUMS.gpg", "SHA256SUMS"):
-            run("aws", "s3", "cp", "--only-show-errors", str(work_dir / name), f"{prefix}/{name}")
+            run("aws", "s3", "cp", "--profile", PROFILE, "--only-show-errors", str(work_dir / name), f"{prefix}/{name}")
         for name in pruned:
-            run("aws", "s3", "rm", "--only-show-errors", f"{prefix}/{name}")
+            run("aws", "s3", "rm", "--profile", PROFILE, "--only-show-errors", f"{prefix}/{name}")
         if pruned:
             say(f"pruned {', '.join(sorted({channel.version_of(n) for n in pruned}))} from {prefix}")
 
 
 def _read(uri: str, binary: bool = False) -> str | bytes:
-    """An object's content, or empty if there's none: the release role may list, so a missing one is a 404."""
-    result = subprocess.run(["aws", "s3", "cp", "--only-show-errors", uri, "-"], capture_output=True, check=False)
+    """An object's content, or empty if there's none: the publish role may list, so a missing one is a 404."""
+    result = subprocess.run(["aws", "s3", "cp", "--profile", PROFILE, "--only-show-errors", uri, "-"],
+                            capture_output=True, check=False)
     if result.returncode == 0:
         return result.stdout if binary else result.stdout.decode()
     if b"404" in result.stderr or b"Not Found" in result.stderr:

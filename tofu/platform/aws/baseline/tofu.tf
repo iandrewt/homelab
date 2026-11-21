@@ -45,7 +45,7 @@ locals {
   profile = "homelab-management"
 
   # As org names them: a provider's for_each can't read anything, so they're here too
-  accounts = toset(["Management", "Log Archive", "Security", "Network", "Platform", "Sandbox", "State"])
+  accounts = toset(["Management", "Log Archive", "Security", "Network", "Platform", "Sandbox", "Signing", "State"])
 }
 
 provider "aws" {

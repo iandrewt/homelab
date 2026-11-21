@@ -232,6 +232,13 @@ jobs:
           uv run ansible-galaxy collection install -r ansible/requirements.yml
           uv run ansible-galaxy role install -p ansible/roles \
             -r ansible/collections/ansible_collections/homelab/debian/requirements.yml
+      # Platform's role writes the bucket, as the profile publish names; Signing's signs, as the environment
+      - if: matrix.sign == 'kms'
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+        with:
+          role-to-assume: ${{ vars.IMAGES_PUBLISH_ROLE }}
+          aws-region: ${{ vars.IMAGES_REGION }}
+          aws-profile: images-publish
       - if: matrix.sign == 'kms'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
@@ -401,6 +408,11 @@ jobs:
           restore-keys: *packages-older
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
+          role-to-assume: ${{ vars.IMAGES_PUBLISH_ROLE }}
+          aws-region: ${{ vars.IMAGES_REGION }}
+          aws-profile: images-publish
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+        with:
           role-to-assume: ${{ vars.IMAGES_RELEASE_ROLE }}
           aws-region: ${{ vars.IMAGES_REGION }}
       - run: uv run homelab image extension build "$EXTENSION" --image "$IMAGE" --sign kms
@@ -478,6 +490,11 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           enable-cache: true
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
+        with:
+          role-to-assume: ${{ vars.IMAGES_PUBLISH_ROLE }}
+          aws-region: ${{ vars.IMAGES_REGION }}
+          aws-profile: images-publish
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
           role-to-assume: ${{ vars.IMAGES_RELEASE_ROLE }}

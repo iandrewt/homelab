@@ -44,7 +44,7 @@ cat debian.esl ours.esl > db.esl
 mkdir auto
 sign-efi-sig-list -k KEK.key -c KEK.crt db db.esl auto/db.auth >/dev/null
 """
-KMS_KEY = "alias/images"
+# Any of the organisation's principals may read its public half, by the alias's ARN from another account
 AWS_PROFILE = "homelab-platform"
 
 
@@ -97,14 +97,16 @@ def _db(args) -> int:
     kek = secrets.read_items(VAULT, ITEM + "KEK").get(ITEM + "KEK")
     if not kek:
         raise BootstrapError(f"no {ITEM}KEK in {VAULT}: run `homelab image keys` first")
+    if not (key := os.environ.get("HOMELAB_IMAGES_KEY")):
+        raise BootstrapError("HOMELAB_IMAGES_KEY names the release key: platform/aws/signing's output `key`")
     with tempfile.TemporaryDirectory(dir=os.environ.get("XDG_RUNTIME_DIR")) as tmp:
         work = Path(tmp)
         (work / "release.der").write_bytes(base64.b64decode(run(
-            "aws", "kms", "get-public-key", "--key-id", KMS_KEY, "--profile", AWS_PROFILE,
+            "aws", "kms", "get-public-key", "--key-id", key, "--profile", AWS_PROFILE,
             "--query", "PublicKey", "--output", "text", capture=True)))
         (work / "KEK.key").write_text(kek[("KEK", "private key")])
         (work / "KEK.crt").write_text(kek[("KEK", "certificate")])
-        say(f"certifying {KMS_KEY} with KEK, and signing the db that holds it")
+        say(f"certifying {key} with KEK, and signing the db that holds it")
         builder.run_in({published: "/secure-boot:ro", work: "/work"}, "sh", "-c", DB,
                        user=f"{os.getuid()}:{os.getgid()}", workdir="/work")
         (published / "db.crt").write_bytes((work / "db.crt").read_bytes())

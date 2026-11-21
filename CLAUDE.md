@@ -549,7 +549,10 @@ them unsigned); Dependabot's are squashed.
 **An image is released by a signed tag**, `image/<image>/<YYYY.MM.N>` on `main`: `images.yml`
 builds and tests it at that commit, and publishes it with its package manifest and `SHA256SUMS`,
 signed keylessly by the workflow (`docs/images.md` says how to check one). An image-based one is signed by the release key,
-`alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`): mkosi's
+`alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`). Both
+are in the Signing account (`platform/aws/signing`), which, like State, only the bootstrap role
+administers, so no one who administers Platform can make themselves the signer; it only signs, and
+Platform's own `images-publish` writes the update bucket, as the profile `publish` names. mkosi's
 signing tools have no network, so its PKCS#11 module runs behind `p11-kit server`, which `mkosi box`
 starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, issued by KEK
 (`homelab image db`). Its release publishes its update files and its disk (a qcow2, or a card's raw image as
