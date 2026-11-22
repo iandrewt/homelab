@@ -1,10 +1,10 @@
 # What each extension was last released from: `homelab image extension lock` writes it
 
 [dnsdist]
-version = "2.1.3-4"
+version = "2.1.3-5"
 
 [dnsdist.ymir-amd64-vm]
-inputs = "158e3caa9cb4909a508cdaf6f03ade8e00783a1f6c17440b70c3b7a8c74d2413"
+inputs = "1a9689dbce4fce29e1ef019979c780adb07e99287bcf38131499aede5aafec4d"
 packages = [
     "bind9-dnsutils=1:9.20.30-1~deb13u1",
     "bind9-host=1:9.20.30-1~deb13u1",
@@ -37,7 +37,7 @@ packages = [
 ]
 
 [dnsdist.ymir-arm64-raspi3]
-inputs = "158e3caa9cb4909a508cdaf6f03ade8e00783a1f6c17440b70c3b7a8c74d2413"
+inputs = "1a9689dbce4fce29e1ef019979c780adb07e99287bcf38131499aede5aafec4d"
 packages = [
     "bind9-dnsutils=1:9.20.30-1~deb13u1",
     "bind9-host=1:9.20.30-1~deb13u1",
