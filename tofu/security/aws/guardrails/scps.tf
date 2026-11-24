@@ -154,27 +154,6 @@ resource "aws_organizations_policy" "guardrails" {
         Resource = "*"
       },
       {
-        # Identity's federation layer makes them, through bootstrap; a role's trust in one is its own
-        Sid    = "IdentityProvidersAreBootstrap"
-        Effect = "Deny"
-        Action = [
-          "iam:AddClientIDToOpenIDConnectProvider",
-          "iam:CreateOpenIDConnectProvider",
-          "iam:CreateSAMLProvider",
-          "iam:DeleteOpenIDConnectProvider",
-          "iam:DeleteSAMLProvider",
-          "iam:RemoveClientIDFromOpenIDConnectProvider",
-          "iam:TagOpenIDConnectProvider",
-          "iam:TagSAMLProvider",
-          "iam:UntagOpenIDConnectProvider",
-          "iam:UntagSAMLProvider",
-          "iam:UpdateOpenIDConnectProviderThumbprint",
-          "iam:UpdateSAMLProvider",
-        ]
-        Resource  = "*"
-        Condition = { ArnNotLike = { "aws:PrincipalArn" = local.bootstrap_role } }
-      },
-      {
         Sid      = "NoLongLivedCredentials"
         Effect   = "Deny"
         Action   = ["iam:CreateAccessKey", "iam:CreateLoginProfile", "iam:CreateUser"]
@@ -222,6 +201,79 @@ resource "aws_organizations_policy" "guardrails" {
         ]
         Resource  = "*"
         Condition = { ArnNotLike = { "aws:PrincipalArn" = concat([local.bootstrap_role], local.security_administrators) } }
+      },
+    ]
+  })
+}
+
+locals {
+  # Every identity provider's issuer, as IAM's issuer keys give it: OIDC's host and path
+  identity_provider_issuers = ["token.actions.githubusercontent.com"]
+
+  identity_provider_actions = [
+    "iam:CreateOpenIDConnectProvider",
+    "iam:CreateSAMLProvider",
+    "iam:UpdateOpenIDConnectProvider",
+    "iam:UpdateSAMLProvider",
+  ]
+}
+
+# identity/aws/federation makes them, through bootstrap; a role's trust in one is its own. The issuer
+# statements are AWS's own, for trusted identity propagation, and bind bootstrap too
+resource "aws_organizations_policy" "identity_providers" {
+  name = "Identity providers"
+  type = "SERVICE_CONTROL_POLICY"
+
+  content = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "OnlyBootstrap"
+        Effect = "Deny"
+        Action = concat(local.identity_provider_actions, [
+          "iam:AddClientIDToOpenIDConnectProvider",
+          "iam:DeleteOpenIDConnectProvider",
+          "iam:DeleteSAMLProvider",
+          "iam:RemoveClientIDFromOpenIDConnectProvider",
+          "iam:TagOpenIDConnectProvider",
+          "iam:TagSAMLProvider",
+          "iam:UntagOpenIDConnectProvider",
+          "iam:UntagSAMLProvider",
+          "iam:UpdateOpenIDConnectProviderThumbprint",
+        ])
+        Resource  = "*"
+        Condition = { ArnNotLike = { "aws:PrincipalArn" = local.bootstrap_role } }
+      },
+      {
+        Sid      = "OnlyApprovedIssuers"
+        Effect   = "Deny"
+        Action   = ["iam:CreateOpenIDConnectProvider", "iam:CreateSAMLProvider", "iam:UpdateSAMLProvider"]
+        Resource = "*"
+        Condition = {
+          Null                          = { "iam:RequestIdentityProviderIssuers" = "false" }
+          "ForAnyValue:StringNotEquals" = { "iam:RequestIdentityProviderIssuers" = local.identity_provider_issuers }
+        }
+      },
+      {
+        Sid      = "PropagationOnlyFromApprovedIssuers"
+        Effect   = "Deny"
+        Action   = local.identity_provider_actions
+        Resource = "*"
+        Condition = {
+          Bool                          = { "iam:EnableIdentityPropagation" = "true" }
+          Null                          = { "iam:ResourceIdentityProviderIssuers" = "false" }
+          "ForAnyValue:StringNotEquals" = { "iam:ResourceIdentityProviderIssuers" = local.identity_provider_issuers }
+        }
+      },
+      {
+        Sid      = "PropagationOnlyFromKnownIssuers"
+        Effect   = "Deny"
+        Action   = local.identity_provider_actions
+        Resource = "*"
+        Condition = {
+          Bool = { "iam:EnableIdentityPropagation" = "true" }
+          Null = { "iam:ResourceIdentityProviderIssuers" = "true" }
+        }
       },
     ]
   })
@@ -323,8 +375,9 @@ resource "aws_organizations_policy" "suspended" {
 
 resource "aws_organizations_policy_attachment" "root_scps" {
   for_each = {
-    guardrails = aws_organizations_policy.guardrails.id
-    regions    = aws_organizations_policy.regions.id
+    guardrails         = aws_organizations_policy.guardrails.id
+    regions            = aws_organizations_policy.regions.id
+    identity_providers = aws_organizations_policy.identity_providers.id
   }
 
   policy_id = each.value

@@ -90,12 +90,13 @@ resource "aws_s3_bucket_versioning" "trail" {
   }
 }
 
+# The record of a compromise: nothing shortens it, root included
 resource "aws_s3_bucket_object_lock_configuration" "trail" {
   bucket = aws_s3_bucket.trail.id
 
   rule {
     default_retention {
-      mode = "GOVERNANCE"
+      mode = "COMPLIANCE"
       days = 90
     }
   }

@@ -433,7 +433,13 @@ as AWS's multi-account guidance has it: Security holds only Log Archive and Secu
 Deployments holds release machinery (Tofu State, Artifact Signing, Artifact Distribution), whose SCP
 admits only bootstrap and the roles each names, and which Identity Center's Administrator never
 reaches, by membership; Infrastructure holds Network and Identity. Only bootstrap makes an identity
-provider; a role's trust in one is its own.
+provider; a role's trust in one is its own. **The seed (`security/aws/seed`) is what CI can't create**, applied
+from a laptop alone: management's GitHub OIDC provider; `deploy-org`, assumable by `tofu.yml` on
+`main` but holding nothing until an activation, under a boundary that leaves out IAM, Identity
+Center, EventBridge and SNS; `ManagementAdministrator`; and the tripwires, which mail the
+management mailbox on any change to the organisation, management's IAM or Identity Center, the
+tripwires themselves, or the trail. The trail is under Object Lock in `COMPLIANCE`, which no one
+shortens, root included.
 
 The three states apply in order, by blast radius: `directory`, `aws`, `apps`, each reading the
 others by name. **Nothing unattended applies them** (assignments need

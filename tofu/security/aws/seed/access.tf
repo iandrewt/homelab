@@ -8,8 +8,9 @@ locals {
   management_administrators = ["499e64f8-70c1-70e6-0b34-e78a86877e2b"]
 }
 
-# Only the management account can change a permission set provisioned in it, so its own
-# are here rather than in identity/aws/identity-center
+# Only the management account can change a permission set provisioned in it, so its own are here
+# rather than in identity/aws/identity-center; and here rather than in org, since who reaches
+# management is the seed's
 resource "aws_ssoadmin_permission_set" "management_administrator" {
   instance_arn     = local.sso_instance_arn
   name             = "ManagementAdministrator"

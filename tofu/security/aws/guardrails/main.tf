@@ -23,6 +23,6 @@ locals {
   account_ids = module.accounts.ids
   ou_ids      = { for ou in data.aws_organizations_organizational_units.top.children : ou.name => ou.id }
 
-  # platform/aws/org's
+  # security/aws/seed's
   management_administrator = "ManagementAdministrator"
 }
