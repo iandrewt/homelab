@@ -10,7 +10,10 @@ locals {
 
   state_teams = toset([for team in module.tenancy.teams : team.title])
 
-  trail_bucket = "arn:aws:s3:::cloudtrail-${local.account_ids["Log Archive"]}-ap-southeast-2-an"
+  accounts    = module.accounts.accounts
+  account_ids = module.accounts.ids
+
+  trail_bucket = "arn:aws:s3:::cloudtrail-${local.account_ids["log-archive"]}-ap-southeast-2-an"
 
   permission_sets = {
     Administrator = { description = "Administers an account", managed = ["AdministratorAccess"] }
@@ -30,7 +33,7 @@ locals {
             Sid       = "TrailKey"
             Effect    = "Allow"
             Action    = "kms:Decrypt"
-            Resource  = "arn:aws:kms:ap-southeast-2:${local.account_ids["Log Archive"]}:key/*"
+            Resource  = "arn:aws:kms:ap-southeast-2:${local.account_ids["log-archive"]}:key/*"
             Condition = { "ForAnyValue:StringEquals" = { "kms:ResourceAliases" = "alias/cloudtrail" } }
           },
         ]
@@ -43,26 +46,41 @@ locals {
         Statement = [{
           Effect   = "Allow"
           Action   = "sts:AssumeRole"
-          Resource = "arn:aws:iam::${local.account_ids["State"]}:role/tofu-state/*"
+          Resource = "arn:aws:iam::${local.account_ids["tofu-state"]}:role/tofu-state/*"
         }]
       })
     }
   }
 
-  members = keys(local.account_ids)
+  members = [for slug in keys(local.accounts) : slug if contains(keys(local.account_ids), slug)]
+
+  # No one administers an account in Deployments but the bootstrap role
+  deployments   = toset(data.aws_organizations_organizational_unit_descendant_accounts.deployments.accounts[*].id)
+  administered  = [for slug in local.members : slug if !contains(local.deployments, local.account_ids[slug])]
+  administrator = { for slug in local.administered : slug => toset(["Administrators", module.tenancy.teams[local.accounts[slug].owner].title]) }
 
   assignments = concat(
-    # No one administers State or Signing but the bootstrap role
-    [for account in local.members : { set = "Administrator", group = "Administrators", account = account } if !contains(["State", "Signing"], account)],
-    [for account in local.members : { set = "SecurityAudit", group = "Security", account = account }],
-    [{ set = "LogReader", group = "Security", account = "Log Archive" }],
-    [
-      { set = "Administrator", group = "Network", account = "Network" },
-      { set = "Administrator", group = "Platform", account = "Platform" },
-      { set = "Administrator", group = "Platform", account = "Sandbox" },
-    ],
-    [for team in local.state_teams : { set = "TofuState", group = team, account = "State" }],
+    flatten([for slug, groups in local.administrator : [for group in groups : { set = "Administrator", group = group, account = slug }]]),
+    [for slug in local.members : { set = "SecurityAudit", group = "Security", account = slug }],
+    [{ set = "LogReader", group = "Security", account = "log-archive" }],
+    [for team in local.state_teams : { set = "TofuState", group = team, account = "tofu-state" }],
   )
+}
+
+data "aws_organizations_organizational_units" "top" {
+  provider = aws.management
+
+  parent_id = data.aws_organizations_organization.this.roots[0].id
+}
+
+data "aws_organizations_organization" "this" {
+  provider = aws.management
+}
+
+data "aws_organizations_organizational_unit_descendant_accounts" "deployments" {
+  provider = aws.management
+
+  parent_id = one([for ou in data.aws_organizations_organizational_units.top.children : ou.id if ou.name == "Deployments"])
 }
 
 # Entra's, synced by SCIM: every group identity/entra makes, whose members it provisions

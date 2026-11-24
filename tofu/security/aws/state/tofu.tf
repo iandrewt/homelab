@@ -47,12 +47,10 @@ provider "aws" {
   profile = "homelab-management"
 }
 
-data "aws_organizations_organization" "this" {
-  provider = aws.management
-}
+module "accounts" {
+  source = "../../../modules/accounts"
 
-locals {
-  state_account = one([for a in data.aws_organizations_organization.this.non_master_accounts : a.id if a.name == "State"])
+  providers = { aws = aws.management }
 }
 
 provider "aws" {
@@ -60,7 +58,7 @@ provider "aws" {
   profile = "homelab-management"
 
   assume_role {
-    role_arn     = "arn:aws:iam::${local.state_account}:role/OrganizationAccountAccessRole"
+    role_arn     = "arn:aws:iam::${module.accounts.ids["tofu-state"]}:role/OrganizationAccountAccessRole"
     session_name = "state"
   }
 

@@ -89,6 +89,7 @@ Each file is a contract for one thing, and nothing reaches across:
 |---|---|
 | NetBox | addresses, prefixes, VLANs, and what each machine is |
 | `tofu/identity/tenancy/teams/<team>.yaml` | which teams exist: each one's Entra group, 1Password vault and state role. Never who is in them - that's Entra's |
+| `tofu/platform/aws/accounts/<account>.yaml` | which member accounts exist: each one's name, OU and owning team. Its slug is its alias, its root email's tag and every layer's key for it |
 | Entra (`tofu/identity/entra/*`) | people and their groups; an app per platform instance, vended from its data file |
 | `tofu/platform/proxmox/clusters/<name>.yaml` | a Proxmox cell: nodes, storage, MAC prefix, the API endpoint, what it grants each tenant |
 | `tofu/platform/proxmox/images/<site>.yaml` | the site's pinned image library, on storage every cell there mounts |
@@ -423,9 +424,16 @@ the `team-<team>` SAML claims and SCIM's scope; membership is written onto users
 the `aws` directory extension, which the scoping filters read, always before the scope is saved
 (saving starts a sync that disables whoever is out of scope).
 
-The organisation and its accounts are Platform's (`platform/aws/org`); what every account runs
-under - guardrails, the trail, detection, the state account - is Security's (`security/aws/*`),
-which reads the organisation by name; Identity Center's sets and assignments are Identity's.
+The organisation and its accounts are Platform's (`platform/aws/org`), made from the account
+catalogue, which every layer reads for its accounts; what every account runs under - guardrails,
+the trail, detection, the state bucket - is Security's (`security/aws/*`); Identity Center's sets
+and assignments, its delegated administration (the Identity account) and GitHub's OIDC provider in
+every member (`identity/aws/federation`) are Identity's. **OUs group accounts by their controls**,
+as AWS's multi-account guidance has it: Security holds only Log Archive and Security Tooling;
+Deployments holds release machinery (Tofu State, Artifact Signing, Artifact Distribution), whose SCP
+admits only bootstrap and the roles each names, and which Identity Center's Administrator never
+reaches, by membership; Infrastructure holds Network and Identity. Only bootstrap makes an identity
+provider; a role's trust in one is its own.
 
 The three states apply in order, by blast radius: `directory`, `aws`, `apps`, each reading the
 others by name. **Nothing unattended applies them** (assignments need
@@ -459,7 +467,7 @@ as a subinterface in the ifupdown2 renderer.
 
 **State is laid out by the team that owns it**: a layer's key is its path under `tofu/`,
 `<path>/terraform.tfstate` or `<path>/<workspace>/terraform.tfstate`, and the same path is its
-KMS encryption context (`alias/tofu-state`). Both are in the State account, which only the
+KMS encryption context (`alias/tofu-state`). Both are in the Tofu State account, which only the
 bootstrap role administers, and the bucket keeps every version under Object Lock for 90 days.
 A team's role, `tofu-state-<team>`, may touch only
 `${aws:PrincipalTag/team}/*`, and a layer reaches it as profile `homelab-state-<team>`, assumed
@@ -467,7 +475,7 @@ from the `homelab-state` SSO profile (`aws sso login` first). Moving a layer: ch
 and `encryption_context` together, then `tofu init -migrate-state`.
 
 `tofu/platform/proxmox/clusters/schema.json` sits beside the data it describes, for editors'
-`$schema` comments; CI checks the cluster files against it.
+`$schema` comments; CI checks the cluster files against it, and every other catalogue against its own.
 
 ## Commands
 
@@ -550,9 +558,10 @@ them unsigned); Dependabot's are squashed.
 builds and tests it at that commit, and publishes it with its package manifest and `SHA256SUMS`,
 signed keylessly by the workflow (`docs/images.md` says how to check one). An image-based one is signed by the release key,
 `alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`). Both
-are in the Signing account (`platform/aws/signing`), which, like State, only the bootstrap role
-administers, so no one who administers Platform can make themselves the signer; it only signs, and
-Platform's own `images-publish` writes the update bucket, as the profile `publish` names. mkosi's
+are in the Artifact Signing account (`platform/aws/signing`), which, like Tofu State, only the bootstrap
+role administers, so no one who administers Platform can make themselves the signer; it only signs, and
+`images-publish` writes the update bucket, in Artifact Distribution (`platform/aws/images`), as the
+profile `publish` names. mkosi's
 signing tools have no network, so its PKCS#11 module runs behind `p11-kit server`, which `mkosi box`
 starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, issued by KEK
 (`homelab image db`). Its release publishes its update files and its disk (a qcow2, or a card's raw image as

@@ -6,18 +6,10 @@ locals {
   regions = module.regions.names
 
   # Paths, nested with a slash: an OU can't move once made, but an account can
-  organizational_units = ["Security", "Infrastructure", "Sandbox", "Suspended"]
+  organizational_units = ["Security", "Infrastructure", "Deployments", "Sandbox", "Suspended"]
 
-  # baseline names them too, since a provider's for_each can't read them from here
-  accounts = {
-    "Log Archive" = "Security"
-    "Security"    = "Security"
-    "State"       = "Security"
-    "Network"     = "Infrastructure"
-    "Platform"    = "Infrastructure"
-    "Sandbox"     = "Sandbox"
-    "Signing"     = "Security"
-  }
+  accounts_dir = "${path.module}/../accounts"
+  accounts     = { for f in fileset(local.accounts_dir, "*.yaml") : trimsuffix(f, ".yaml") => yamldecode(file("${local.accounts_dir}/${f}")) }
 }
 
 resource "aws_organizations_organization" "this" {
@@ -56,7 +48,7 @@ locals {
   management_email = aws_organizations_organization.this.master_account_email
 
   account_ids = merge(
-    { Management = local.management_id },
+    { management = local.management_id },
     { for name, account in aws_organizations_account.this : name => account.id },
   )
 }
@@ -87,9 +79,9 @@ locals {
 resource "aws_organizations_account" "this" {
   for_each = local.accounts
 
-  name      = each.key
-  email     = replace(local.management_email, "/^([^+@]+)[^@]*@/", "$1+${lower(replace(each.key, " ", "-"))}@")
-  parent_id = local.ou_ids[each.value]
+  name      = each.value.name
+  email     = replace(local.management_email, "/^([^+@]+)[^@]*@/", "$1+${each.key}@")
+  parent_id = local.ou_ids[each.value.organizational_unit]
 
   lifecycle {
     prevent_destroy = true
@@ -113,7 +105,7 @@ resource "aws_account_region" "this" {
     "${pair[0]}/${pair[1]}" => { account = pair[0], region = pair[1] }
   }
 
-  account_id  = each.value.account == "Management" ? null : local.account_ids[each.value.account]
+  account_id  = each.value.account == "management" ? null : local.account_ids[each.value.account]
   region_name = each.value.region
   enabled     = true
 }
@@ -152,7 +144,7 @@ resource "aws_account_alternate_contact" "this" {
     "${pair[0]}/${pair[1]}" => { account = pair[0], type = pair[1] }
   }
 
-  account_id             = each.value.account == "Management" ? null : local.account_ids[each.value.account]
+  account_id             = each.value.account == "management" ? null : local.account_ids[each.value.account]
   alternate_contact_type = each.value.type
   name                   = data.aws_account_primary_contact.management.full_name
   title                  = "Owner"

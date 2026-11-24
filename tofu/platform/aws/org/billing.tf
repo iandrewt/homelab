@@ -1,7 +1,7 @@
 locals {
   budgets = {
     Organisation = { limit = "75", accounts = [] }
-    Sandbox      = { limit = "20", accounts = [local.account_ids["Sandbox"]] }
+    Sandbox      = { limit = "20", accounts = [local.account_ids["sandbox"]] }
   }
 }
 

@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schema.json
+name: Security Tooling
+organizational_unit: Security
+owner: security

@@ -44,8 +44,10 @@ terraform {
 locals {
   profile = "homelab-management"
 
-  # As org names them: a provider's for_each can't read anything, so they're here too
-  accounts = toset(["Management", "Log Archive", "Security", "Network", "Platform", "Sandbox", "Signing", "State"])
+  # The catalogue, read here since a provider's for_each can't take a module's output
+  catalogue_dir = "${path.module}/../accounts"
+  catalogue     = { for f in fileset(local.catalogue_dir, "*.yaml") : trimsuffix(f, ".yaml") => yamldecode(file("${local.catalogue_dir}/${f}")) }
+  accounts      = toset(concat(["management"], keys(local.catalogue)))
 }
 
 provider "aws" {
@@ -53,17 +55,14 @@ provider "aws" {
   profile = local.profile
 }
 
-data "aws_organizations_organization" "this" {}
+module "accounts" {
+  source = "../../../modules/accounts"
+}
 
 locals {
-  account_ids = merge(
-    { for account in data.aws_organizations_organization.this.non_master_accounts : account.name => account.id },
-    { Management = data.aws_organizations_organization.this.master_account_id },
-  )
-
   bootstrap_roles = {
-    for name in local.accounts :
-    name => "arn:aws:iam::${local.account_ids[name]}:role/OrganizationAccountAccessRole" if name != "Management"
+    for slug in local.accounts :
+    slug => "arn:aws:iam::${module.accounts.ids[slug]}:role/OrganizationAccountAccessRole" if slug != "management"
   }
 }
 
@@ -75,7 +74,7 @@ provider "aws" {
   profile = local.profile
 
   dynamic "assume_role" {
-    for_each = each.key == "Management" ? [] : [each.key]
+    for_each = each.key == "management" ? [] : [each.key]
 
     content {
       role_arn     = local.bootstrap_roles[assume_role.value]

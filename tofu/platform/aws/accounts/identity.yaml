@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schema.json
+name: Identity
+organizational_unit: Infrastructure
+owner: identity

@@ -6,7 +6,7 @@ locals {
   regions = toset(module.regions.names)
 
   features = ["S3_DATA_EVENTS", "EKS_AUDIT_LOGS"]
-  runtime  = ["Sandbox"]
+  runtime  = ["sandbox"]
 
   region_features = {
     for pair in setproduct(local.regions, local.features) :
@@ -16,11 +16,12 @@ locals {
 
 data "aws_organizations_organization" "this" {}
 
+module "accounts" {
+  source = "../../../modules/accounts"
+}
+
 locals {
-  account_ids = {
-    for account in data.aws_organizations_organization.this.non_master_accounts :
-    account.name => account.id if account.state == "ACTIVE"
-  }
+  account_ids = module.accounts.ids
 }
 
 resource "aws_guardduty_detector" "this" {

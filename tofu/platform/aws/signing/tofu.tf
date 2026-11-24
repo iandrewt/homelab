@@ -51,8 +51,10 @@ data "aws_organizations_organization" "this" {
   provider = aws.management
 }
 
-locals {
-  accounts = { for a in data.aws_organizations_organization.this.non_master_accounts : a.name => a.id }
+module "accounts" {
+  source = "../../../modules/accounts"
+
+  providers = { aws = aws.management }
 }
 
 # As the bootstrap role: no one else administers this account
@@ -61,7 +63,7 @@ provider "aws" {
   profile = "homelab-management"
 
   assume_role {
-    role_arn     = "arn:aws:iam::${local.accounts["Signing"]}:role/OrganizationAccountAccessRole"
+    role_arn     = "arn:aws:iam::${module.accounts.ids["artifact-signing"]}:role/OrganizationAccountAccessRole"
     session_name = "signing"
   }
 

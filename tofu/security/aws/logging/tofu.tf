@@ -53,7 +53,7 @@ provider "aws" {
 provider "aws" {
   alias   = "security"
   region  = "ap-southeast-2"
-  profile = "homelab-security"
+  profile = "homelab-security-tooling"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "security/aws/logging" }

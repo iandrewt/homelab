@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/iandrewt/homelab/tofu/platform/aws/accounts/schema.json",
+  "title": "A member account",
+  "description": "A member account of the organisation, named for the file: its IAM alias, root email and every layer's key for it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "organizational_unit", "owner"],
+  "properties": {
+    "name": {
+      "description": "Its display name in Organizations, which every layer finds it by.",
+      "type": "string"
+    },
+    "organizational_unit": {
+      "description": "The OU it's in, by path: its controls. An account can move; an OU can't.",
+      "type": "string"
+    },
+    "owner": {
+      "description": "The team whose layers it holds, which administers it outside Deployments.",
+      "type": "string"
+    }
+  }
+}

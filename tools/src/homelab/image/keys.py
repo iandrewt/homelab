@@ -44,9 +44,6 @@ cat debian.esl ours.esl > db.esl
 mkdir auto
 sign-efi-sig-list -k KEK.key -c KEK.crt db db.esl auto/db.auth >/dev/null
 """
-# Any of the organisation's principals may read its public half, by the alias's ARN from another account
-AWS_PROFILE = "homelab-platform"
-
 
 def register(verbs) -> None:
     keys = verbs.add_parser(
@@ -102,7 +99,7 @@ def _db(args) -> int:
     with tempfile.TemporaryDirectory(dir=os.environ.get("XDG_RUNTIME_DIR")) as tmp:
         work = Path(tmp)
         (work / "release.der").write_bytes(base64.b64decode(run(
-            "aws", "kms", "get-public-key", "--key-id", key, "--profile", AWS_PROFILE,
+            "aws", "kms", "get-public-key", "--key-id", key,
             "--query", "PublicKey", "--output", "text", capture=True)))
         (work / "KEK.key").write_text(kek[("KEK", "private key")])
         (work / "KEK.crt").write_text(kek[("KEK", "certificate")])

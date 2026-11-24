@@ -16,7 +16,7 @@ resource "aws_organizations_policy" "ec2" {
       serial_console_access        = { status = { "@@assign" = "disabled" } }
       vpc_block_public_access = {
         internet_gateway_block = {
-          mode               = { "@@assign" = "block_ingress" }
+          mode               = { "@@assign" = "block_bidirectional" }
           exclusions_allowed = { "@@assign" = "enabled" }
         }
       }

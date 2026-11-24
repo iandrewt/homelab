@@ -88,9 +88,18 @@ locals {
     ]
   }
 
+  # Each Deployments account's own: state's, the release key's, the update bucket's
+  deployment_roles = [
+    "arn:aws:iam::*:role/tofu-state/*",
+    "arn:aws:iam::*:role/images-release",
+    "arn:aws:iam::*:role/images-publish",
+  ]
+  # Reaching a team's state role, and reading
+  deployment_sets = ["TofuState", "SecurityAudit"]
+
   # Administrator where the logging and detection layers run
   security_administrators = [
-    for account in ["Log Archive", "Security"] :
+    for account in ["log-archive", "security-tooling"] :
     "arn:aws:iam::${local.account_ids[account]}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_Administrator_*"
   ]
 }
@@ -143,6 +152,27 @@ resource "aws_organizations_policy" "guardrails" {
           "sso:UpdateInstanceAccessControlAttributeConfiguration",
         ]
         Resource = "*"
+      },
+      {
+        # Identity's federation layer makes them, through bootstrap; a role's trust in one is its own
+        Sid    = "IdentityProvidersAreBootstrap"
+        Effect = "Deny"
+        Action = [
+          "iam:AddClientIDToOpenIDConnectProvider",
+          "iam:CreateOpenIDConnectProvider",
+          "iam:CreateSAMLProvider",
+          "iam:DeleteOpenIDConnectProvider",
+          "iam:DeleteSAMLProvider",
+          "iam:RemoveClientIDFromOpenIDConnectProvider",
+          "iam:TagOpenIDConnectProvider",
+          "iam:TagSAMLProvider",
+          "iam:UntagOpenIDConnectProvider",
+          "iam:UntagSAMLProvider",
+          "iam:UpdateOpenIDConnectProviderThumbprint",
+          "iam:UpdateSAMLProvider",
+        ]
+        Resource  = "*"
+        Condition = { ArnNotLike = { "aws:PrincipalArn" = local.bootstrap_role } }
       },
       {
         Sid      = "NoLongLivedCredentials"
@@ -256,6 +286,31 @@ resource "aws_organizations_policy" "bootstrap_role" {
   })
 }
 
+# What release machinery holds is changed only by bootstrap and the roles it names. Identity Center's
+# read-only sets are let in, and so are root sessions, which can unlock a bucket a policy shut
+resource "aws_organizations_policy" "deployments" {
+  name = "Deployments"
+  type = "SERVICE_CONTROL_POLICY"
+
+  content = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "OnlyNamedRoles"
+      Effect   = "Deny"
+      Action   = "*"
+      Resource = "*"
+      Condition = {
+        ArnNotLike = {
+          "aws:PrincipalArn" = concat([local.bootstrap_role], local.deployment_roles, [
+            for set in local.deployment_sets : "arn:aws:iam::*:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_${set}_*"
+          ])
+        }
+        Null = { "aws:AssumedRoot" = "true" }
+      }
+    }]
+  })
+}
+
 resource "aws_organizations_policy" "suspended" {
   name = "Suspended"
   type = "SERVICE_CONTROL_POLICY"
@@ -283,6 +338,11 @@ resource "aws_organizations_policy_attachment" "bootstrap_role" {
 
   policy_id = aws_organizations_policy.bootstrap_role.id
   target_id = each.value
+}
+
+resource "aws_organizations_policy_attachment" "deployments" {
+  policy_id = aws_organizations_policy.deployments.id
+  target_id = local.ou_ids["Deployments"]
 }
 
 resource "aws_organizations_policy_attachment" "suspended" {

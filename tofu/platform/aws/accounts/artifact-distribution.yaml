@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schema.json
+name: Artifact Distribution
+organizational_unit: Deployments
+owner: platform

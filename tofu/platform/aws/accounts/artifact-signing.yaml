@@ -1,0 +1,4 @@
+# yaml-language-server: $schema=schema.json
+name: Artifact Signing
+organizational_unit: Deployments
+owner: platform
