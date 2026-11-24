@@ -71,7 +71,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: fluxcd/flux2/action@3fa784edd773d56630bb9f62645e08f70c2cff0a  # v2.10.0
-      - uses: controlplaneio-fluxcd/flux-operator/actions/setup@48e2cd76c475be87a1c9a8bd83fe07e064abd725  # v0.62.1
+      - uses: controlplaneio-fluxcd/flux-operator/actions/setup@712a9026cd99efdd885d73ed31d0775a2dd2873a  # v0.63.0
       - working-directory: kubernetes
         run: |
           set -euo pipefail
