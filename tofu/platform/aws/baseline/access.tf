@@ -19,7 +19,7 @@ resource "aws_iam_openid_connect_provider" "github" {
   client_id_list = ["sts.amazonaws.com"]
 }
 
-# A new account has none until this applies there, so CI plans it as bootstrap, under an activation
+# A new account has none until this applies there, so that first apply is by hand
 module "tofu_plan" {
   source   = "../../../modules/tofu-plan"
   for_each = { for slug, account in local.members : slug => account.owner }

@@ -431,10 +431,10 @@ and assignments and its delegated administration (the Identity account) are Iden
 **`platform/aws/baseline` is the account factory**: everything every member gets, through
 bootstrap - its alias, EBS encryption, no default VPC, GitHub's OIDC provider, `tofu-plan`, and
 `tofu-apply` in the team tier. What may federate is the `Identity providers` SCP's, so no team
-but Platform's takes part in vending. **A new account is two stages**: `org` makes it, then
-`baseline` and `identity-center` in parallel, since a provider can't name an account the same
-plan creates. Until `baseline` applies there it has no `tofu-plan`, so CI plans it as bootstrap,
-which works only inside an activation. **OUs group accounts by their controls**,
+but Platform's takes part in vending. **A new account is two applies**: `org` makes it,
+then `baseline` and `identity-center`, since a provider can't name an account the same plan
+creates. Until `baseline` applies there it has no `tofu-plan`, so that first `baseline` apply is
+by hand. **OUs group accounts by their controls**,
 as AWS's multi-account guidance has it: Security holds only Log Archive and Security Tooling;
 Deployments holds release machinery (Tofu State, Artifact Signing, Artifact Distribution), whose SCP
 admits no Identity Center session but reading and state, and which Identity Center's Administrator
@@ -454,15 +454,20 @@ the gates CI runs behind: rulesets on `main` (signed, linear, no force-push or d
 checks, only you push) and on release tags (never moved or deleted, only you create), Actions'
 permissions, and the environments, each limited to `main`. Its token administers this repository
 alone, read ephemerally from `Break-glass`; nothing else holds Administration.
-**`tofu.yml` plans and applies the AWS layers that don't read NetBox**, all org tier, in stages
-(`org`; `guardrails`; `baseline` and `identity-center`; the rest), each planned once the last
-has applied. A pull request runs `main`'s copy of it (`pull_request_target`), and plans only if
-every commit is signed by the operator's primary key (`.github/signing-key.asc`) or is
-Dependabot's signed by GitHub, since its tofu runs against state that holds secrets. Plans are
-printed, checked by conftest (`tofu/policy`: nothing lasting destroyed, no `/org/` role
-changed, both applied by hand instead) and kept for the apply, which applies that file once
-the run is activated. Tools are `mise.toml`'s. Layers reading NetBox, and on-prem ones, wait
-for CI to reach NetBox.
+**Every layer is a Terramate stack** (`stack.tm.hcl`: what it runs `after`), and CI runs the
+changed ones tagged `ci`, in Terramate's order (`terramate run --changed --tags ci`); a layer gets
+the tag once CI can reach its providers, and the seed and `security/github` never do. `tofu.yml`
+is two jobs: a plan, on a pull request from `main`'s copy (`pull_request_target`) only if every
+commit is signed by the operator's primary key (`.github/signing-key.asc`) or is Dependabot's
+signed by GitHub, and on `main` keeping each plan with changes; then an apply, on `main` and
+skipped when there are none, of exactly those plans once the run is activated. Each job exchanges its
+GitHub token, once, for every profile a layer names, straight to that account's role (bootstrap
+alone chains, from `deploy-org`), then runs `terramate run -- tofu …` a command at a time; the
+plan job checks every plan against `main`'s policy, and the apply job waits for the activation
+before it touches anything. A later stack's
+plan is made before an earlier one applies, so what an upstream apply changes reaches it on the
+next run. Plans are printed and checked by conftest (`tofu/policy`: nothing lasting destroyed, no `/org/`
+role changed, both applied by hand). Tools are `mise.toml`'s.
 
 **An account's tier is in the catalogue, and decides who applies to it.** `team` (Network,
 Artifact Distribution): CI, in its owner's `tofu-<team>` environment, as `tofu-apply`, which
