@@ -5,6 +5,11 @@ output "repository" {
   value       = "iandrewt@12795256/homelab@1394808425"
 }
 
+output "repository_id" {
+  description = "The repository's immutable ID, as GitHub's repository_id claim gives it."
+  value       = "1394808425"
+}
+
 output "workflow" {
   description = "The one workflow file that may plan or apply, on main."
   value       = "iandrewt/homelab/.github/workflows/tofu.yml@refs/heads/main"

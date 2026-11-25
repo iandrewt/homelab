@@ -18,7 +18,6 @@ resource "aws_organizations_policy" "perimeter" {
           "sts:GetFederationToken",
           "sts:GetServiceBearerToken",
           "sts:GetSessionToken",
-          "sts:SetContext",
         ]
         Resource = "*"
         Condition = {
@@ -87,10 +86,38 @@ resource "aws_organizations_policy" "bootstrap_role_trust" {
   })
 }
 
+module "github" {
+  source = "../../../modules/github"
+}
+
+# The outer limit on GitHub's tokens, inside which each role's trust is its own: only this
+# repository's federate, however loose a trust is. A token without the claim is another issuer's,
+# which the Identity providers SCP already limits
+resource "aws_organizations_policy" "github" {
+  name = "GitHub"
+  type = "RESOURCE_CONTROL_POLICY"
+
+  content = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "OnlyThisRepository"
+      Effect    = "Deny"
+      Principal = "*"
+      Action    = "sts:AssumeRoleWithWebIdentity"
+      Resource  = "*"
+      Condition = {
+        Null            = { "token.actions.githubusercontent.com:repository_id" = "false" }
+        StringNotEquals = { "token.actions.githubusercontent.com:repository_id" = module.github.repository_id }
+      }
+    }]
+  })
+}
+
 resource "aws_organizations_policy_attachment" "root_rcps" {
   for_each = {
     perimeter            = aws_organizations_policy.perimeter.id
     bootstrap_role_trust = aws_organizations_policy.bootstrap_role_trust.id
+    github               = aws_organizations_policy.github.id
   }
 
   policy_id = each.value
