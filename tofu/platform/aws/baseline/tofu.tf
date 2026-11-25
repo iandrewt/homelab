@@ -42,28 +42,15 @@ terraform {
 }
 
 locals {
-  profile = "homelab-management"
-
   # The catalogue, read here since a provider's for_each can't take a module's output
   catalogue_dir = "${path.module}/../accounts"
   catalogue     = { for f in fileset(local.catalogue_dir, "*.yaml") : trimsuffix(f, ".yaml") => yamldecode(file("${local.catalogue_dir}/${f}")) }
   accounts      = toset(concat(["management"], keys(local.catalogue)))
 }
 
-provider "aws" {
-  region  = "ap-southeast-2"
-  profile = local.profile
-}
-
-module "accounts" {
-  source = "../../../modules/accounts"
-}
-
 locals {
-  bootstrap_roles = {
-    for slug in local.accounts :
-    slug => "arn:aws:iam::${module.accounts.ids[slug]}:role/OrganizationAccountAccessRole" if slug != "management"
-  }
+  # Management's own administrator, and bootstrap in every member: what local-exec runs as too
+  apply_profiles = { for slug in local.accounts : slug => slug == "management" ? "homelab-management" : "homelab-${slug}-bootstrap" }
 }
 
 provider "aws" {
@@ -71,16 +58,7 @@ provider "aws" {
   for_each = local.accounts
 
   region  = "ap-southeast-2"
-  profile = local.profile
-
-  dynamic "assume_role" {
-    for_each = each.key == "management" ? [] : [each.key]
-
-    content {
-      role_arn     = local.bootstrap_roles[assume_role.value]
-      session_name = "baseline"
-    }
-  }
+  profile = terraform.applying ? local.apply_profiles[each.key] : "homelab-${each.key}-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "platform/aws/baseline" }

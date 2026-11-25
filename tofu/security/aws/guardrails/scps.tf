@@ -88,14 +88,8 @@ locals {
     ]
   }
 
-  # Each Deployments account's own: state's, the release key's, the update bucket's
-  deployment_roles = [
-    "arn:aws:iam::*:role/tofu-state/*",
-    "arn:aws:iam::*:role/images-release",
-    "arn:aws:iam::*:role/images-publish",
-  ]
-  # Reaching a team's state role, and reading
-  deployment_sets = ["TofuState", "SecurityAudit"]
+  # Reading, reaching a team's state role, and reaching the account's tofu-plan
+  deployment_sets = ["ReadOnly", "SecurityAudit", "TofuState"]
 
   # Administrator where the logging and detection layers run
   security_administrators = [
@@ -179,6 +173,16 @@ resource "aws_organizations_policy" "guardrails" {
         Condition = { ArnNotLike = { "aws:PrincipalArn" = local.bootstrap_role } }
       },
       {
+        # CI never needs either, even activated; a person's session carries no SubjectType
+        Sid      = "NeverWorkloads"
+        Effect   = "Deny"
+        Action   = ["s3:BypassGovernanceRetention", "route53domains:RetrieveDomainAuthCode", "route53domains:TransferDomainToAnotherAwsAccount"]
+        Resource = "*"
+        Condition = {
+          StringEquals = { "aws:OriginIdentity/SubjectType" = "workload" }
+        }
+      },
+      {
         Sid    = "DetectionStaysOn"
         Effect = "Deny"
         Action = [
@@ -218,7 +222,7 @@ locals {
   ]
 }
 
-# identity/aws/federation makes them, through bootstrap; a role's trust in one is its own. The issuer
+# platform/aws/baseline makes them, through bootstrap; a role's trust in one is its own. The issuer
 # statements are AWS's own, for trusted identity propagation, and bind bootstrap too
 resource "aws_organizations_policy" "identity_providers" {
   name = "Identity providers"
@@ -279,7 +283,12 @@ resource "aws_organizations_policy" "identity_providers" {
   })
 }
 
-# baseline deletes every region's default VPC through the bootstrap role
+# baseline deletes every region's default VPC through the bootstrap role, and plans it as tofu-plan,
+# which reads alone, and only bootstrap can make
+locals {
+  everywhere = [local.bootstrap_role, "arn:aws:iam::*:role/org/tofu-plan"]
+}
+
 resource "aws_organizations_policy" "regions" {
   name = "Regions"
   type = "SERVICE_CONTROL_POLICY"
@@ -294,7 +303,7 @@ resource "aws_organizations_policy" "regions" {
         Resource  = "*"
         Condition = {
           StringNotEquals = { "aws:RequestedRegion" = local.regions }
-          ArnNotLike      = { "aws:PrincipalArn" = local.bootstrap_role }
+          ArnNotLike      = { "aws:PrincipalArn" = local.everywhere }
         }
       }],
       [for region, actions in local.pinned : {
@@ -304,42 +313,58 @@ resource "aws_organizations_policy" "regions" {
         Resource = "*"
         Condition = {
           StringNotEquals = { "aws:RequestedRegion" = concat(local.regions, [region]) }
-          ArnNotLike      = { "aws:PrincipalArn" = local.bootstrap_role }
+          ArnNotLike      = { "aws:PrincipalArn" = local.everywhere }
         }
       }],
     )
   })
 }
 
+locals {
+  role_changes = [
+    "iam:AttachRolePolicy",
+    "iam:CreateRole",
+    "iam:DeleteRole",
+    "iam:DeleteRolePermissionsBoundary",
+    "iam:DeleteRolePolicy",
+    "iam:DetachRolePolicy",
+    "iam:PutRolePermissionsBoundary",
+    "iam:PutRolePolicy",
+    "iam:UpdateAssumeRolePolicy",
+    "iam:UpdateRole",
+    "iam:UpdateRoleDescription",
+  ]
+}
+
+# Bootstrap's role, to everyone; the organisation's own roles, under /org/, to all but bootstrap.
+# A team's other roles are its own
 resource "aws_organizations_policy" "bootstrap_role" {
-  name = "Bootstrap role"
+  name = "Fixed roles"
   type = "SERVICE_CONTROL_POLICY"
 
   content = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid    = "BootstrapRoleIsFixed"
-      Effect = "Deny"
-      Action = [
-        "iam:AttachRolePolicy",
-        "iam:CreateRole",
-        "iam:DeleteRole",
-        "iam:DeleteRolePermissionsBoundary",
-        "iam:DeleteRolePolicy",
-        "iam:DetachRolePolicy",
-        "iam:PutRolePermissionsBoundary",
-        "iam:PutRolePolicy",
-        "iam:UpdateAssumeRolePolicy",
-        "iam:UpdateRole",
-        "iam:UpdateRoleDescription",
-      ]
-      Resource = local.bootstrap_role
-    }]
+    Statement = [
+      {
+        Sid      = "BootstrapRoleIsFixed"
+        Effect   = "Deny"
+        Action   = local.role_changes
+        Resource = local.bootstrap_role
+      },
+      {
+        Sid       = "OrgRolesAreFixed"
+        Effect    = "Deny"
+        Action    = local.role_changes
+        Resource  = "arn:aws:iam::*:role/org/*"
+        Condition = { ArnNotLike = { "aws:PrincipalArn" = local.bootstrap_role } }
+      },
+    ]
   })
 }
 
-# What release machinery holds is changed only by bootstrap and the roles it names. Identity Center's
-# read-only sets are let in, and so are root sessions, which can unlock a bucket a policy shut
+# Release machinery is administered by bootstrap alone. Every role in such an account was made by
+# something already trusted, so the one way in from outside is Identity Center: whoever
+# administers it could assign themselves anything here, so only its read-only sets are let in
 resource "aws_organizations_policy" "deployments" {
   name = "Deployments"
   type = "SERVICE_CONTROL_POLICY"
@@ -347,17 +372,15 @@ resource "aws_organizations_policy" "deployments" {
   content = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid      = "OnlyNamedRoles"
+      Sid      = "OnlyReadingSets"
       Effect   = "Deny"
       Action   = "*"
       Resource = "*"
       Condition = {
+        ArnLike = { "aws:PrincipalArn" = "arn:aws:iam::*:role/aws-reserved/sso.amazonaws.com/*" }
         ArnNotLike = {
-          "aws:PrincipalArn" = concat([local.bootstrap_role], local.deployment_roles, [
-            for set in local.deployment_sets : "arn:aws:iam::*:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_${set}_*"
-          ])
+          "aws:PrincipalArn" = [for set in local.deployment_sets : "arn:aws:iam::*:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_${set}_*"]
         }
-        Null = { "aws:AssumedRoot" = "true" }
       }
     }]
   })

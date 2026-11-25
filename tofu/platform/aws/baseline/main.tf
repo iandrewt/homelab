@@ -35,9 +35,8 @@ resource "terraform_data" "delete_default_vpcs" {
     command = "${path.module}/delete-default-vpcs.sh"
 
     environment = {
-      AWS_PROFILE = local.profile
+      AWS_PROFILE = local.apply_profiles[each.value.account]
       AWS_REGION  = each.value.region
-      ROLE_ARN    = lookup(local.bootstrap_roles, each.value.account, "")
     }
   }
 }

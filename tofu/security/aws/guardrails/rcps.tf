@@ -69,14 +69,17 @@ resource "aws_organizations_policy" "bootstrap_role_trust" {
   content = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid       = "OnlyManagementAdministrators"
+      Sid       = "OnlyManagementAdministratorsAndDeployOrg"
       Effect    = "Deny"
       Principal = "*"
       Action    = "sts:AssumeRole"
       Resource  = local.bootstrap_role
       Condition = {
         ArnNotLike = {
-          "aws:PrincipalArn" = "arn:aws:iam::${local.management_id}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_${local.management_administrator}_*"
+          "aws:PrincipalArn" = [
+            "arn:aws:iam::${local.management_id}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_${local.management_administrator}_*",
+            "arn:aws:iam::${local.management_id}:role/deploy-org",
+          ]
         }
         BoolIfExists = { "aws:PrincipalIsAWSService" = "false" }
       }

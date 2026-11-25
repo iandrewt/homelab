@@ -43,7 +43,7 @@ terraform {
 
 provider "aws" {
   region  = "ap-southeast-2"
-  profile = "homelab-management"
+  profile = terraform.applying ? "homelab-management" : "homelab-management-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "platform/aws/org" }

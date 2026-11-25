@@ -39,6 +39,20 @@ locals {
         ]
       })
     }
+    # Where Administrator can't go: a Deployments account. Each tofu-plan trusts only its own
+    # account's sessions, so this plans no further than its assignment
+    ReadOnly = {
+      description = "Reads an account, and plans it as its tofu-plan"
+      managed     = ["ReadOnlyAccess"]
+      inline = jsonencode({
+        Version = "2012-10-17"
+        Statement = [{
+          Effect   = "Allow"
+          Action   = "sts:AssumeRole"
+          Resource = "arn:aws:iam::*:role/org/tofu-plan"
+        }]
+      })
+    }
     TofuState = {
       description = "OpenTofu state: becomes a team's role in security/aws/state"
       inline = jsonencode({
@@ -54,13 +68,18 @@ locals {
 
   members = [for slug in keys(local.accounts) : slug if contains(keys(local.account_ids), slug)]
 
-  # No one administers an account in Deployments but the bootstrap role
-  deployments   = toset(data.aws_organizations_organizational_unit_descendant_accounts.deployments.accounts[*].id)
-  administered  = [for slug in local.members : slug if !contains(local.deployments, local.account_ids[slug])]
-  administrator = { for slug in local.administered : slug => toset(["Administrators", module.tenancy.teams[local.accounts[slug].owner].title]) }
+  # The owner and Administrators in every account: Administrator, but only read where no one
+  # administers but the bootstrap role, in Deployments. Until the broker elevates, Administrator is standing
+  deployments = toset(data.aws_organizations_organizational_unit_descendant_accounts.deployments.accounts[*].id)
+  access = {
+    for slug in local.members : slug => {
+      set    = contains(local.deployments, local.account_ids[slug]) ? "ReadOnly" : "Administrator"
+      groups = toset(["Administrators", module.tenancy.teams[local.accounts[slug].owner].title])
+    }
+  }
 
   assignments = concat(
-    flatten([for slug, groups in local.administrator : [for group in groups : { set = "Administrator", group = group, account = slug }]]),
+    flatten([for slug, a in local.access : [for group in a.groups : { set = a.set, group = group, account = slug }]]),
     [for slug in local.members : { set = "SecurityAudit", group = "Security", account = slug }],
     [{ set = "LogReader", group = "Security", account = "log-archive" }],
     [for team in local.state_teams : { set = "TofuState", group = team, account = "tofu-state" }],

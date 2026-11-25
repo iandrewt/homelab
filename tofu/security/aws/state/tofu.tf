@@ -42,25 +42,8 @@ terraform {
 }
 
 provider "aws" {
-  alias   = "management"
   region  = "ap-southeast-2"
-  profile = "homelab-management"
-}
-
-module "accounts" {
-  source = "../../../modules/accounts"
-
-  providers = { aws = aws.management }
-}
-
-provider "aws" {
-  region  = "ap-southeast-2"
-  profile = "homelab-management"
-
-  assume_role {
-    role_arn     = "arn:aws:iam::${module.accounts.ids["tofu-state"]}:role/OrganizationAccountAccessRole"
-    session_name = "state"
-  }
+  profile = terraform.applying ? "homelab-tofu-state-bootstrap" : "homelab-tofu-state-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "security/aws/state" }

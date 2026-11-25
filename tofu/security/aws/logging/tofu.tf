@@ -43,7 +43,7 @@ terraform {
 
 provider "aws" {
   region  = "ap-southeast-2"
-  profile = "homelab-log-archive"
+  profile = terraform.applying ? "homelab-log-archive-bootstrap" : "homelab-log-archive-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "security/aws/logging" }
@@ -53,7 +53,7 @@ provider "aws" {
 provider "aws" {
   alias   = "security"
   region  = "ap-southeast-2"
-  profile = "homelab-security-tooling"
+  profile = terraform.applying ? "homelab-security-tooling-bootstrap" : "homelab-security-tooling-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "security/aws/logging" }

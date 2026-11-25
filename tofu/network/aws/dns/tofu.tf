@@ -51,7 +51,7 @@ terraform {
 
 provider "aws" {
   region  = "ap-southeast-2"
-  profile = "homelab-network"
+  profile = terraform.applying ? "homelab-network-apply" : "homelab-network-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "network/aws/dns" }

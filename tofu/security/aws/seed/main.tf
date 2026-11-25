@@ -1,10 +1,11 @@
 locals {
   management_id = data.aws_organizations_organization.this.master_account_id
 
-  # As the repository's immutable subject claim names it, the owner and repository by ID too
-  repository     = "iandrewt@12795256/homelab@1394808425"
-  workflow       = "iandrewt/homelab/.github/workflows/tofu.yml@refs/heads/main"
   bootstrap_role = "arn:aws:iam::*:role/OrganizationAccountAccessRole"
+}
+
+module "github" {
+  source = "../../../modules/github"
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -27,8 +28,9 @@ resource "aws_iam_role" "deploy_org" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud"              = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub"              = "repo:${local.repository}:environment:tofu-org"
-          "token.actions.githubusercontent.com:job_workflow_ref" = local.workflow
+          "token.actions.githubusercontent.com:sub"              = "repo:${module.github.repository}:environment:tofu-org"
+          "token.actions.githubusercontent.com:job_workflow_ref" = module.github.workflow
+          "token.actions.githubusercontent.com:actor_id"         = module.github.operator
         }
       }
     }]
@@ -121,4 +123,14 @@ resource "aws_iam_policy" "deploy_org_boundary" {
       },
     ]
   })
+}
+
+# Management's plans: management's permission sets go to users alone, so its own administrators plan here
+module "tofu_plan" {
+  source = "../../../modules/tofu-plan"
+
+  environments    = ["tofu-plan-org"]
+  permission_sets = ["ManagementAdministrator"]
+
+  depends_on = [aws_iam_openid_connect_provider.github]
 }

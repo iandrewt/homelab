@@ -1,15 +1,6 @@
 #!/usr/bin/env bash
-# Deletes AWS_REGION's default VPC, as ROLE_ARN when it's set
+# Deletes AWS_REGION's default VPC, as AWS_PROFILE
 set -euo pipefail
-
-if [[ -n ${ROLE_ARN:-} ]]; then
-  read -r AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN < <(
-    aws sts assume-role --role-arn "$ROLE_ARN" --role-session-name baseline \
-      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text
-  )
-  export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
-  unset AWS_PROFILE
-fi
 
 for vpc in $(aws ec2 describe-vpcs --filters Name=is-default,Values=true --query 'Vpcs[].VpcId' --output text); do
   for igw in $(aws ec2 describe-internet-gateways --filters "Name=attachment.vpc-id,Values=$vpc" \

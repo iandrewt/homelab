@@ -117,20 +117,50 @@ OpenTofu needs no wrapper. State and plans are encrypted with OpenTofu's own
 key in the same account as the state bucket: Tofu State, which only the bootstrap role
 administers. Each team's state is reached as that team's role there, which a layer names by
 profile - `homelab-state-<team>`, the first directory of its path. Locally, each is the role
-assumed from your `TofuState` session in Tofu State:
+assumed from your `TofuState` session in Tofu State.
+
+A layer names its account by profile too, a different one to plan and to apply
+(`terraform.applying`), so a plan runs as the same role wherever it runs:
+
+| Profile | Plans or applies | Is |
+| --- | --- | --- |
+| `homelab-<account>-plan` | every plan | `tofu-plan` in that account, read-only |
+| `homelab-management-plan` | management's plans | management's `tofu-plan` |
+| `homelab-<account>-apply` | a team-tier account's applies (Network, Artifact Distribution) | `tofu-apply`, which only CI may assume |
+| `homelab-<account>-bootstrap` | an org-tier account's applies | bootstrap, from `deploy-org` in CI or `ManagementAdministrator` here |
+| `homelab-management` | management's applies | `ManagementAdministrator` here, `deploy-org` in CI |
+
+Locally, `tofu-plan` is assumed from your session in the same account (Administrator, or
+`ReadOnly` in a Deployments account), and
+bootstrap from `ManagementAdministrator`:
 
 ```ini
 # ~/.aws/config
 [profile homelab-state-network]
 role_arn = arn:aws:iam::877127520873:role/tofu-state/tofu-state-network
 source_profile = homelab-state
+
+[profile homelab-network-tofu]
+sso_session = homelab
+sso_account_id = <network>
+sso_role_name = Administrator
+
+[profile homelab-network-plan]
+role_arn = arn:aws:iam::<network>:role/org/tofu-plan
+source_profile = homelab-network-tofu
+
+[profile homelab-network-bootstrap]
+role_arn = arn:aws:iam::<network>:role/OrganizationAccountAccessRole
+source_profile = homelab-management
 ```
 
-CI would define the same profile names from its OIDC token (`web_identity_token_file`)
-instead, so the layers don't change. The 1Password provider reads every other secret.
+Applies are CI's. You have no `-apply` profile in the ordinary case; to apply a team-tier
+layer by hand, which is break-glass, point its `-apply` profile at the `-bootstrap` one's
+role. CI writes the same profile names from its OIDC token, so the layers don't change. The
+1Password provider reads every other secret.
 
 octoDNS writes Route53 as `network/aws/dns`'s `octodns` role, which can't touch a cluster's
-names, assumed from your Network session:
+names, assumed from your Network Administrator session:
 
 ```ini
 [profile homelab-octodns]

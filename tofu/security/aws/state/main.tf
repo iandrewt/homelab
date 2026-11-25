@@ -65,6 +65,10 @@ locals {
   state_roles    = "arn:aws:iam::${local.account}:role/tofu-state/*"
 }
 
+module "github" {
+  source = "../../../modules/github"
+}
+
 resource "aws_s3_bucket_policy" "state" {
   bucket = aws_s3_bucket.state.id
 
@@ -78,6 +82,15 @@ resource "aws_s3_bucket_policy" "state" {
         Action    = "s3:*"
         Resource  = "${aws_s3_bucket.state.arn}/*"
         Condition = { ArnNotLike = { "aws:PrincipalArn" = [local.state_roles, local.bootstrap_role] } }
+      },
+      {
+        # A plan job shares its team's state role, and runs a pull request's code
+        Sid       = "PlansDontWriteState"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = ["s3:DeleteObject", "s3:PutObject"]
+        Resource  = "${aws_s3_bucket.state.arn}/*terraform.tfstate"
+        Condition = { StringLike = { "aws:TransactionContext/IdentityProvider/environment" = "tofu-plan-*" } }
       },
       {
         Sid       = "ConfigurationIsBootstrap"
@@ -146,9 +159,9 @@ locals {
 }
 
 # One role per team, and one policy for them all: the role's own `team` tag is what scopes
-# it. Who may become the team is the trust policy's - today a member, through TofuState with
-# the tag Entra gives their session; CI by its OIDC token, when there is CI. IAM makes
-# nothing under aws-reserved but Identity Center's roles, and the trust grants no
+# it. Who may become the team is the trust policy's: a member, through TofuState with the tag
+# Entra gives their session, or CI, in the team's plan or apply environments or the org tier's.
+# IAM makes nothing under aws-reserved but Identity Center's roles, and the trust grants no
 # sts:TagSession, so nobody can bring a `team` tag of their own.
 resource "aws_iam_role" "state" {
   for_each = local.teams
@@ -159,16 +172,50 @@ resource "aws_iam_role" "state" {
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "Members"
-      Effect    = "Allow"
-      Principal = { AWS = "arn:aws:iam::${local.account}:root" }
-      Action    = "sts:AssumeRole"
-      Condition = {
-        StringEquals = { "aws:PrincipalTag/team-${each.key}" = "true" }
-        ArnLike      = { "aws:PrincipalArn" = "arn:aws:iam::${local.account}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_TofuState_*" }
-      }
-    }]
+    Statement = [
+      {
+        Sid       = "Members"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${local.account}:root" }
+        Action    = "sts:AssumeRole"
+        Condition = {
+          StringEquals = { "aws:PrincipalTag/team-${each.key}" = "true" }
+          ArnLike      = { "aws:PrincipalArn" = "arn:aws:iam::${local.account}:role/aws-reserved/sso.amazonaws.com/*/AWSReservedSSO_TofuState_*" }
+        }
+      },
+      {
+        Sid       = "Plans"
+        Effect    = "Allow"
+        Principal = { Federated = "arn:aws:iam::${local.account}:oidc-provider/token.actions.githubusercontent.com" }
+        Action    = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud"              = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:job_workflow_ref" = module.github.workflow
+            "token.actions.githubusercontent.com:actor_id"         = module.github.planners
+            "token.actions.githubusercontent.com:sub" = [
+              for environment in ["tofu-plan-${each.key}", "tofu-plan-org"] : "repo:${module.github.repository}:environment:${environment}"
+            ]
+          }
+        }
+      },
+      {
+        Sid       = "Applies"
+        Effect    = "Allow"
+        Principal = { Federated = "arn:aws:iam::${local.account}:oidc-provider/token.actions.githubusercontent.com" }
+        Action    = "sts:AssumeRoleWithWebIdentity"
+        Condition = {
+          StringEquals = {
+            "token.actions.githubusercontent.com:aud"              = "sts.amazonaws.com"
+            "token.actions.githubusercontent.com:job_workflow_ref" = module.github.workflow
+            "token.actions.githubusercontent.com:actor_id"         = module.github.operator
+            "token.actions.githubusercontent.com:sub" = [
+              for environment in ["tofu-${each.key}", "tofu-org"] : "repo:${module.github.repository}:environment:${environment}"
+            ]
+          }
+        }
+      },
+    ]
   })
 }
 

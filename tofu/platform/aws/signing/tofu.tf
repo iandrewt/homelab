@@ -44,28 +44,16 @@ terraform {
 provider "aws" {
   alias   = "management"
   region  = "ap-southeast-2"
-  profile = "homelab-management"
+  profile = terraform.applying ? "homelab-management" : "homelab-management-plan"
 }
 
 data "aws_organizations_organization" "this" {
   provider = aws.management
 }
 
-module "accounts" {
-  source = "../../../modules/accounts"
-
-  providers = { aws = aws.management }
-}
-
-# As the bootstrap role: no one else administers this account
 provider "aws" {
   region  = "ap-southeast-2"
-  profile = "homelab-management"
-
-  assume_role {
-    role_arn     = "arn:aws:iam::${module.accounts.ids["artifact-signing"]}:role/OrganizationAccountAccessRole"
-    session_name = "signing"
-  }
+  profile = terraform.applying ? "homelab-artifact-signing-bootstrap" : "homelab-artifact-signing-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "platform/aws/signing" }

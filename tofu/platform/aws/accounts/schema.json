@@ -5,7 +5,12 @@
   "description": "A member account of the organisation, named for the file: its IAM alias, root email and every layer's key for it.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "organizational_unit", "owner"],
+  "required": [
+    "name",
+    "organizational_unit",
+    "owner",
+    "tier"
+  ],
   "properties": {
     "name": {
       "description": "Its display name in Organizations, which every layer finds it by.",
@@ -18,6 +23,13 @@
     "owner": {
       "description": "The team whose layers it holds, which administers it outside Deployments.",
       "type": "string"
+    },
+    "tier": {
+      "description": "Who applies its layers: `team`, CI through its owner's environment and tofu-apply; `org`, bootstrap, through deploy-org and an activation.",
+      "enum": [
+        "org",
+        "team"
+      ]
     }
   }
 }

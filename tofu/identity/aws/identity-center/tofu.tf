@@ -44,7 +44,7 @@ terraform {
 provider "aws" {
   alias   = "management"
   region  = "ap-southeast-2"
-  profile = "homelab-management"
+  profile = terraform.applying ? "homelab-management" : "homelab-management-plan"
 }
 
 module "accounts" {
@@ -55,12 +55,7 @@ module "accounts" {
 
 provider "aws" {
   region  = "ap-southeast-2"
-  profile = "homelab-management"
-
-  assume_role {
-    role_arn     = "arn:aws:iam::${module.accounts.ids["identity"]}:role/OrganizationAccountAccessRole"
-    session_name = "identity"
-  }
+  profile = terraform.applying ? "homelab-identity-bootstrap" : "homelab-identity-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "identity/aws/identity-center" }

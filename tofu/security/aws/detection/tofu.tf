@@ -47,7 +47,7 @@ terraform {
 
 provider "aws" {
   region  = "ap-southeast-2"
-  profile = "homelab-security-tooling"
+  profile = terraform.applying ? "homelab-security-tooling-bootstrap" : "homelab-security-tooling-plan"
 
   default_tags {
     tags = { managed-by = "opentofu", layer = "security/aws/detection" }

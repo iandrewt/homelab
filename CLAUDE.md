@@ -427,12 +427,18 @@ the `aws` directory extension, which the scoping filters read, always before the
 The organisation and its accounts are Platform's (`platform/aws/org`), made from the account
 catalogue, which every layer reads for its accounts; what every account runs under - guardrails,
 the trail, detection, the state bucket - is Security's (`security/aws/*`); Identity Center's sets
-and assignments, its delegated administration (the Identity account) and GitHub's OIDC provider in
-every member (`identity/aws/federation`) are Identity's. **OUs group accounts by their controls**,
+and assignments and its delegated administration (the Identity account) are Identity's.
+**`platform/aws/baseline` is the account factory**: everything every member gets, through
+bootstrap - its alias, EBS encryption, no default VPC, GitHub's OIDC provider, `tofu-plan`, and
+`tofu-apply` in the team tier. What may federate is the `Identity providers` SCP's, so no team
+but Platform's takes part in vending. **A new account is two stages**: `org` makes it, then
+`baseline` and `identity-center` in parallel, since a provider can't name an account the same
+plan creates. Until `baseline` applies there it has no `tofu-plan`, so CI plans it as bootstrap,
+which works only inside an activation. **OUs group accounts by their controls**,
 as AWS's multi-account guidance has it: Security holds only Log Archive and Security Tooling;
 Deployments holds release machinery (Tofu State, Artifact Signing, Artifact Distribution), whose SCP
-admits only bootstrap and the roles each names, and which Identity Center's Administrator never
-reaches, by membership; Infrastructure holds Network and Identity. Only bootstrap makes an identity
+admits no Identity Center session but reading and state, and which Identity Center's Administrator
+never reaches, by membership; Infrastructure holds Network and Identity. Only bootstrap makes an identity
 provider; a role's trust in one is its own. **The seed (`security/aws/seed`) is what CI can't create**, applied
 from a laptop alone: management's GitHub OIDC provider; `deploy-org`, assumable by `tofu.yml` on
 `main` but holding nothing until an activation, under a boundary that leaves out IAM, Identity
@@ -440,6 +446,26 @@ Center, EventBridge and SNS; `ManagementAdministrator`; and the tripwires, which
 management mailbox on any change to the organisation, management's IAM or Identity Center, the
 tripwires themselves, or the trail. The trail is under Object Lock in `COMPLIANCE`, which no one
 shortens, root included.
+
+**An account's tier is in the catalogue, and decides who applies to it.** `team` (Network,
+Artifact Distribution): CI, in its owner's `tofu-<team>` environment, as `tofu-apply`, which
+no person may assume. `org` (everything that sets or could loosen the bounds): bootstrap, from
+`deploy-org` once activated, or `ManagementAdministrator` by hand. **Every plan, a person's or
+CI's, is `tofu-plan` in the account**, reached from the account's Administrator or `ReadOnly`
+session, or by the owner's `tofu-plan-<team>` or the org tier's `tofu-plan-org`; management's
+is the seed's, for `ManagementAdministrator` and `tofu-plan-org`. Only your runs (`actor_id`)
+apply; yours and Dependabot's plan. **People hold standing read, never standing change**: the
+owner team and `Administrators` (the platform's operators, across every team, whose passkeys
+approve activations) get Administrator outside Deployments until the broker elevates, and
+`ReadOnly` inside.
+It reads contents too, as drift and ephemeral values need: what a plan sees is scoped by who
+may assume it, never by action. A layer picks its profile by `terraform.applying`
+(`homelab-<account>-plan`, or `-apply`, or `-bootstrap`), which the backend can't, so a plan
+shares its team's state role and the state bucket refuses a state write from a `tofu-plan-*`
+session, by trusted identity propagation. `modules/tofu-plan` defines it once, for `baseline` and the seed. **A role the organisation depends on is under `/org/`**, which an
+SCP lets only bootstrap change; a team owns
+every other path in its account. The Deployments SCP admits every session but Identity Center's
+other than `ReadOnly`, `SecurityAudit` and `TofuState`, so it names no account's roles.
 
 The three states apply in order, by blast radius: `directory`, `aws`, `apps`, each reading the
 others by name. **Nothing unattended applies them** (assignments need

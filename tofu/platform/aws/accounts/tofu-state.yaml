@@ -2,3 +2,4 @@
 name: Tofu State
 organizational_unit: Deployments
 owner: security
+tier: org
