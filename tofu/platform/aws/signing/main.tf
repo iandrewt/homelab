@@ -30,14 +30,33 @@ resource "aws_kms_key" "signing" {
         Resource  = "*"
       },
       {
-        Sid       = "ReleasesSign"
+        # IAM decides, so that only an activation, the seed's policy on the role for one run, signs
+        Sid       = "ReleasesSignAsIAMAllows"
         Effect    = "Allow"
-        Principal = { AWS = aws_iam_role.release.arn }
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
         Action    = "kms:Sign"
         Resource  = "*"
         Condition = {
+          ArnEquals    = { "aws:PrincipalArn" = aws_iam_role.release.arn }
           StringEquals = { "kms:SigningAlgorithm" = local.signing_algorithm, "kms:MessageType" = "DIGEST" }
         }
+      },
+      # Administration's kms:* would sign too
+      {
+        Sid       = "OnlyReleasesSign"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "kms:Sign"
+        Resource  = "*"
+        Condition = { ArnNotEquals = { "aws:PrincipalArn" = aws_iam_role.release.arn } }
+      },
+      {
+        # tofu-plan's refresh, Access Analyzer's and SecurityAudit's, by IAM: the policy, never the key
+        Sid       = "Readers"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root" }
+        Action    = ["kms:DescribeKey", "kms:GetKeyPolicy", "kms:GetKeyRotationStatus", "kms:ListGrants", "kms:ListKeyPolicies", "kms:ListResourceTags"]
+        Resource  = "*"
       },
       # Its public half is what db and the update keyring are made of, read by whoever makes them
       {
@@ -62,7 +81,8 @@ resource "aws_kms_alias" "signing" {
   target_key_id = aws_kms_key.signing.key_id
 }
 
-# Only a job in the release environment, which takes an image/* or extension/* tag and its reviewer's approval
+# Only a job in the release environment, which takes an image/* or extension/* tag; it signs only while
+# activated, by the seed
 resource "aws_iam_role" "release" {
   name = "images-release"
 
@@ -89,7 +109,7 @@ resource "aws_iam_role_policy" "release" {
     Version = "2012-10-17"
     Statement = [{
       Effect   = "Allow"
-      Action   = ["kms:Sign", "kms:GetPublicKey", "kms:DescribeKey"]
+      Action   = ["kms:GetPublicKey", "kms:DescribeKey"]
       Resource = aws_kms_key.signing.arn
     }]
   })

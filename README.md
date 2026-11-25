@@ -156,7 +156,15 @@ source_profile = homelab-management
 
 Applies are CI's. You have no `-apply` profile in the ordinary case; to apply a team-tier
 layer by hand, which is break-glass, point its `-apply` profile at the `-bootstrap` one's
-role. CI writes the same profile names from its OIDC token, so the layers don't change. The
+role. An org-tier apply, or a release, waits for you to activate its run once you've read
+its plan, from the run's ID in its URL:
+
+```
+tofu -chdir=tofu/security/aws/seed apply -var 'activate={org="<run id>"}'      # or release
+tofu -chdir=tofu/security/aws/seed apply                                     # closes it
+```
+
+It opens the tier to that run alone, for sessions it starts in the next 15 minutes. CI writes the same profile names from its OIDC token, so the layers don't change. The
 1Password provider reads every other secret.
 
 octoDNS writes Route53 as `network/aws/dns`'s `octodns` role, which can't touch a cluster's

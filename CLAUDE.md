@@ -445,7 +445,10 @@ from a laptop alone: management's GitHub OIDC provider; `deploy-org`, assumable 
 Center, EventBridge and SNS; `ManagementAdministrator`; and the tripwires, which mail the
 management mailbox on any change to the organisation, management's IAM or Identity Center, the
 tripwires themselves, or the trail. The trail is under Object Lock in `COMPLIANCE`, which no one
-shortens, root included.
+shortens, root included. **An activation opens a tier for one run**: the seed's `activate`
+variable, applied by hand, writes an inline policy on `deploy-org` (org) or `images-release`
+(release, which signs only through IAM, so only then) for sessions carrying that run's
+`run_id` by TIP, issued in the next 15 minutes. Applying without it closes the tier.
 
 **An account's tier is in the catalogue, and decides who applies to it.** `team` (Network,
 Artifact Distribution): CI, in its owner's `tofu-<team>` environment, as `tofu-apply`, which
