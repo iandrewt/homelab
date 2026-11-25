@@ -454,6 +454,15 @@ the gates CI runs behind: rulesets on `main` (signed, linear, no force-push or d
 checks, only you push) and on release tags (never moved or deleted, only you create), Actions'
 permissions, and the environments, each limited to `main`. Its token administers this repository
 alone, read ephemerally from `Break-glass`; nothing else holds Administration.
+**`tofu.yml` plans and applies the AWS layers that don't read NetBox**, all org tier, in stages
+(`org`; `guardrails`; `baseline` and `identity-center`; the rest), each planned once the last
+has applied. A pull request runs `main`'s copy of it (`pull_request_target`), and plans only if
+every commit is signed by the operator's primary key (`.github/signing-key.asc`) or is
+Dependabot's signed by GitHub, since its tofu runs against state that holds secrets. Plans are
+printed, checked by conftest (`tofu/policy`: nothing lasting destroyed, no `/org/` role
+changed, both applied by hand instead) and kept for the apply, which applies that file once
+the run is activated. Tools are `mise.toml`'s. Layers reading NetBox, and on-prem ones, wait
+for CI to reach NetBox.
 
 **An account's tier is in the catalogue, and decides who applies to it.** `team` (Network,
 Artifact Distribution): CI, in its owner's `tofu-<team>` environment, as `tofu-apply`, which

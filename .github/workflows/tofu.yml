@@ -1,0 +1,385 @@
+name: tofu
+
+# The AWS layers that don't read NetBox, every one org tier. A pull request is planned from main's own copy of
+# this file, only if every commit is the operator's; main is planned and applied a stage at a time, each apply
+# waiting for its activation. Every role pins this file on main, so no other workflow, or this one elsewhere,
+# gets their credentials
+on:
+  pull_request_target:
+    paths: &paths
+      - "tofu/**"
+      - ".github/workflows/tofu.yml"
+      - "mise.toml"
+  push:
+    branches: [main]
+    paths: *paths
+  workflow_dispatch:
+
+permissions: {}
+
+# One run on main at a time, never cancelled mid-apply; a pull request's newest push supersedes its plans
+concurrency:
+  group: tofu-${{ github.event.pull_request.number || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
+
+env:
+  # A stage plans once the one before it has applied; its layers run in parallel
+  STAGES: >-
+    [["platform/aws/org"],
+     ["security/aws/guardrails"],
+     ["platform/aws/baseline", "identity/aws/identity-center"],
+     ["security/aws/detection", "security/aws/logging", "security/aws/state", "platform/aws/signing"]]
+  # The operator's primary key, whichever subkey signs
+  OPERATOR_KEY: B657C0C18BB7049D0F29AD2502FEFD0A7B59B580
+  DEPENDABOT: 49699333+dependabot[bot]@users.noreply.github.com
+  MANAGEMENT: "615824167099"
+  # Any member: a bootstrap there answers whether this run is activated
+  CANARY: "961708215121"
+  AWS_REGION: ap-southeast-2
+  TF_IN_AUTOMATION: "1"
+
+jobs:
+  changes:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      stages: ${{ steps.layers.outputs.stages }}
+    steps:
+      - id: layers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          case "$GITHUB_EVENT_NAME" in
+            pull_request_target) changed=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" -q '.[].filename') ;;
+            push) changed=$(gh api "repos/$GITHUB_REPOSITORY/compare/$BEFORE...$GITHUB_SHA" -q '.files[].filename') ;;
+            *) changed=mise.toml ;;
+          esac
+          # What every layer reads: the shared modules, the catalogue, the policy, the tools and this file
+          everything='^(tofu/modules/|tofu/platform/aws/accounts/|tofu/policy/|mise\.toml$|\.github/workflows/tofu\.yml$)'
+          stages=$(jq -c --arg changed "$changed" --arg everything "$everything" '
+            ($changed | split("\n")) as $files
+            | any($files[]; test($everything)) as $all
+            | map(map(select(. as $layer | $all or any($files[]; startswith("tofu/\($layer)/")))))' <<< "$STAGES")
+          echo "stages=$stages" >> "$GITHUB_OUTPUT"
+          echo "$stages"
+
+  plan-1:
+    name: plan ${{ matrix.layer }}
+    needs: [changes]
+    if: ${{ !cancelled() && !failure() && toJSON(fromJSON(needs.changes.outputs.stages)[0]) != '[]' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    environment: tofu-plan-org
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJSON(needs.changes.outputs.stages)[0] }}
+    env:
+      LAYER: ${{ matrix.layer }}
+    steps: &plan-steps
+      # Every tool, policy and script comes from here; a pull request's checkout only supplies tofu
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          path: main
+          persist-credentials: false
+
+      - if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: code
+          fetch-depth: 0
+          persist-credentials: false
+
+      - if: github.event_name != 'pull_request_target'
+        run: ln -s main code
+
+      # A pull request's tofu runs with state that holds secrets, so only the operator's, or Dependabot's
+      # signed by GitHub, is planned
+      - name: every commit is the operator's
+        if: github.event_name == 'pull_request_target'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          GNUPGHOME=$(mktemp -d) && export GNUPGHOME
+          gpg -q --import main/.github/signing-key.asc
+          refused=0
+          while IFS='|' read -r sha status primary author; do
+            [[ $status =~ ^[GU]$ && $primary == "$OPERATOR_KEY" ]] && continue
+            if [[ $author == "$DEPENDABOT" ]] &&
+              [[ $(gh api "repos/$GITHUB_REPOSITORY/commits/$sha" -q .commit.verification.verified) == true ]]; then
+              continue
+            fi
+            echo "::error::$sha isn't signed by the operator's key"
+            refused=1
+          done < <(git -C code log --format='%H|%G?|%GP|%ae' "$BASE..HEAD")
+          exit $refused
+
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
+        with:
+          version: 2026.11.14
+          working_directory: main
+
+      # tofu-plan in every account, and the layer's team's state: the same roles a person plans as
+      - name: credentials
+        run: |
+          set -euo pipefail
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          mkdir -p ~/.aws
+          profile() {
+            aws sts assume-role-with-web-identity --role-arn "$2" --web-identity-token "$token" \
+              --role-session-name "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --query Credentials --output json |
+              jq -r --arg name "$1" '"[\($name)]\naws_access_key_id = \(.AccessKeyId)\naws_secret_access_key = \(.SecretAccessKey)\naws_session_token = \(.SessionToken)\n"' \
+              >> ~/.aws/credentials
+          }
+          profile homelab-management-plan "arn:aws:iam::$MANAGEMENT:role/org/tofu-plan"
+          aws organizations list-accounts --profile homelab-management-plan --query 'Accounts[].[Name,Id]' --output json > accounts.json
+          for file in main/tofu/platform/aws/accounts/*.yaml; do
+            slug=$(basename "$file" .yaml)
+            name=$(sed -n 's/^name: //p' "$file")
+            id=$(jq -r --arg name "$name" '.[] | select(.[0] == $name) | .[1]' accounts.json)
+            # A new account has no tofu-plan until baseline applies there: its plan waits for that
+            [[ -n $id ]] && profile "homelab-$slug-plan" "arn:aws:iam::$id:role/org/tofu-plan"
+            jq -n --arg slug "$slug" --arg id "$id" '{($slug): $id}' >> ids.json
+          done
+          jq -s add ids.json > code/tofu/"$LAYER"/accounts.json
+          state=$(jq -r '.["tofu-state"]' code/tofu/"$LAYER"/accounts.json)
+          profile "homelab-state-${LAYER%%/*}" "arn:aws:iam::$state:role/tofu-state/tofu-state-${LAYER%%/*}"
+
+      - name: plan
+        id: plan
+        working-directory: code/tofu/${{ matrix.layer }}
+        run: |
+          set -uo pipefail
+          tofu init -input=false -no-color || exit 1
+          tofu plan -input=false -no-color -lock-timeout=5m -detailed-exitcode -out=tfplan
+          result=$?
+          [[ $result == 1 ]] && exit 1
+          echo "$result" > changes
+          tofu show -no-color tfplan > plan.txt
+          tofu show -json tfplan > plan.json
+          cat plan.txt
+          if [[ $result == 2 ]]; then
+            { echo "### $LAYER"; echo '```'; cat plan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### $LAYER: no changes" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "artifact=plan-${LAYER//\//-}" >> "$GITHUB_OUTPUT"
+
+      - name: policy
+        run: conftest test --no-color --policy main/tofu/policy "code/tofu/$LAYER/plan.json"
+
+      - if: github.event_name != 'pull_request_target'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: ${{ steps.plan.outputs.artifact }}
+          path: |
+            code/tofu/${{ matrix.layer }}/tfplan
+            code/tofu/${{ matrix.layer }}/changes
+            code/tofu/${{ matrix.layer }}/accounts.json
+          retention-days: 1
+          if-no-files-found: error
+
+  apply-1:
+    name: apply ${{ matrix.layer }}
+    needs: [changes, plan-1]
+    if: ${{ github.event_name != 'pull_request_target' && !cancelled() && needs.plan-1.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    environment: tofu-org
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJSON(needs.changes.outputs.stages)[0] }}
+    env:
+      LAYER: ${{ matrix.layer }}
+    steps: &apply-steps
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          path: main
+          persist-credentials: false
+
+      - id: name
+        run: echo "artifact=plan-${LAYER//\//-}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
+        with:
+          name: ${{ steps.name.outputs.artifact }}
+          path: main/tofu/${{ matrix.layer }}
+
+      - id: changes
+        run: |
+          if [[ $(cat "main/tofu/$LAYER/changes") == 2 ]]; then echo "apply=true" >> "$GITHUB_OUTPUT"; else echo "no changes"; fi
+
+      - if: steps.changes.outputs.apply
+        uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
+        with:
+          version: 2026.11.14
+          working_directory: main
+
+      # deploy-org, which holds nothing until this run is activated, bootstrap in every member through it, and
+      # the layer's team's state
+      - name: credentials
+        if: steps.changes.outputs.apply
+        run: |
+          set -euo pipefail
+          token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+          mkdir -p ~/.aws
+          profile() {
+            aws sts assume-role-with-web-identity --role-arn "$2" --web-identity-token "$token" \
+              --role-session-name "$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --query Credentials --output json |
+              jq -r --arg name "$1" '"[\($name)]\naws_access_key_id = \(.AccessKeyId)\naws_secret_access_key = \(.SecretAccessKey)\naws_session_token = \(.SessionToken)\n"' \
+              >> ~/.aws/credentials
+          }
+          ids="main/tofu/$LAYER/accounts.json"
+          profile homelab-management "arn:aws:iam::$MANAGEMENT:role/deploy-org"
+          profile "homelab-state-${LAYER%%/*}" \
+            "arn:aws:iam::$(jq -r '.["tofu-state"]' "$ids"):role/tofu-state/tofu-state-${LAYER%%/*}"
+          jq -r 'to_entries[] | select(.value != "") |
+            "[profile homelab-\(.key)-bootstrap]\nrole_arn = arn:aws:iam::\(.value):role/OrganizationAccountAccessRole\nsource_profile = homelab-management\nrole_session_name = \(env.GITHUB_RUN_ID)-\(env.GITHUB_RUN_ATTEMPT)\n"' \
+            "$ids" >> ~/.aws/config
+
+      - name: activation
+        if: steps.changes.outputs.apply
+        run: |
+          set -uo pipefail
+          echo "::notice::Read this run's plans, then: tofu -chdir=tofu/security/aws/seed apply -var 'activate={org=\"$GITHUB_RUN_ID\"}'"
+          for _ in $(seq 60); do
+            aws sts assume-role --profile homelab-management --role-session-name "$GITHUB_RUN_ID-activation" \
+              --role-arn "arn:aws:iam::$CANARY:role/OrganizationAccountAccessRole" >/dev/null 2>&1 && exit 0
+            sleep 30
+          done
+          echo "::error::Not activated within 30 minutes"
+          exit 1
+
+      - name: apply
+        if: steps.changes.outputs.apply
+        working-directory: main/tofu/${{ matrix.layer }}
+        run: |
+          set -euo pipefail
+          tofu init -input=false -no-color
+          tofu apply -input=false -no-color tfplan
+
+  plan-2:
+    name: plan ${{ matrix.layer }}
+    needs: [changes, apply-1]
+    if: ${{ !cancelled() && !failure() && toJSON(fromJSON(needs.changes.outputs.stages)[1]) != '[]' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    environment: tofu-plan-org
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJSON(needs.changes.outputs.stages)[1] }}
+    env:
+      LAYER: ${{ matrix.layer }}
+    steps: *plan-steps
+
+  apply-2:
+    name: apply ${{ matrix.layer }}
+    needs: [changes, plan-2]
+    if: ${{ github.event_name != 'pull_request_target' && !cancelled() && needs.plan-2.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    environment: tofu-org
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJSON(needs.changes.outputs.stages)[1] }}
+    env:
+      LAYER: ${{ matrix.layer }}
+    steps: *apply-steps
+
+  plan-3:
+    name: plan ${{ matrix.layer }}
+    needs: [changes, apply-2]
+    if: ${{ !cancelled() && !failure() && toJSON(fromJSON(needs.changes.outputs.stages)[2]) != '[]' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    environment: tofu-plan-org
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJSON(needs.changes.outputs.stages)[2] }}
+    env:
+      LAYER: ${{ matrix.layer }}
+    steps: *plan-steps
+
+  apply-3:
+    name: apply ${{ matrix.layer }}
+    needs: [changes, plan-3]
+    if: ${{ github.event_name != 'pull_request_target' && !cancelled() && needs.plan-3.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    environment: tofu-org
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJSON(needs.changes.outputs.stages)[2] }}
+    env:
+      LAYER: ${{ matrix.layer }}
+    steps: *apply-steps
+
+  plan-4:
+    name: plan ${{ matrix.layer }}
+    needs: [changes, apply-3]
+    if: ${{ !cancelled() && !failure() && toJSON(fromJSON(needs.changes.outputs.stages)[3]) != '[]' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    environment: tofu-plan-org
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJSON(needs.changes.outputs.stages)[3] }}
+    env:
+      LAYER: ${{ matrix.layer }}
+    steps: *plan-steps
+
+  apply-4:
+    name: apply ${{ matrix.layer }}
+    needs: [changes, plan-4]
+    if: ${{ github.event_name != 'pull_request_target' && !cancelled() && needs.plan-4.result == 'success' }}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    environment: tofu-org
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJSON(needs.changes.outputs.stages)[3] }}
+    env:
+      LAYER: ${{ matrix.layer }}
+    steps: *apply-steps
