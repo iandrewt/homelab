@@ -449,6 +449,11 @@ shortens, root included. **An activation opens a tier for one run**: the seed's 
 variable, applied by hand, writes an inline policy on `deploy-org` (org) or `images-release`
 (release, which signs only through IAM, so only then) for sessions carrying that run's
 `run_id` by TIP, issued in the next 15 minutes. Applying without it closes the tier.
+**GitHub's settings are `security/github`'s, applied by hand alone** like the seed, since they're
+the gates CI runs behind: rulesets on `main` (signed, linear, no force-push or deletion, ci.yml's
+checks, only you push) and on release tags (never moved or deleted, only you create), Actions'
+permissions, and the environments, each limited to `main`. Its token administers this repository
+alone, read ephemerally from `Break-glass`; nothing else holds Administration.
 
 **An account's tier is in the catalogue, and decides who applies to it.** `team` (Network,
 Artifact Distribution): CI, in its owner's `tofu-<team>` environment, as `tofu-apply`, which
