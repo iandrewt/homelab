@@ -25,6 +25,9 @@ env:
   TM_ARG_TAGS: ci
   TM_ARG_CHANGED: ${{ github.event_name != 'workflow_dispatch' }}
   TM_ARG_GIT_CHANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+  # CI runs the commit it checked out, so whether main is behind GitHub means nothing here, and asking needs a
+  # token the checkout doesn't keep, beside a pull request's tofu
+  TM_DISABLE_SAFEGUARDS: git-out-of-sync
   TF_IN_AUTOMATION: "1"
 
 jobs:
