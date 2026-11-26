@@ -187,90 +187,8 @@ purpose**. A **speaker group** shares an ASN: a DNS fleet, a Kubernetes cluster,
 
 ## Kubernetes
 
-A cluster is Talos in one region, across its Proxmox cells and its metal, named
-`<region>-k8s-<purpose>` (`au1-k8s-shared`). One layer builds every one, `tofu/platform/kubernetes`, a
-workspace and a data file (`clusters/<name>.yaml`) each, through `talos-cluster` and
-`fleet-bootstrap`. VMs are the data file's; **metal is NetBox's**: a device in the
-virtualization cluster is a node, its interfaces named as Talos names its links. A node class's
-**lifecycle**: `permanent` seals volumes to the TPM, so the layer refuses metal NetBox doesn't
-record with `secure_boot` and `tpm`; `transient` keys them to the node and is tainted
-`node.homelab.io/lifecycle=transient:NoSchedule`.
-
-**Every upgrade has one owner**: Talos is `talos_machine.image`, Kubernetes
-`talos_cluster.kubernetes_version`, and Cilium, Proxmox CCM and Flux their HelmReleases. Talos
-runs `cni: none` and no kube-proxy. Tofu installs those charts exactly once, through
-flux-operator-bootstrap's Job, from the files Flux reads - never `helm_release`. Talos CCM is
-Talos's: an inline manifest rendered by `helm_template`, since `talos_cluster`'s health checks
-wait on the kubelet certificates it approves.
-
-**The bootstrap is defined by rule, so a rebuild works at full capability.** It carries exactly
-what Flux can't order with `dependsOn`:
-
-- what Flux needs to run: the CNI, a CCM, routes back to its pods (Cilium's BGP config), the Git
-  credentials;
-- CRDs a bootstrap-installed controller only looks for at start (Gateway API's, for Cilium);
-- CRDs a bootstrap chart's *values* render objects of (Prometheus Operator's, the day one turns
-  on a `ServiceMonitor`);
-- secrets needed before External Secrets exists - then only its own token.
-
-Each is applied from the file Flux reconciles, and Flux adopts it. **The fleet catalog names
-them**: a component with a `bootstrap` kind (`operator`, `chart` by `order`, or `manifests`) is
-installed by the bootstrap if the cluster takes it, with the CRDs of any `cilium.io` kind its
-manifests hold, at Cilium's tag. The Job's ConfigMap is capped at 1 MiB, so a CRD bundle nothing
-else upgrades is Talos's, a `KubeExternalManifestConfig` (Gateway API's, like Talos CCM); a
-controller's own CRDs it upgrades itself stay the Job's, or `upgrade-k8s` would roll them back.
-A new component that fits a rule joins the bootstrap in the same change.
-
-**Nothing in a cluster reads NetBox.** Tofu writes what Flux needs into the `flux-runtime-info`
-ConfigMap, and Flux substitutes it, strictly. The provider can't read an ASN's cluster, so the
-ASN is in the data file, and must agree with NetBox's or the router drops every route.
-
-**Flux runs a fleet, in rings.** `kubernetes/components/<name>/` is cluster-neutral: bare
-manifests, a HelmRelease's values inline, no `kustomization.yaml`. What's true of a component
-everywhere - its `dependsOn`, its part in the bootstrap - is in `components/fleet/catalog.yaml`.
-A cluster's directory is its FluxInstance and its component list (`cluster.yaml`), joined by the
-fleet ResourceSet into a Kustomization each. CI pushes `kubernetes/` as a signed OCI artifact,
-`ghcr.io/iandrewt/homelab-fleet`: every main commit as `<next patch>-rc.<run>`, a `v*` tag as a
-release. **A cluster syncs only its ring from Git**, `kubernetes/fleet/<name>/`: an
-OCIRepository by semver range (`>=0.0.0-0` canary, `>=0.0.0` stable), verified against the
-workflow's keyless signature. Promoting is tagging a release canary has run. **The bootstrap
-installs exactly what the ring runs**: `homelab fleet files` resolves the ring to its artifact
-and reads files at its commit with `git show`, never the working tree. Until the repo is public,
-GHCR needs `GitHub Token - Flux GHCR`.
-
-**Machine secrets and configs are never in state or on Proxmox storage.** The secrets are
-generated ephemerally, written once to 1Password (`_wo`) and read back ephemerally; a node boots
-the metal Secure Boot ISO into maintenance mode, with no cidata, and gets its config over the
-Talos API once the guest agent answers.
-
-**Proxmox CCM is the only cloud-node**: it writes a node's provider ID (`proxmox://<cell>/<vmid>`,
-write-once) and topology - the well-known `region` is the cell, `zone` the node, where a local
-volume attaches. **Both CCMs run on the host network before there is a CNI**, through KubePrism.
-The Proxmox API admits what NetBox tags `proxmox-api`: the node network, and CSI controllers'
-pool. A cluster asks for its Proxmox integrations in its data file (`proxmox_integrations`), and
-`admin/access` makes their tokens. **The host network is only for what must run before a CNI**;
-a pod needing the Proxmox API gets a pod pool of its own, on a NetBox prefix the firewall
-admits. Proxmox picks VMIDs and MACs; a node is reached at the EUI-64 of the MAC in its VM's
-config. IPv6 comes first wherever Kubernetes orders families.
-
-**Pods are addressed like EKS prefix delegation**: Cilium's multi-pool IPAM hands nodes `/28`s
-and `/80`s from shared pools as their pods need them, and BGP advertises the chunks. A pool is a
-NetBox sub-pool of the cluster's block (`pods-default`, `pods-storage`), or a block of its own
-(`pods-internet`), never wider than a `/64`; a pod joins one by `ipam.cilium.io/ip-pool`. **A
-cluster has the pools NetBox gives it**: the layer passes them as JSON in runtime info, and the
-`pools` component makes each pool and its advertisement. A Service joins an LB pool by its
-`homelab.io/exposure` label, or gets no address. A new purpose is a NetBox role and a row in the
-layer's `pools`, with its chunk size. The default pool is a plain manifest in `cilium-bgp`, for
-the bootstrap. A pool's mask size is fixed once created, and at most 16 bits longer than the
-pool. Nothing uses a node's `podCIDRs`.
-
-**The API endpoint is anycast**: an `anycast` address per family in `kubernetes-api`, on every
-control plane's `lo`, originated by Talos's `fabric` instance, so it routes before Cilium. Never
-an L2 VIP: a `/128` on the link outranks the node's own address in source selection.
-
-**Cilium's host firewall is the nodes' firewall** (`CiliumClusterwideNetworkPolicy`); Talos's
-stays at accept, since on netfilter's input hook it drops what Cilium's proxy hands to Envoy. A
-node is open from boot until Flux applies the policies.
+`.claude/rules/kubernetes.md` holds the clusters' design, loaded with their files. **Nothing in a
+cluster reads NetBox**, and **machine secrets and configs are never in state or on Proxmox storage.**
 
 ## Host networking
 
@@ -305,51 +223,10 @@ so it writes the whole of its `/etc`, since an extension carries none of its pac
 roles write PowerDNS's configuration themselves, no galaxy role between, and
 `ansible/tests/resolver-{primary,secondary}.yml` prove them on a booted ymir (`homelab image extension
 test --playbook`), each run twice, the second changing nothing; `images.yml` runs them where a change
-touches what they read, and builds no image for a change only they and the extensions read. **`images/` is one mkosi project**: the distribution in `mkosi.conf.d/<distribution>/`,
-each family (`mutable`, `ymir`) and target (`vm`, `raspi3`) a profile in `mkosi.profiles/`, and an
-image a pair of them, which a `mkosi.conf.d` file matching both names; `images.toml` holds only what
-mkosi has no setting for. **Every package a build takes is Debian's snapshot's** (`Snapshot=` in
-`mkosi.conf.d/debian/`, a bake input), the tools tree's too; a source mkosi doesn't make (ymir's forky,
-the bake's apt while the baseline runs) is rewritten to the snapshot, or refused, since apt falls back to
-the live archive without a word. The snapshot workflow opens its weekly bump as a PR, the lock with it,
-whose images build when dispatched at its branch, and the kernel is the bake's, so it moves with the snapshot. **A distribution is baked once per architecture**: the `bake` profile,
-booted by `mkosi vm` with a login its credentials make, `baseline.yml` run against it with no
-NetBox or 1Password loaded, then sealed into a tar every image takes as `BaseTrees=`. A family and
-target lay themselves over it with mkosi alone, adding what CIS doesn't touch or taking away what
-they don't want, and run no Ansible of their own. A mutable image is a tree laid out on its
-target's disk; **ymir** is laid out as a signed image: a UKI, `/usr` on erofs under verity, its
-`/etc` a confext in `/usr` under the machine's own, updated A/B by sysupdate, with systemd from
-forky. Whatever systemd reads before tmpfiles restores `/etc` on first boot moves to `/usr`;
-`homelab image test` checks the first boot is hardened as the second is. **On a Pi** (`ymir-raspi3`) its
-firmware loads U-Boot, from experimental since boot counting renames a file and 2025.07 is the first
-whose EFI can, and U-Boot's EFI loads systemd-boot: no TPM so nothing encrypted, no Secure Boot, its
-initrd's modules listed so two UKIs fit the ESP, its console the mini UART. `card.py` lays a card out
-whole before first boot from the image's own repart definitions, as `bootstrap pi` does, so nothing
-repartitions it; its test boots qemu's raspi3b, which has no network, and reads its checks off the
-console, as the extension test does with each extension laid in its `/var`, so no playbook runs there.
+touches what they read, and builds no image for a change only they and the extensions read.
 
-**A workload on ymir is a system extension**, on a cadence of its own: a profile in `mkosi.profiles/`
-with the `sysext` one, built `Overlay=yes` over the image's tree (`--format directory`, no boot chain),
-so it holds only what it adds, named in `extensions.toml`. A vendor's train has no snapshot, so its
-source is let through only signed by a key in `images/vendors/`. **`extensions.lock` is what each was
-last released from**, per image: what apt adds over the tree, every bundled package at its version, and
-its own files' hash. Only a moved lock rebuilds one, at upstream's version and a count (`5.4.9-2`, as
-Arch's pkgrel): the base's libraries move with the base, under Debian's ABI and the release file's
-`VERSION_ID`, but a bundled one is a copy. A build refuses a lock that no longer resolves, and an
-extension that installs anything else; CI checks the lock on every change, and `trains.yml` locks a
-vendor's release again in a PR, each image on a runner of its architecture (`lock.yml`). What a package's scripts write in `/etc` and `/var` is gone: its users
-and their groups become `sysusers.d`, the directories its packages hold in `/var` tmpfiles, and its
-enablement and configuration are the machine's. It may hold a role's own files (`files` in
-`extensions.toml`), the anycast loop and the resolvers' health check, which a package-managed host
-takes from the role. Each is a disabled
-sysupdate component in ymir, which a machine enables, so a new extension reaches machines with the
-image's next release; ymir merges only images db's key signed. A newer one, like a newer image, is taken by
-sysupdate's reboot, never by a live refresh. **An update is kept once the host does its job**
-(`host_upgrade_check`, a resolver's what anycast-check asks), by `health-check` before
-`boot-complete.target`: everything new has one try, so a failing boot renames what it tried with none left
-and reboots into what came before. Hosts are staggered by channel, never by a window: hugin follows
-`canary` and ratatoskr `stable`, so a promotion is a release a resolver has served on. Extensions can't
-merge in the initrd: `/var` isn't mounted there, so `systemd-sysext-activate` asks again for what they enable.
+`.claude/rules/images.md` holds how images and their extensions are built, released and
+updated, loaded with their files.
 
 **On a Proxmox node, Ansible owns the host OS and tofu owns Proxmox's resources**: SDN, the
 firewall, storage definitions, access and guests are tofu's; the node's interfaces, resolvers,
@@ -364,12 +241,6 @@ VNet with an address on the VNet's bridge, and a host-only VLAN with a subinterf
 carry 9216 on every VLAN (UniFi's jumbo frames are all or nothing), so nothing is stated per
 VLAN, and a guest's NIC takes its VNet bridge's (`mtu = 1`). Between hosts on one VLAN at
 different sizes, TCP's MSS settles it; across the router, PMTUD, so ICMP errors pass as related.
-
-**`bootstrap pi` writes a card**: the newest `ymir-arm64-raspi3` in a channel (`IMAGES_UPDATE_URL`'s), its
-signed sums checked against `images/secure-boot/updates.pgp` by fingerprint, laid out by `card.py` at the
-card's size with the hybrid MBR the Pi's boot ROM reads, its identity as ESP credentials: a machine ID from
-the board's serial in NetBox (a reflash keeps it, a new board is a new machine), the hostname, the key, and
-networkd's own unit, a resolver's gateways its resolvers.
 
 ## cloud-init seeds
 
@@ -406,108 +277,11 @@ What we write ourselves, a Pi's or an installer's:
 
 ## Identity
 
-Entra ID Free: tokens carry groups as **object IDs**, and only users can be assigned to an app.
-**Groups decide**: `Administrators` and one per team (`Security` is a team), made by
-`tofu/identity/entra/directory`. Each consumer looks groups up by display name at plan time and
-maps the IDs back itself: Proxmox gets a `<object id>-entra` group per grant, the apiserver a
-CEL map to `oidc:<team>`. **Assignments only gate**: each platform instance has its own app (its
-client ID the audience), *assignment required*, and `entra/apps` assigns the members of the
-groups it grants. Apps live there (`modules/entra-app`), so a rebuild keeps its client ID, and
-each is consented for everyone, so no user may consent to anything. App roles are for
-permissions an app defines itself, never team membership.
-
-**Tenant policies are set by hand**: the Azure CLI can't be granted `Policy.*` scopes, so
-`directory` checks what it can read of them.
-
-AWS is ABAC: a permission set says what an entity can do, never who it is. `entra/aws` writes
-the `team-<team>` SAML claims and SCIM's scope; membership is written onto users and groups as
-the `aws` directory extension, which the scoping filters read, always before the scope is saved
-(saving starts a sync that disables whoever is out of scope).
-
-The organisation and its accounts are Platform's (`platform/aws/org`), made from the account
-catalogue, which every layer reads for its accounts; what every account runs under - guardrails,
-the trail, detection, the state bucket - is Security's (`security/aws/*`); Identity Center's sets
-and assignments and its delegated administration (the Identity account) are Identity's.
-**`platform/aws/baseline` is the account factory**: everything every member gets, through
-bootstrap - its alias, EBS encryption, no default VPC, GitHub's OIDC provider, `tofu-plan`, and
-`tofu-apply` in the team tier. What may federate is the `Identity providers` SCP's, so no team
-but Platform's takes part in vending. **A new account is two applies**: `org` makes it,
-then `baseline` and `identity-center`, since a provider can't name an account the same plan
-creates. Until `baseline` applies there it has no `tofu-plan`, so that first `baseline` apply is
-by hand. **OUs group accounts by their controls**,
-as AWS's multi-account guidance has it: Security holds only Log Archive and Security Tooling;
-Deployments holds release machinery (Tofu State, Artifact Signing, Artifact Distribution), whose SCP
-admits no Identity Center session but reading and state, and which Identity Center's Administrator
-never reaches, by membership; Infrastructure holds Network and Identity. Only bootstrap makes an identity
-provider; a role's trust in one is its own. **The seed (`security/aws/seed`) is what CI can't create**, applied
-from a laptop alone: management's GitHub OIDC provider; `deploy-org`, assumable by `tofu.yml` on
-`main` but holding nothing until an activation, under a boundary that leaves out IAM, Identity
-Center, EventBridge and SNS; `ManagementAdministrator`; and the tripwires, which mail the
-management mailbox on any change to the organisation, management's IAM or Identity Center, the
-tripwires themselves, or the trail. The trail is under Object Lock in `COMPLIANCE`, which no one
-shortens, root included. **An activation opens a tier for one run**: the seed's `activate`
-variable, applied by hand, writes an inline policy on `deploy-org` (org) or `images-release`
-(release, which signs only through IAM, so only then) for sessions carrying that run's
-`run_id` by TIP, issued in the next 15 minutes. Applying without it closes the tier.
-**GitHub's settings are `security/github`'s, applied by hand alone** like the seed, since they're
-the gates CI runs behind: rulesets on `main` (signed, linear, no force-push or deletion, ci.yml's
-checks, only you push) and on release tags (never moved or deleted, only you create), Actions'
-permissions, and the environments, each limited to `main`. Its token administers this repository
-alone, read ephemerally from `Break-glass`; nothing else holds Administration.
-**Every layer is a Terramate stack** (`stack.tm.hcl`: what it runs `after`), and CI runs the
-changed ones tagged `ci`, in Terramate's order (`terramate run --changed --tags ci`); a layer gets
-the tag once CI can reach its providers, and the seed and `security/github` never do. `tofu.yml`
-is two jobs: a plan, on a pull request from `main`'s copy (`pull_request_target`) only if every
-commit is signed by the operator's primary key (`.github/signing-key.asc`) or is Dependabot's
-signed by GitHub, and on `main` keeping each plan with changes; then an apply, on `main` and
-skipped when there are none, of exactly those plans once the run is activated. Each job exchanges its
-GitHub token, once, for every profile a layer names, straight to that account's role (bootstrap
-alone chains, from `deploy-org`), then runs `terramate run -- tofu …` a command at a time; the
-plan job checks every plan against `main`'s policy, and the apply job waits for the activation
-before it touches anything. A later stack's
-plan is made before an earlier one applies, so what an upstream apply changes reaches it on the
-next run. Plans are printed and checked by conftest (`tofu/policy`: nothing lasting destroyed, no `/org/`
-role changed, both applied by hand). Tools are `mise.toml`'s.
-
-**An account's tier is in the catalogue, and decides who applies to it.** `team` (Network,
-Artifact Distribution): CI, in its owner's `tofu-<team>` environment, as `tofu-apply`, which
-no person may assume. `org` (everything that sets or could loosen the bounds): bootstrap, from
-`deploy-org` once activated, or `ManagementAdministrator` by hand. **Every plan, a person's or
-CI's, is `tofu-plan` in the account**, reached from the account's Administrator or `ReadOnly`
-session, or by the owner's `tofu-plan-<team>` or the org tier's `tofu-plan-org`; management's
-is the seed's, for `ManagementAdministrator` and `tofu-plan-org`. Only your runs (`actor_id`)
-apply; yours and Dependabot's plan. **People hold standing read, never standing change**: the
-owner team and `Administrators` (the platform's operators, across every team, whose passkeys
-approve activations) get Administrator outside Deployments until the broker elevates, and
-`ReadOnly` inside.
-It reads contents too, as drift and ephemeral values need: what a plan sees is scoped by who
-may assume it, never by action. A layer picks its profile by `terraform.applying`
-(`homelab-<account>-plan`, or `-apply`, or `-bootstrap`), which the backend can't, so a plan
-shares its team's state role and the state bucket refuses a state write from a `tofu-plan-*`
-session, by trusted identity propagation. `modules/tofu-plan` defines it once, for `baseline` and the seed. **A role the organisation depends on is under `/org/`**, which an
-SCP lets only bootstrap change; a team owns
-every other path in its account. The Deployments SCP admits every session but Identity Center's
-other than `ReadOnly`, `SecurityAudit` and `TofuState`, so it names no account's roles.
-
-The three states apply in order, by blast radius: `directory`, `aws`, `apps`, each reading the
-others by name. **Nothing unattended applies them** (assignments need
-`AppRoleAssignment.ReadWrite.All`); they run under an admin's `az login`. `azuread` for what it
-types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.
+`.claude/rules/identity.md` holds Entra, the AWS organisation, GitHub's settings and how CI plans
+and applies, loaded with their files. **Nothing unattended applies Entra's states, the seed or
+`security/github`**: they're applied by hand.
 
 ## Layout
-
-```
-tools/        the `homelab` CLI: reads NetBox, renders what can't read it, syncs DNS, resolves rings, writes UniFi's firewall
-images/       Platform's base images: one mkosi project, its families and targets profiles laid over a bake per architecture, and ymir's extensions
-ansible/      a tree per team (network/, platform/), the homelab.linux and homelab.debian collections, and the roles, plugins and baseline they share
-tofu/         <team>/<kind>/: a layer per kind, a workspace per instance, and shared modules
-kubernetes/   components/, what clusters/<name>/ takes of them, and fleet/<name>/, its ring
-unifi/        generated config for the UniFi gateways that no API takes
-octodns/      octoDNS's config
-netbox/       NetBox's schema
-docs/         public documentation, starting with what goes in NetBox
-internal/     designs, runbooks and reference - never committed (.git/info/exclude)
-```
 
 `tools/src/homelab/` is `netbox.py` (one bulk fetch, no IDs kept), `model.py` (only the joins
 NetBox doesn't make - containment, a VLAN group's scope, a zone's view and policy - into plain
@@ -527,9 +301,6 @@ A team's role, `tofu-state-<team>`, may touch only
 `${aws:PrincipalTag/team}/*`, and a layer reaches it as profile `homelab-state-<team>`, assumed
 from the `homelab-state` SSO profile (`aws sso login` first). Moving a layer: change its `key`
 and `encryption_context` together, then `tofu init -migrate-state`.
-
-`tofu/platform/proxmox/clusters/schema.json` sits beside the data it describes, for editors'
-`$schema` comments; CI checks the cluster files against it, and every other catalogue against its own.
 
 ## Commands
 
@@ -608,24 +379,7 @@ trailer and never a `Claude-Session` one. **A PR of our own lands by fast-forwar
 locally** once CI passes, so its signed commits reach `main` unchanged (GitHub's rebase rewrites
 them unsigned); Dependabot's are squashed.
 
-**An image is released by a signed tag**, `image/<image>/<YYYY.MM.N>` on `main`: `images.yml`
-builds and tests it at that commit, and publishes it with its package manifest and `SHA256SUMS`,
-signed keylessly by the workflow (`docs/images.md` says how to check one). An image-based one is signed by the release key,
-`alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`). Both
-are in the Artifact Signing account (`platform/aws/signing`), which, like Tofu State, only the bootstrap
-role administers, so no one who administers Platform can make themselves the signer; it only signs, and
-`images-publish` writes the update bucket, in Artifact Distribution (`platform/aws/images`), as the
-profile `publish` names. mkosi's
-signing tools have no network, so its PKCS#11 module runs behind `p11-kit server`, which `mkosi box`
-starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, issued by KEK
-(`homelab image db`). Its release publishes its update files and its disk (a qcow2, or a card's raw image as
-`.raw.xz`) to the `canary` channel
-of the update bucket (`homelab image publish`), which a site's image library pins from `stable`,
-behind CloudFront on the Free flat-rate plan, whose WAF admits every site's public aggregates from NetBox; promoting to `stable` is `gh workflow run images.yml
---ref image/<image>/<version> -f promote=true`. Each channel keeps five versions, its `SHA256SUMS`
-checked against the release key before anything's added. **An extension is released alike**, by
-`extension/<extension>/<version>` at the version its lock holds, tested on its image's newest release,
-into `<image>/extensions/<extension>/{canary,stable}/`.
+**An image or extension is released by a signed tag**: `.claude/rules/images.md` says how.
 
 **`internal/design/` can lag the code.** Verify against it before citing one.
 
