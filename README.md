@@ -1,5 +1,9 @@
 # homelab
 
+My homelab, from metal to the cloud. I'm still building it out, with a lot of Claude's help - it's probably not ready for forks just yet!
+
+---
+
 Infrastructure-as-code for one home network and its lab (site `alfheim`): OpenTofu builds the Proxmox cluster and its guests, Ansible configures the hosts, and NetBox is the source of truth for every address either of them uses. [`docs/netbox.md`](docs/netbox.md) says what to put in yours.
 
 ## Layout
@@ -137,7 +141,7 @@ bootstrap from `ManagementAdministrator`:
 ```ini
 # ~/.aws/config
 [profile homelab-state-network]
-role_arn = arn:aws:iam::877127520873:role/tofu-state/tofu-state-network
+role_arn = arn:aws:iam::<state>:role/tofu-state/tofu-state-network
 source_profile = homelab-state
 
 [profile homelab-network-tofu]

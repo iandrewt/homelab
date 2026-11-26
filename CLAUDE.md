@@ -369,8 +369,7 @@ Bad:   # Update the size in the update body to match the plan size when the disk
        # growing. Without this, the UpdateVM API call creates a pending change with...
 ```
 
-**Tests earn their place or go.** Worth writing: a regression for a bug that happened, a rule
-not visible from one function, a contract between modules, a protocol another tool must accept.
+**Tests earn their place or go.** Worth writing: a rule not visible from one function, a contract between modules, a protocol another tool must accept.
 Not: arithmetic you can read, or that something *doesn't* appear in output. Never read live
 NetBox or a real cluster file from a test; `conftest.py` builds a synthetic snapshot.
 
