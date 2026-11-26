@@ -113,9 +113,9 @@ resource "aws_account_region" "this" {
 data "aws_account_primary_contact" "management" {}
 
 locals {
-  primary_contact = {
+  primary_contact = sensitive({
     for field, value in data.aws_account_primary_contact.management : field => value if value != ""
-  }
+  })
 }
 
 resource "aws_account_primary_contact" "members" {
@@ -146,10 +146,10 @@ resource "aws_account_alternate_contact" "this" {
 
   account_id             = each.value.account == "management" ? null : local.account_ids[each.value.account]
   alternate_contact_type = each.value.type
-  name                   = data.aws_account_primary_contact.management.full_name
+  name                   = local.primary_contact.full_name
   title                  = "Owner"
   email_address          = local.management_email
-  phone_number           = data.aws_account_primary_contact.management.phone_number
+  phone_number           = local.primary_contact.phone_number
 
   depends_on = [aws_organizations_organization.this]
 }

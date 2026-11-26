@@ -60,7 +60,9 @@ variable, applied by hand, writes an inline policy on `deploy-org` (org) or `ima
 the gates CI runs behind: rulesets on `main` (signed, linear, no force-push or deletion, ci.yml's
 checks, only you push) and on release tags (never moved or deleted, only you create), Actions'
 permissions, and the environments, each limited to `main`. Its token administers this repository
-alone, read ephemerally from `Break-glass`; nothing else holds Administration.
+alone, read ephemerally from `Break-glass`; nothing else holds Administration. A fork's pull
+request runs only once approved, whoever opens it: set by hand until
+integrations/terraform-provider-github#2108.
 **Every layer is a Terramate stack** (`stack.tm.hcl`: what it runs `after`), and CI runs the
 changed ones tagged `ci`, in Terramate's order (`terramate run --changed --tags ci`); a layer gets
 the tag once CI can reach its providers, and the seed and `security/github` never do. `tofu.yml`
