@@ -105,7 +105,8 @@ others by name. **Nothing unattended applies them** (assignments need
 `AppRoleAssignment.ReadWrite.All`); they run under an admin's `az login`. **CI only plans them**,
 by `tofu/ci/private-by-hand.tm.hcl`, as `directory`'s `Homelab Tofu Plan`: federated from
 `tofu.yml` as `tofu-plan` is, but for `actor_id`, which Entra can't match, and holding Global
-Reader alone, since an app reads a claims policy only with a write permission. Their plans name
+Reader, since an app reads a claims policy only with a write permission, and
+`Synchronization.Read.All`, for provisioning, which Global Reader doesn't reach. Their plans name
 people and logs are public, so CI shows only how much would change and which checks fail, and
 keeps no plan. `azuread` for what it
 types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.

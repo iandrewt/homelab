@@ -35,3 +35,14 @@ resource "azuread_directory_role_assignment" "tofu_plan" {
   role_id             = one([for t in data.azuread_directory_role_templates.this.role_templates : t.object_id if t.display_name == "Global Reader"])
   principal_object_id = azuread_service_principal.tofu_plan.object_id
 }
+
+data "azuread_service_principal" "graph" {
+  client_id = "00000003-0000-0000-c000-000000000000"
+}
+
+# Provisioning's jobs and schema, which Global Reader doesn't reach for an app
+resource "azuread_app_role_assignment" "tofu_plan_synchronization" {
+  app_role_id         = data.azuread_service_principal.graph.app_role_ids["Synchronization.Read.All"]
+  principal_object_id = azuread_service_principal.tofu_plan.object_id
+  resource_object_id  = data.azuread_service_principal.graph.object_id
+}
