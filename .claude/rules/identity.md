@@ -66,12 +66,14 @@ integrations/terraform-provider-github#2108.
 **Every layer is a Terramate stack** (`stack.tm.hcl`: what it runs `after`), and CI runs the
 changed ones tagged `ci`, in Terramate's order (`terramate run --changed --tags ci`); a layer gets
 the tag once CI can reach its providers, and the seed and `security/github` never do. `tofu.yml`
-is two jobs: a plan, on a pull request from `main`'s copy (`pull_request_target`) only if every
+is two jobs: a plan, on a pull request from `main`'s copy (`pull_request_target`), its key and
+policy read from the base commit, only if every
 commit is signed by the operator's primary key (`.github/signing-key.asc`) or is Dependabot's
 signed by GitHub, and on `main` keeping each plan with changes; then an apply, on `main` and
 skipped when there are none, of exactly those plans once the run is activated. Each job exchanges its
 GitHub token, once, for every profile a layer names, straight to that account's role (bootstrap
-alone chains, from `deploy-org`), then runs `terramate run -- tofu …` a command at a time; the
+alone chains, from `deploy-org`), then runs each stack's `plan` or `apply` script (`terramate
+script run`): `tofu/scripts.tm.hcl`'s, or a variant from `tofu/ci/` a subtree imports; the
 plan job checks every plan against `main`'s policy, and the apply job waits for the activation
 before it touches anything. A later stack's
 plan is made before an earlier one applies, so what an upstream apply changes reaches it on the
@@ -100,5 +102,10 @@ other than `ReadOnly`, `SecurityAudit` and `TofuState`, so it names no account's
 
 The three states apply in order, by blast radius: `directory`, `aws`, `apps`, each reading the
 others by name. **Nothing unattended applies them** (assignments need
-`AppRoleAssignment.ReadWrite.All`); they run under an admin's `az login`. `azuread` for what it
+`AppRoleAssignment.ReadWrite.All`); they run under an admin's `az login`. **CI only plans them**,
+by `tofu/ci/private-by-hand.tm.hcl`, as `directory`'s `Homelab Tofu Plan`: federated from
+`tofu.yml` as `tofu-plan` is, but for `actor_id`, which Entra can't match, and holding Global
+Reader alone, since an app reads a claims policy only with a write permission. Their plans name
+people and logs are public, so CI shows only how much would change and which checks fail, and
+keeps no plan. `azuread` for what it
 types, `microsoft/msgraph` for the gaps - not azapi, which reaches only ARM.

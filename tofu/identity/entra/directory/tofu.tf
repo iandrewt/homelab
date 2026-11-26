@@ -47,9 +47,7 @@ terraform {
 
 provider "azuread" {}
 
-provider "msgraph" {
-  use_cli = true
-}
+provider "msgraph" {}
 
 module "tenancy" {
   source = "../../../modules/tenancy"

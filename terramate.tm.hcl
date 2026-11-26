@@ -6,6 +6,7 @@ terramate {
     git {
       default_branch = "main"
     }
+
+    experiments = ["scripts"]
   }
 }
-

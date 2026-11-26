@@ -25,9 +25,6 @@ env:
   TM_ARG_TAGS: ci
   TM_ARG_CHANGED: ${{ github.event_name != 'workflow_dispatch' }}
   TM_ARG_GIT_CHANGE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-  # CI runs the commit it checked out, so whether main is behind GitHub means nothing here, and asking needs a
-  # token the checkout doesn't keep, beside a pull request's tofu
-  TM_DISABLE_SAFEGUARDS: git-out-of-sync
   TF_IN_AUTOMATION: "1"
 
 jobs:
@@ -38,41 +35,30 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    # What a pull request's commits are checked against: main as the pull request found it
+    env:
+      BASE: ${{ github.event.pull_request.base.sha || github.sha }}
     outputs:
       changes: ${{ steps.check.outputs.changes }}
       accounts: ${{ steps.credentials.outputs.accounts }}
     steps:
-      # Tools and policy come from main; a pull request's checkout only supplies its tofu
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          path: main
-          fetch-depth: 0
-          persist-credentials: false
-
-      - if: github.event_name == 'pull_request_target'
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
           ref: ${{ github.event.pull_request.head.sha }}
-          path: code
           fetch-depth: 0
           persist-credentials: false
-
-      - if: github.event_name != 'pull_request_target'
-        run: ln -s main code
 
       # A pull request's tofu runs against state that holds secrets, so only the operator's commits, or
       # Dependabot's signed by GitHub, are planned. The operator's primary key, whichever subkey signs
       - name: every commit is the operator's
         if: github.event_name == 'pull_request_target'
-        working-directory: code
         env:
           GH_TOKEN: ${{ github.token }}
-          BASE: ${{ github.event.pull_request.base.sha }}
           OPERATOR: B657C0C18BB7049D0F29AD2502FEFD0A7B59B580
           DEPENDABOT: 49699333+dependabot[bot]@users.noreply.github.com
         run: |
           GNUPGHOME=$(mktemp -d) && export GNUPGHOME
-          gpg -q --import ../main/.github/signing-key.asc
+          git show "$BASE:.github/signing-key.asc" | gpg -q --import
           refused=0
           while IFS='|' read -r sha status primary author; do
             [[ $status =~ ^[GU]$ && $primary == "$OPERATOR" ]] && continue
@@ -86,12 +72,9 @@ jobs:
       - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
         with:
           version: 2026.11.14
-          working_directory: main
 
-      # tofu-plan in every account and every team's state role, the roles a person plans as, from one token
       - name: credentials
         id: credentials
-        working-directory: main
         run: |
           token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
@@ -117,22 +100,17 @@ jobs:
             profile "homelab-state-$team" "arn:aws:iam::$(jq -r '.["tofu-state"]' <<< "$accounts"):role/tofu-state/tofu-state-$team"
           done
 
-      - working-directory: code
-        run: terramate run -- tofu init -input=false -no-color
+      - run: terramate script run plan
 
-      - working-directory: code
-        run: terramate run -- tofu plan -input=false -no-color -lock-timeout=5m -out=tfplan
-
-      # main's policy against every plan, and whether any changes anything
       - name: check
         id: check
-        working-directory: code
         run: |
+          git archive "$BASE" tofu/policy | tar -x -C "$RUNNER_TEMP"
           refused=0
           while IFS= read -r -d '' plan; do
             stack=$(dirname "$plan")
             json=$(tofu -chdir="$stack" show -json tfplan)
-            conftest test --no-color --policy ../main/tofu/policy - <<< "$json" || refused=1
+            conftest test --no-color --policy "$RUNNER_TEMP/tofu/policy" - <<< "$json" || refused=1
             if jq -e '[.resource_changes[]? | select(.change.actions != ["no-op"])] | length > 0' <<< "$json" >/dev/null; then
               echo "changes=true" >> "$GITHUB_OUTPUT"
               { echo "### ${stack#tofu/}"; echo '```'; tofu -chdir="$stack" show -no-color tfplan; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
@@ -142,7 +120,6 @@ jobs:
 
       # Encrypted with the state key
       - if: github.event_name != 'pull_request_target' && steps.check.outputs.changes
-        working-directory: code
         run: find tofu -name tfplan -not -path '*/.terraform/*' -print0 | tar --null -cf "$RUNNER_TEMP/plans.tar" -T -
 
       - if: github.event_name != 'pull_request_target' && steps.check.outputs.changes
@@ -167,7 +144,6 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          path: code
           fetch-depth: 0
           persist-credentials: false
 
@@ -176,13 +152,11 @@ jobs:
           name: plans
           path: ${{ runner.temp }}
 
-      - working-directory: code
-        run: tar -xf "$RUNNER_TEMP/plans.tar"
+      - run: tar -xf "$RUNNER_TEMP/plans.tar"
 
       - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78  # v5.3.0
         with:
           version: 2026.11.14
-          working_directory: code
 
       # deploy-org holds nothing until the run is activated: bootstrap in any member answers whether it is
       - name: activation
@@ -206,10 +180,7 @@ jobs:
           echo "::error::Not activated within 30 minutes"
           exit 1
 
-      # deploy-org and every team's state role, from one token; bootstrap in every member chained from deploy-org,
-      # since bootstrap trusts only management
       - name: credentials
-        working-directory: code
         run: |
           token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
             "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
@@ -229,8 +200,4 @@ jobs:
             "[profile homelab-\(.key)-bootstrap]\nrole_arn = arn:aws:iam::\(.value):role/OrganizationAccountAccessRole\nsource_profile = homelab-management\nrole_session_name = \($session)\n"' \
             <<< "$ACCOUNTS" >> ~/.aws/config
 
-      - working-directory: code
-        run: terramate run -- tofu init -input=false -no-color
-
-      - working-directory: code
-        run: terramate run -- tofu apply -input=false -no-color tfplan
+      - run: terramate script run apply

@@ -45,12 +45,10 @@ terraform {
   }
 }
 
-# An admin's `az login`, never unattended: assignments need AppRoleAssignment.ReadWrite.All
+# Applied by an admin's `az login`, never unattended: assignments need AppRoleAssignment.ReadWrite.All
 provider "azuread" {}
 
-provider "msgraph" {
-  use_cli = true
-}
+provider "msgraph" {}
 
 module "tenancy" {
   source = "../../../modules/tenancy"
