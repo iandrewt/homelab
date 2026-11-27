@@ -67,9 +67,10 @@ networkd's own unit, a resolver's gateways its resolvers.
 
 **An image is released by a signed tag**, `image/<image>/<YYYY.MM.N>` on `main`: `images.yml`
 builds and tests it at that commit, and publishes it with its package manifest and `SHA256SUMS`,
-signed keylessly by the workflow (`docs/images.md` says how to check one). An image-based one is signed by the release key,
-`alias/images` in KMS, which only the `release` environment's role may sign with (`--sign kms`). Both
-are in the Artifact Signing account (`platform/aws/signing`), which, like Tofu State, only the bootstrap
+every file it names carrying the workflow's build provenance (`actions/attest`; `docs/images.md` says how to check one). An image-based one is signed by the release key,
+`alias/images` in KMS, which only `images-release` may sign with (`--sign kms`): from `image-release`, or
+`extension-release` for an extension, once the seed activates the run (`activate={release=...}`), each
+signing job waiting for it before it takes credentials. Both are in the Artifact Signing account (`platform/aws/signing`), which, like Tofu State, only the bootstrap
 role administers, so no one who administers Platform can make themselves the signer; it only signs, and
 `images-publish` writes the update bucket, in Artifact Distribution (`platform/aws/images`), as the
 profile `publish` names. mkosi's
@@ -78,8 +79,11 @@ starts from the tools tree, and db trusts it by `images/secure-boot/db.crt`, iss
 (`homelab image db`). Its release publishes its update files and its disk (a qcow2, or a card's raw image as
 `.raw.xz`) to the `canary` channel
 of the update bucket (`homelab image publish`), which a site's image library pins from `stable`,
-behind CloudFront on the Free flat-rate plan, whose WAF admits every site's public aggregates from NetBox; promoting to `stable` is `gh workflow run images.yml
---ref image/<image>/<version> -f promote=true`. Each channel keeps five versions, its `SHA256SUMS`
+behind CloudFront on the Free flat-rate plan, whose WAF admits every site's public aggregates from NetBox.
+**Promoting to `stable` is the release run's last job**, in `image-promote` or `extension-promote`: you
+approve its deployment once canary has served, then activate the run again, since stable's sums are
+signed again. The key, role, bucket and update URL are `images.yml`'s constants, and a release ships the
+keyring its updates are checked by, `updates.pgp`. Each channel keeps five versions, its `SHA256SUMS`
 checked against the release key before anything's added. **An extension is released alike**, by
 `extension/<extension>/<version>` at the version its lock holds, tested on its image's newest release,
 into `<image>/extensions/<extension>/{canary,stable}/`.

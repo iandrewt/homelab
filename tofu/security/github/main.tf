@@ -9,7 +9,7 @@ locals {
   # A personal repository's admin: you
   admin = { actor_type = "RepositoryRole", actor_id = 5 }
 
-  release_tags = ["refs/tags/image/**", "refs/tags/extension/**", "refs/tags/fleet/**", "refs/tags/v*"]
+  release_tags = ["refs/tags/image/**", "refs/tags/extension/**", "refs/tags/fleet/**"]
 
   # Each limited to main; pull_request_target runs on the base branch, so a plan is too
   environments = [
@@ -18,6 +18,18 @@ locals {
     "tofu-plan-platform", "tofu-platform",
     "tofu-plan-identity",
   ]
+
+  # Each taken only by its kind's tags: a release signs once activated, and its promotion waits for you first
+  releases = {
+    "image-release"     = { tag = "image/*/*", reviewed = false }
+    "image-promote"     = { tag = "image/*/*", reviewed = true }
+    "extension-release" = { tag = "extension/*/*", reviewed = false }
+    "extension-promote" = { tag = "extension/*/*", reviewed = true }
+  }
+}
+
+module "github" {
+  source = "../../modules/github"
 }
 
 # What every commit on main is, whoever pushes it, with no one exempt
@@ -155,4 +167,31 @@ resource "github_repository_environment_deployment_policy" "tofu" {
   repository     = local.repository
   environment    = each.value.environment
   branch_pattern = "main"
+}
+
+resource "github_repository_environment" "release" {
+  for_each = local.releases
+
+  repository  = local.repository
+  environment = each.key
+
+  dynamic "reviewers" {
+    for_each = each.value.reviewed ? [module.github.operator] : []
+    content {
+      users = [tonumber(reviewers.value)]
+    }
+  }
+
+  deployment_branch_policy {
+    protected_branches     = false
+    custom_branch_policies = true
+  }
+}
+
+resource "github_repository_environment_deployment_policy" "release" {
+  for_each = github_repository_environment.release
+
+  repository  = local.repository
+  environment = each.value.environment
+  tag_pattern = local.releases[each.key].tag
 }

@@ -23,19 +23,24 @@ on:
   pull_request:
     paths: *paths
   workflow_dispatch:
-    inputs:
-      promote:
-        description: Promote this tag's release, an image's or an extension's, from canary to stable, building nothing
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
-# A promotion at a release's tag mustn't cancel the release
+# A release's run waits for its promotion's approval, so nothing at a tag cancels it
 concurrency:
-  group: images-${{ github.ref }}${{ inputs.promote && '-promote' || '' }}
-  cancel-in-progress: true
+  group: images-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+env:
+  AWS_REGION: ap-southeast-2
+  # The release key, and the role that signs with it once the seed activates a run: platform/aws/signing's
+  HOMELAB_IMAGES_KEY: arn:aws:kms:ap-southeast-2:837357551240:alias/images
+  IMAGES_RELEASE_ROLE: arn:aws:iam::837357551240:role/images-release
+  # What writes the update bucket, and where machines read it: platform/aws/images's
+  IMAGES_PUBLISH_ROLE: arn:aws:iam::585242447535:role/images-publish
+  IMAGES_BUCKET: images-585242447535-ap-southeast-2-an
+  IMAGES_UPDATE_URL: https://d3mmebre0rx3rz.cloudfront.net
 
 jobs:
   # A tag, image/<image>/<version>, builds and releases that image, and extension/<extension>/<version> that
@@ -43,7 +48,6 @@ jobs:
   # changes is extensions', and checks each extension's lock still resolves over the images as it lays them
   # out, each on a runner of its image's architecture, over the one bake its architecture shares
   plan:
-    if: ${{ !inputs.promote }}
     runs-on: ubuntu-slim
     outputs:
       bakes: ${{ steps.plan.outputs.bakes }}
@@ -201,8 +205,8 @@ jobs:
     if: needs.plan.outputs.builds != '[]'
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
-    # Only a job in the release environment can assume the role that signs with the release key
-    environment: ${{ matrix.sign == 'kms' && 'release' || '' }}
+    # Only a job in a release environment can assume the role that signs with the release key
+    environment: ${{ matrix.sign == 'kms' && 'image-release' || '' }}
     permissions:
       contents: read
       id-token: write
@@ -232,45 +236,59 @@ jobs:
           uv run ansible-galaxy collection install -r ansible/requirements.yml
           uv run ansible-galaxy role install -p ansible/roles \
             -r ansible/collections/ansible_collections/homelab/debian/requirements.yml
+      # The key signs only for a run the seed has activated, and only by credentials issued since
+      - name: activation
+        if: matrix.sign == 'kms'
+        run: &activation |
+          echo "::notice::Activate this run to sign: tofu -chdir=tofu/security/aws/seed apply -var 'activate={release=\"$GITHUB_RUN_ID\"}'"
+          digest=$(head -c 32 /dev/zero | base64)
+          for _ in $(seq 60); do
+            token=$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+              "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value)
+            if credentials=$(aws sts assume-role-with-web-identity --role-arn "$IMAGES_RELEASE_ROLE" \
+                --web-identity-token "$token" --role-session-name "$GITHUB_RUN_ID-activation" --query Credentials --output json); then
+              refusal=$(AWS_ACCESS_KEY_ID=$(jq -r .AccessKeyId <<< "$credentials") \
+                AWS_SECRET_ACCESS_KEY=$(jq -r .SecretAccessKey <<< "$credentials") \
+                AWS_SESSION_TOKEN=$(jq -r .SessionToken <<< "$credentials") \
+                aws kms sign --key-id "$HOMELAB_IMAGES_KEY" --message "$digest" --message-type DIGEST \
+                  --signing-algorithm RSASSA_PKCS1_V1_5_SHA_256 --dry-run 2>&1 >/dev/null) || true
+              [[ $refusal == *DryRunOperation* ]] && exit 0
+            fi
+            sleep 30
+          done
+          echo "::error::Not activated within 30 minutes"
+          exit 1
       # Platform's role writes the bucket, as the profile publish names; Signing's signs, as the environment
       - if: matrix.sign == 'kms'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
-          role-to-assume: ${{ vars.IMAGES_PUBLISH_ROLE }}
-          aws-region: ${{ vars.IMAGES_REGION }}
+          role-to-assume: ${{ env.IMAGES_PUBLISH_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
           aws-profile: images-publish
       - if: matrix.sign == 'kms'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
-          role-to-assume: ${{ vars.IMAGES_RELEASE_ROLE }}
-          aws-region: ${{ vars.IMAGES_REGION }}
-      - env:
-          HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
-          IMAGES_UPDATE_URL: ${{ vars.IMAGES_UPDATE_URL }}
-        run: |
+          role-to-assume: ${{ env.IMAGES_RELEASE_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: |
           uv run homelab image build "${{ matrix.image }}" --version "${{ needs.plan.outputs.version }}" \
             --sign "${{ matrix.sign }}"
-      - env:
-          HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
-          IMAGES_UPDATE_URL: ${{ vars.IMAGES_UPDATE_URL }}
-        run: uv run homelab image test "${{ matrix.image }}" --sign "${{ matrix.sign }}"
-      # An image-based release goes to its canary channel; promoting it is a dispatch at its tag
+      - run: uv run homelab image test "${{ matrix.image }}" --sign "${{ matrix.sign }}"
+      # An image-based release goes to its canary channel, and to stable once its promotion's approved
       - if: matrix.sign == 'kms'
-        env:
-          HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
-          IMAGES_BUCKET: ${{ vars.IMAGES_BUCKET }}
         run: uv run homelab image publish "${{ matrix.image }}"
       - if: startsWith(github.ref, 'refs/tags/image/')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
           name: ${{ matrix.image }}
-          # What a release ships: the image as it's taken, and its packages
+          # What a release ships: the image as it's taken, its packages, and the keyring its updates are checked by
           path: |
             ~/.cache/homelab/images/${{ matrix.image }}/${{ matrix.image }}.${{ matrix.format }}
             ~/.cache/homelab/images/${{ matrix.image }}/${{ matrix.image }}.packages
+            ~/.cache/homelab/images/${{ matrix.image }}/keys/tree/usr/lib/systemd/import-pubring.pgp
           retention-days: 1
 
-  # Signed keylessly, as the fleet is: SHA256SUMS's signature names this workflow, and the sums the rest
+  # Attested by the workflow: SLSA provenance for every file SHA256SUMS names, which `gh attestation verify` checks
   release:
     if: startsWith(github.ref, 'refs/tags/image/')
     needs: [plan, build]
@@ -278,6 +296,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      attestations: write
     env:
       IMAGE: ${{ fromJSON(needs.plan.outputs.builds)[0].image }}
       VERSION: ${{ needs.plan.outputs.version }}
@@ -286,18 +305,27 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8.0.2
         with:
           name: ${{ env.IMAGE }}
-      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532  # v4.1.3
       - run: |
           set -euo pipefail
+          # An image-based one's: what bootstrap pi and images/secure-boot/updates.pgp check its sums by
+          keyring=keys/tree/usr/lib/systemd/import-pubring.pgp
+          shipped=()
+          if [ -f "$keyring" ]; then mv "$keyring" updates.pgp; shipped=(updates.pgp); fi
+          rm -rf keys
           for file in "$IMAGE".*; do mv "$file" "$IMAGE-$VERSION.${file#"$IMAGE".}"; done
           # A raw image, to write to a card, goes compressed
           if [ -f "$IMAGE-$VERSION.raw" ]; then xz --threads=0 "$IMAGE-$VERSION.raw"; fi
-          sha256sum "$IMAGE-$VERSION".* > SHA256SUMS
-          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
+          sha256sum "$IMAGE-$VERSION".* "${shipped[@]}" > SHA256SUMS
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
+        with:
+          subject-checksums: SHA256SUMS
+      - run: &publish |
+          set -euo pipefail
+          mapfile -t files < <(awk '{print $2}' SHA256SUMS)
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "$IMAGE $VERSION" \
+            --title "$(basename "$(dirname "$GITHUB_REF_NAME")") $VERSION" \
             --notes "Built from $GITHUB_SHA: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/images.md" \
-            "$IMAGE-$VERSION".* SHA256SUMS SHA256SUMS.sigstore.json
+            "${files[@]}" SHA256SUMS
 
   # A lock that no longer resolves fails here, before it reaches main: `homelab image extension lock` locks
   # it again, at its next version, which its tag releases
@@ -378,8 +406,8 @@ jobs:
     needs: [plan, bake]
     if: needs.plan.outputs.extensions != '[]'
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-    environment: release
+    timeout-minutes: 60
+    environment: extension-release
     permissions:
       contents: read
       id-token: write
@@ -390,7 +418,6 @@ jobs:
     env:
       EXTENSION: ${{ matrix.extension }}
       IMAGE: ${{ matrix.image }}
-      HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
@@ -406,15 +433,17 @@ jobs:
           path: *packages-path
           key: *packages-key
           restore-keys: *packages-older
+      - name: activation
+        run: *activation
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
-          role-to-assume: ${{ vars.IMAGES_PUBLISH_ROLE }}
-          aws-region: ${{ vars.IMAGES_REGION }}
+          role-to-assume: ${{ env.IMAGES_PUBLISH_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
           aws-profile: images-publish
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
-          role-to-assume: ${{ vars.IMAGES_RELEASE_ROLE }}
-          aws-region: ${{ vars.IMAGES_REGION }}
+          role-to-assume: ${{ env.IMAGES_RELEASE_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
       - run: uv run homelab image extension build "$EXTENSION" --image "$IMAGE" --sign kms
       - env:
           GH_TOKEN: ${{ github.token }}
@@ -433,9 +462,7 @@ jobs:
           fi
       - run: ls -l /dev/kvm || echo "no KVM here"
       - run: uv run homelab image extension test "$IMAGE" "$EXTENSION"
-      - env:
-          IMAGES_BUCKET: ${{ vars.IMAGES_BUCKET }}
-        run: uv run homelab image extension publish "$EXTENSION" --image "$IMAGE"
+      - run: uv run homelab image extension publish "$EXTENSION" --image "$IMAGE"
       # Named by its image, as its release ships it beside its other images'
       - run: |
           mkdir release
@@ -448,7 +475,6 @@ jobs:
           path: release/*
           retention-days: 1
 
-  # Not on the slim runner, which lacks the envsubst cosign's installer runs
   extension-release:
     if: startsWith(github.ref, 'refs/tags/extension/')
     needs: [plan, extension]
@@ -456,6 +482,7 @@ jobs:
     permissions:
       contents: write
       id-token: write
+      attestations: write
     env:
       EXTENSION: ${{ fromJSON(needs.plan.outputs.extensions)[0].extension }}
       VERSION: ${{ needs.plan.outputs.version }}
@@ -465,23 +492,22 @@ jobs:
         with:
           pattern: ${{ env.EXTENSION }}-*
           merge-multiple: true
-      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532  # v4.1.3
-      - run: |
-          set -euo pipefail
-          sha256sum "$EXTENSION-$VERSION"-* > SHA256SUMS
-          cosign sign-blob --yes --bundle SHA256SUMS.sigstore.json SHA256SUMS
-          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
-            --title "$EXTENSION $VERSION" \
-            --notes "Built from $GITHUB_SHA: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/blob/$GITHUB_SHA/docs/images.md" \
-            "$EXTENSION-$VERSION"-* SHA256SUMS SHA256SUMS.sigstore.json
+      - run: sha256sum "$EXTENSION-$VERSION"-* > SHA256SUMS
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # v4.2.2
+        with:
+          subject-checksums: SHA256SUMS
+      - run: *publish
 
-  # `gh workflow run images.yml --ref <image|extension>/<name>/<version> -f promote=true`: at the tag, so in
-  # the release environment, with the release key
+  # Once canary has served it: approving this deployment, then activating the run again, since the stable
+  # channel's sums are signed again
   promote:
-    if: inputs.promote && (startsWith(github.ref, 'refs/tags/image/') || startsWith(github.ref, 'refs/tags/extension/'))
+    needs: [plan, release, extension-release]
+    if: >-
+      !cancelled() && !failure() && (needs.extension-release.result == 'success' ||
+      (needs.release.result == 'success' && fromJSON(needs.plan.outputs.builds)[0].sign == 'kms'))
     runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    environment: release
+    timeout-minutes: 60
+    environment: ${{ startsWith(github.ref, 'refs/tags/extension/') && 'extension-promote' || 'image-promote' }}
     permissions:
       contents: read
       id-token: write
@@ -490,19 +516,18 @@ jobs:
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           enable-cache: true
+      - name: activation
+        run: *activation
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
-          role-to-assume: ${{ vars.IMAGES_PUBLISH_ROLE }}
-          aws-region: ${{ vars.IMAGES_REGION }}
+          role-to-assume: ${{ env.IMAGES_PUBLISH_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
           aws-profile: images-publish
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd  # v6.3.0
         with:
-          role-to-assume: ${{ vars.IMAGES_RELEASE_ROLE }}
-          aws-region: ${{ vars.IMAGES_REGION }}
-      - env:
-          HOMELAB_IMAGES_KEY: ${{ vars.IMAGES_KEY }}
-          IMAGES_BUCKET: ${{ vars.IMAGES_BUCKET }}
-        run: |
+          role-to-assume: ${{ env.IMAGES_RELEASE_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: |
           kind="${GITHUB_REF_NAME%%/*}" release="${GITHUB_REF_NAME#*/}"
           if [ "$kind" = extension ]; then
             uv run homelab image extension promote "${release%/*}" "${release##*/}"

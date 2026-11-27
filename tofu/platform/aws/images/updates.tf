@@ -100,7 +100,7 @@ resource "aws_s3_bucket_policy" "updates" {
   depends_on = [aws_s3_bucket_public_access_block.updates]
 }
 
-# A release's, which platform/aws/signing's role signs: only a job in the release environment
+# A release's, which platform/aws/signing's role signs: only a job in a release or promote environment
 resource "aws_iam_role" "publish" {
   name = "images-publish"
 
@@ -113,7 +113,10 @@ resource "aws_iam_role" "publish" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${local.repository}:environment:release"
+          "token.actions.githubusercontent.com:sub" = [
+            for e in ["image-release", "image-promote", "extension-release", "extension-promote"] :
+            "repo:${local.repository}:environment:${e}"
+          ]
         }
       }
     }]

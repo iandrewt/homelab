@@ -52,7 +52,7 @@ manifests, a HelmRelease's values inline, no `kustomization.yaml`. What's true o
 everywhere - its `dependsOn`, its part in the bootstrap - is in `components/fleet/catalog.yaml`.
 A cluster's directory is its FluxInstance and its component list (`cluster.yaml`), joined by the
 fleet ResourceSet into a Kustomization each. CI pushes `kubernetes/` as a signed OCI artifact,
-`ghcr.io/iandrewt/homelab-fleet`: every main commit as `<next patch>-rc.<run>`, a `v*` tag as a
+`ghcr.io/iandrewt/homelab-fleet`: every main commit as `<next patch>-rc.<run>`, a `fleet/v*` tag as a
 release. **A cluster syncs only its ring from Git**, `kubernetes/fleet/<name>/`: an
 OCIRepository by semver range (`>=0.0.0-0` canary, `>=0.0.0` stable), verified against the
 workflow's keyless signature. Promoting is tagging a release canary has run. **The bootstrap

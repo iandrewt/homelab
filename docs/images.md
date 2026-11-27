@@ -99,8 +99,8 @@ the release it was built for (`ID=debian`, `VERSION_ID=13`), so systemd refuses 
 library it bundles is a copy, which only a rebuild updates.
 
 Each is released by a tag, `extension/<extension>/<version>`, as an image is: tested on the
-image's newest release, published to `canary`, promoted to `stable` by a dispatch at its tag. Its
-release on GitHub holds each image's extension and package list, and `SHA256SUMS`, signed as an
+image's newest release, published to `canary`, promoted to `stable` once its run's promotion is approved. Its
+release on GitHub holds each image's extension and package list, and `SHA256SUMS`, attested as an
 image's. Adding one is a profile in `images/mkosi.profiles/<extension>/` (its packages, and its
 vendor's source signed by a key in `images/vendors/`), its entry in `images/extensions.toml`, and
 `uv run homelab image extension lock`. Its component reaches machines with the image's next
@@ -159,17 +159,22 @@ fixed, `/opt` and `/srv` included: data belongs in `/var/lib`, or on a disk of i
 ## Getting one
 
 Each is a release of this repo, tagged `image/<image>/<version>`: the image, its package
-manifest, and `SHA256SUMS`, signed keylessly by the workflow that built it. Check the signature
-names [`images.yml`](../.github/workflows/images.yml) at that tag, then the files against the sums:
+manifest, an image-based one's keyring (`updates.pgp`), and `SHA256SUMS`. Every file the sums name
+carries build provenance from the workflow that built it. Check each was built by
+[`images.yml`](../.github/workflows/images.yml) at that tag, and the files against the sums:
 
 ```
 tag=image/debian-13-amd64-vm/2026.11.0
 gh release download "$tag" --repo iandrewt/homelab
-cosign verify-blob SHA256SUMS --bundle SHA256SUMS.sigstore.json \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity "https://github.com/iandrewt/homelab/.github/workflows/images.yml@refs/tags/$tag"
 sha256sum --check SHA256SUMS
+for file in $(awk '{print $2}' SHA256SUMS); do
+  gh attestation verify "$file" --repo iandrewt/homelab \
+    --signer-workflow iandrewt/homelab/.github/workflows/images.yml --source-ref "refs/tags/$tag"
+done
 ```
+
+An older release has `SHA256SUMS.sigstore.json` beside its sums instead: check it with `cosign
+verify-blob`, the same workflow at the same tag its identity.
 
 Or build one: `uv run homelab image build debian-13-amd64-vm`, then `uv run homelab image test
 debian-13-amd64-vm` to check it.

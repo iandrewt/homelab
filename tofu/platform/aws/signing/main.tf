@@ -11,6 +11,8 @@ locals {
   # What UEFI, the kernel's verity check, systemd-measure and OpenPGP all verify
   signing_algorithm = "RSASSA_PKCS1_V1_5_SHA_256"
   bootstrap_role    = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/OrganizationAccountAccessRole"
+  # A release signs its images and extensions, and a promotion the stable channel's sums
+  environments = ["image-release", "image-promote", "extension-release", "extension-promote"]
 }
 
 resource "aws_kms_key" "signing" {
@@ -81,8 +83,8 @@ resource "aws_kms_alias" "signing" {
   target_key_id = aws_kms_key.signing.key_id
 }
 
-# Only a job in the release environment, which takes an image/* or extension/* tag; it signs only while
-# activated, by the seed
+# Only a job in a release or promote environment, each taken by its own tags; it signs only while activated,
+# by the seed
 resource "aws_iam_role" "release" {
   name = "images-release"
 
@@ -95,7 +97,7 @@ resource "aws_iam_role" "release" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${local.repository}:environment:release"
+          "token.actions.githubusercontent.com:sub" = [for e in local.environments : "repo:${local.repository}:environment:${e}"]
         }
       }
     }]
