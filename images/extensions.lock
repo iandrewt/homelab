@@ -1,10 +1,10 @@
 # What each extension was last released from: `homelab image extension lock` writes it
 
 [dnsdist]
-version = "2.1.4-1"
+version = "2.1.4-2"
 
 [dnsdist.ymir-amd64-vm]
-inputs = "1a9689dbce4fce29e1ef019979c780adb07e99287bcf38131499aede5aafec4d"
+inputs = "16beec743f0e7c8f31f06be02b4b6348a84229fff929cd0bc4bed6b42520afc8"
 packages = [
     "bind9-dnsutils=1:9.20.30-1~deb13u1",
     "bind9-host=1:9.20.30-1~deb13u1",
@@ -37,7 +37,7 @@ packages = [
 ]
 
 [dnsdist.ymir-arm64-raspi3]
-inputs = "1a9689dbce4fce29e1ef019979c780adb07e99287bcf38131499aede5aafec4d"
+inputs = "16beec743f0e7c8f31f06be02b4b6348a84229fff929cd0bc4bed6b42520afc8"
 packages = [
     "bind9-dnsutils=1:9.20.30-1~deb13u1",
     "bind9-host=1:9.20.30-1~deb13u1",
@@ -70,10 +70,10 @@ packages = [
 ]
 
 [frr]
-version = "10.7.1-5"
+version = "10.7.1-6"
 
 [frr.ymir-amd64-vm]
-inputs = "292410508950ba56fb7b12de9ef3e4ce8aa81c4041dfeac5e55568a06bd12c48"
+inputs = "7f8154ca5c262fd76794e537558e8372169442997b6cfe7dd732db18a2770182"
 packages = [
     "frr=10.7.1-0~deb13u1",
     "libcares2=1.34.9-1~deb13u1",
@@ -85,7 +85,7 @@ packages = [
 ]
 
 [frr.ymir-arm64-raspi3]
-inputs = "292410508950ba56fb7b12de9ef3e4ce8aa81c4041dfeac5e55568a06bd12c48"
+inputs = "7f8154ca5c262fd76794e537558e8372169442997b6cfe7dd732db18a2770182"
 packages = [
     "frr=10.7.1-0~deb13u1",
     "libcares2=1.34.9-1~deb13u1",
@@ -97,10 +97,10 @@ packages = [
 ]
 
 [haproxy]
-version = "3.0.11-5"
+version = "3.0.11-6"
 
 [haproxy.ymir-amd64-vm]
-inputs = "2648594b65c673c0e56a3df303a0de4b16d16367152709738d4150cf4498cad7"
+inputs = "109481bc971e757670a0f0c8f5441ad3d21e375a2b873a67bd64f271c36b26af"
 packages = [
     "haproxy=3.0.11-1+deb13u5",
     "libjemalloc2=5.3.0-3",
@@ -110,7 +110,7 @@ packages = [
 ]
 
 [haproxy.ymir-arm64-raspi3]
-inputs = "2648594b65c673c0e56a3df303a0de4b16d16367152709738d4150cf4498cad7"
+inputs = "109481bc971e757670a0f0c8f5441ad3d21e375a2b873a67bd64f271c36b26af"
 packages = [
     "haproxy=3.0.11-1+deb13u5",
     "libjemalloc2=5.3.0-3",
@@ -120,10 +120,10 @@ packages = [
 ]
 
 [pdns]
-version = "5.1.7-1"
+version = "5.1.7-2"
 
 [pdns.ymir-amd64-vm]
-inputs = "267b4901e03393cec6e4543ba702bbb54e4ff3ba58ba550f25baa4b3ff58c648"
+inputs = "c9bf18f18c4db419b2b0748679f6bd04086ceafe3bdee7182e391d368cd45f03"
 packages = [
     "libboost-program-options1.83.0=1.83.0-4.2",
     "libboost-serialization1.83.0=1.83.0-4.2",
@@ -136,7 +136,7 @@ packages = [
 ]
 
 [pdns.ymir-arm64-raspi3]
-inputs = "267b4901e03393cec6e4543ba702bbb54e4ff3ba58ba550f25baa4b3ff58c648"
+inputs = "c9bf18f18c4db419b2b0748679f6bd04086ceafe3bdee7182e391d368cd45f03"
 packages = [
     "libboost-program-options1.83.0=1.83.0-4.2",
     "libboost-serialization1.83.0=1.83.0-4.2",
@@ -149,10 +149,10 @@ packages = [
 ]
 
 [pdns-recursor]
-version = "5.4.9-4"
+version = "5.4.9-5"
 
 [pdns-recursor.ymir-amd64-vm]
-inputs = "baeb798996e557fb19023af18a64822129ac3e781827ab08a7fdc6fa895fe0ec"
+inputs = "044c28273c7b6fa8611999a24fa3710f0437b811cbd9049de1e173002c0ae45e"
 packages = [
     "dns-root-data=2025080400~deb13u1",
     "libboost-context1.83.0=1.83.0-4.2",
@@ -175,7 +175,7 @@ packages = [
 ]
 
 [pdns-recursor.ymir-arm64-raspi3]
-inputs = "baeb798996e557fb19023af18a64822129ac3e781827ab08a7fdc6fa895fe0ec"
+inputs = "044c28273c7b6fa8611999a24fa3710f0437b811cbd9049de1e173002c0ae45e"
 packages = [
     "dns-root-data=2025080400~deb13u1",
     "libboost-context1.83.0=1.83.0-4.2",

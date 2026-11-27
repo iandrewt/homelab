@@ -143,10 +143,12 @@ resource "github_actions_repository_permissions" "this" {
   sha_pinning_required = true
 }
 
+# One switch lets GITHUB_TOKEN create and approve pull requests: trains.yml and snapshot.yml open theirs,
+# and no ruleset needs an approval, so approving gates nothing
 resource "github_workflow_repository_permissions" "this" {
   repository                       = local.repository
   default_workflow_permissions     = "read"
-  can_approve_pull_request_reviews = false
+  can_approve_pull_request_reviews = true
 }
 
 resource "github_repository_environment" "tofu" {

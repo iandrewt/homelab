@@ -376,7 +376,8 @@ NetBox or a real cluster file from a test; `conftest.py` builds a synthetic snap
 **Commits** follow Conventional Commits, signed off (`-s`), with a `Co-Authored-By: Claude ...`
 trailer and never a `Claude-Session` one. **A PR of our own lands by fast-forwarding `main`
 locally** once CI passes, so its signed commits reach `main` unchanged (GitHub's rebase rewrites
-them unsigned); Dependabot's are squashed.
+them unsigned). A bot's lands the same way: Dependabot's commits are signed by GitHub, and
+`trains.yml`'s and `snapshot.yml`'s are re-signed by you, keeping the bot as author.
 
 **An image or extension is released by a signed tag**: `.claude/rules/images.md` says how.
 

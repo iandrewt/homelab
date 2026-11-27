@@ -195,8 +195,9 @@ def load(images: Path, name: str) -> Extension:
     return Extension(
         name=name, images=tuple(entry["images"]), package=entry["package"], packages=tuple(config["Packages"]),
         snapshot=config["Snapshot"], sandbox_trees=trees, files=files,
+        # The release key's certificate too: an extension signed by a new key is a new release
         inputs=(images / "mkosi.profiles" / PROFILE, images / "mkosi.profiles" / name, *trees,
-                *(source for _, source in files)),
+                *(source for _, source in files), images / "secure-boot" / "db.crt"),
     )
 
 
