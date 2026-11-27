@@ -3,8 +3,12 @@ package main
 
 import rego.v1
 
-# Each is a key that signs or encrypts, data under Object Lock, an account, or a URL machines are built with
-lasting := {"aws_kms_key", "aws_s3_bucket", "aws_organizations_account", "aws_cloudfront_distribution"}
+# Each is a key that signs or encrypts, data under Object Lock, an account, a URL machines are built
+# with, or what every account access assignment belongs to
+lasting := {
+	"aws_kms_key", "aws_s3_bucket", "aws_organizations_account", "aws_cloudfront_distribution",
+	"aws_accountaccess_application",
+}
 
 deny contains msg if {
 	some change in input.resource_changes

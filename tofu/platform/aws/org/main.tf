@@ -18,6 +18,7 @@ resource "aws_organizations_organization" "this" {
   aws_service_access_principals = [
     "access-analyzer.amazonaws.com",
     "account.amazonaws.com",
+    "account-access.amazonaws.com",
     "cloudtrail.amazonaws.com",
     "compute-optimizer.amazonaws.com",
     "cost-optimization-hub.bcm.amazonaws.com",
