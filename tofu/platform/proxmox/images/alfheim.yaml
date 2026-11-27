@@ -2,10 +2,10 @@
 images:
   # From its stable channel, which keeps five versions
   ymir-amd64-vm:
-    url: https://d3mmebre0rx3rz.cloudfront.net/ymir-amd64-vm/stable/ymir-amd64-vm_2026.11.8.qcow2
+    url: https://d3mmebre0rx3rz.cloudfront.net/ymir-amd64-vm/stable/ymir-amd64-vm_2026.11.10.qcow2
     file_name: ymir-amd64-vm.qcow2
     content_type: import
-    checksum: 7081b25b6502113c30d9f2af2c0197e5a64e1e2fcde302918b9f4776ebafa750
+    checksum: 38e905d784bef5b83abd92b1491e4513a66f25aa59c9042c9a0ba5d5d774f328
     checksum_algorithm: sha256
 
   # schematic includes qemu-guest-agent
