@@ -71,7 +71,7 @@ check "the counted entry was blessed" '[ "$(/usr/lib/systemd/systemd-bless-boot 
 VOLATILE = re.compile(r"random|_seed|boot_id|ns_last_pid|fs\.(file|inode|dentry|quota)|tcp_fastopen_key"
                       r"|user_reserve_kbytes|admin_reserve_kbytes|nr_inodes=|pipe_ino=|fd=|pgrp=|stat_"
                       # What the kernel sizes by the memory it finds at boot
-                      r"|threads-max|max_\w+_namespaces|(tcp|udp)_mem")
+                      r"|threads-max|max_\w+_namespaces|(tcp|udp)_mem|max_user_(watches|marks)|max_(inotify|fanotify)_")
 
 
 def register(verbs) -> None:
