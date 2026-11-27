@@ -1,5 +1,7 @@
 ---
 proxmox_node_cluster: "{{ cluster }}"
+# What Proxmox calls the node: its hostname
+proxmox_node_name: "{{ ansible_facts.hostname }}"
 # Corosync's: the VLAN NetBox puts in the cluster
 proxmox_node_corosync: >-
   {{ netbox_site.vlans.values() | selectattr('cluster', 'eq', proxmox_node_cluster) | first }}

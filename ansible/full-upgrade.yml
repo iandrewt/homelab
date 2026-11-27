@@ -1,6 +1,7 @@
 ---
+# A hypervisor's is platform/upgrade.yml, which minds its guests; a ymir host's is its image
 - name: Deliberate apt full-upgrade pass
-  hosts: all
+  hosts: all:!hypervisor:!family_ymir
   become: true
   # An upgrade restarts what a host serves, and a resolver's peer answers meanwhile
   serial: 1

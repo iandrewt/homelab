@@ -111,7 +111,8 @@ uv run ansible-galaxy role install -p ansible/roles -r ansible/collections/ansib
 cd ansible/network && uv run ansible-playbook site.yml --limit <hostname>
 cd ansible/network && uv run ansible-playbook site.yml --limit <hostname> --skip-tags cis   # routine runs
 cd ansible/network && uv run ansible-playbook site.yml --limit <hostname> --tags resolvers  # one play
-cd ansible/platform && uv run ansible-playbook ../full-upgrade.yml
+cd ansible/platform && uv run ansible-playbook upgrade.yml                # every cell, a node at a time, routinely
+cd ansible/network && uv run ansible-playbook ../full-upgrade.yml          # apt's hosts, but hypervisors and ymir
 ```
 
 ### OpenTofu

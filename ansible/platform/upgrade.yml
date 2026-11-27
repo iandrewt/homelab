@@ -1,0 +1,12 @@
+---
+# Routine, by hand until CI reaches on-prem: every cell's nodes, one at a time, and the next only
+# once this one's guests run again. --limit a cell to take it ahead of the rest
+- name: Upgrade the hypervisors
+  hosts: hypervisor
+  become: true
+  serial: 1
+  tasks:
+    - name: Upgrade the node
+      ansible.builtin.import_role:
+        name: proxmox_node
+        tasks_from: upgrade

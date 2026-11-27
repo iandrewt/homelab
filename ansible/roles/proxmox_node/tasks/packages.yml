@@ -30,8 +30,8 @@
     name: lldpd
     update_cache: "{{ proxmox_node_enterprise is changed or proxmox_node_no_subscription is changed }}"
 
-# A node joins at the cell's level whatever ISO it came from. Only before it joins: a
-# member's guests have to move off first
+# A node joins at the cell's level whatever ISO it came from. Only before it joins: a member
+# upgrades routinely, by platform/upgrade.yml, which moves or stops its guests first
 - name: Check whether the node is in a cluster yet
   ansible.builtin.stat:
     path: /etc/pve/corosync.conf
