@@ -1,7 +1,7 @@
 # What each extension was last released from: `homelab image extension lock` writes it
 
 [dnsdist]
-version = "2.1.3-5"
+version = "2.1.4-1"
 
 [dnsdist.ymir-amd64-vm]
 inputs = "1a9689dbce4fce29e1ef019979c780adb07e99287bcf38131499aede5aafec4d"
@@ -9,7 +9,7 @@ packages = [
     "bind9-dnsutils=1:9.20.30-1~deb13u1",
     "bind9-host=1:9.20.30-1~deb13u1",
     "bind9-libs=1:9.20.30-1~deb13u1",
-    "dnsdist=2.1.3-1pdns.debian13",
+    "dnsdist=2.1.4-1pdns.debian13",
     "libabsl20240722=20240722.0-4",
     "libcdb1=0.81-2",
     "libfstrm0=0.6.1-1+b3",
@@ -42,7 +42,7 @@ packages = [
     "bind9-dnsutils=1:9.20.30-1~deb13u1",
     "bind9-host=1:9.20.30-1~deb13u1",
     "bind9-libs=1:9.20.30-1~deb13u1",
-    "dnsdist=2.1.3-1pdns.debian13",
+    "dnsdist=2.1.4-1pdns.debian13",
     "libabsl20240722=20240722.0-4",
     "libcdb1=0.81-2",
     "libfstrm0=0.6.1-1+b3",
@@ -120,7 +120,7 @@ packages = [
 ]
 
 [pdns]
-version = "5.1.5-4"
+version = "5.1.7-1"
 
 [pdns.ymir-amd64-vm]
 inputs = "267b4901e03393cec6e4543ba702bbb54e4ff3ba58ba550f25baa4b3ff58c648"
@@ -131,8 +131,8 @@ packages = [
     "libluajit-5.1-2=2.1.0+openresty20250117-2",
     "libluajit-5.1-common=2.1.0+openresty20250117-2",
     "libsodium23=1.0.18-1+deb13u1",
-    "pdns-backend-lmdb=5.1.5-1pdns.debian13",
-    "pdns-server=5.1.5-1pdns.debian13",
+    "pdns-backend-lmdb=5.1.7-1pdns.debian13",
+    "pdns-server=5.1.7-1pdns.debian13",
 ]
 
 [pdns.ymir-arm64-raspi3]
@@ -144,8 +144,8 @@ packages = [
     "libluajit-5.1-2=2.1.0+openresty20250117-2",
     "libluajit-5.1-common=2.1.0+openresty20250117-2",
     "libsodium23=1.0.18-1+deb13u1",
-    "pdns-backend-lmdb=5.1.5-1pdns.debian13",
-    "pdns-server=5.1.5-1pdns.debian13",
+    "pdns-backend-lmdb=5.1.7-1pdns.debian13",
+    "pdns-server=5.1.7-1pdns.debian13",
 ]
 
 [pdns-recursor]
