@@ -20,7 +20,7 @@
 
 - name: Move its guests to another node
   ansible.builtin.command: pvenode migrateall {{ proxmox_node_target }} --with-local-disks 1
-  when: proxmox_node_target and proxmox_node_running
+  when: proxmox_node_target | length > 0 and proxmox_node_running | length > 0
   changed_when: true
 
 - name: Upgrade it
@@ -57,16 +57,17 @@
   retries: 60
   delay: 10
   changed_when: false
-  when: proxmox_node_target
+  when: proxmox_node_target | length > 0
 
 # Where nothing moved, what ran before has to run again, by its own on_boot, before the next node
 - name: Wait for its guests to run again
   ansible.builtin.command: pvesh get /cluster/resources --type vm --output-format json
   register: proxmox_node_after
   until: >-
-    proxmox_node_after.stdout | from_json | selectattr('vmid', 'in', proxmox_node_running)
+    proxmox_node_after.stdout | from_json | selectattr('type', 'in', ['qemu', 'lxc'])
+    | selectattr('vmid', 'in', proxmox_node_running)
     | selectattr('status', 'eq', 'running') | list | length == proxmox_node_running | length
   retries: 60
   delay: 10
   changed_when: false
-  when: not proxmox_node_target
+  when: proxmox_node_target | length == 0
