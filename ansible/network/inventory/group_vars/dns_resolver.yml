@@ -32,8 +32,20 @@ frr_bgp_anycast_addresses: >-
 frr_bgp_anycast_service: dnsdist.service
 frr_bgp_anycast_needs: [pdns-recursor.service, pdns.service]
 frr_bgp_anycast_check: >-
-  /usr/libexec/homelab/dns-health {{ powerdns_resolver_health_port }} {{ powerdns_resolver_health_internal }}
-  {{ powerdns_resolver_health_public }} {{ powerdns_resolver_health_roots | join(' ') }}
+  /usr/libexec/homelab/dns-health {{ dns_resolver_health.port }} {{ dns_resolver_health.internal }}
+  {{ dns_resolver_health.public }} {{ dns_resolver_health.roots | join(' ') }}
+
+# The anycast health check, through dnsdist on loopback: a signed internal zone, logged when it
+# doesn't validate, and our signed public zone, which withdraws only while a root server answers. The
+# tree's, since the resolver serves it and FRR and the host's upgrade check run it, in other plays
+dns_resolver_health:
+  port: 5300
+  internal: >-
+    {{ netbox_zones | rejectattr('dnssec_keys', 'eq', []) | map(attribute='name') | first | default('') }}
+  public: titmuss.zone
+  roots: [198.41.0.4, "2001:503:ba3e::2:30", 193.0.14.129, "2001:7fd::1"]
+powerdns_resolver_health_port: "{{ dns_resolver_health.port }}"
+powerdns_resolver_health_internal: "{{ dns_resolver_health.internal }}"
 
 powerdns_resolver_anycast_v4: "{{ netbox_site.dns.recursor.ipv4 }}"
 powerdns_resolver_anycast_v6: "{{ netbox_site.dns.recursor.ipv6 }}"
@@ -65,7 +77,6 @@ powerdns_resolver_primary_api_key: "{{ powerdns_primary_api_key }}"
 powerdns_resolver_primary_host: "{{ dns_resolver_primary_name }}"
 
 powerdns_resolver_zones: "{{ netbox_zones }}"
-powerdns_resolver_health_public: titmuss.zone
 
 network_services:
   - "{{ netbox_site.services[inventory_hostname] | default({}) }}"
