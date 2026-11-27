@@ -23,7 +23,7 @@ ARCHITECTURE = "arm64"
 MACHINE_IDS = uuid.UUID("9b6a1a2e-4c1e-4f3e-9d5f-6f1c0a7e2b11")
 
 # Signed by the release key, by its fingerprint, as a machine's sysupdate checks it
-UPDATES_KEY = "6D13C27C5938E41A486FD72D735765B2A9C3EEB7"
+UPDATES_KEY = "69EB345BA409151E3829D2C96AD7462C31CF8C29"
 CHECK = f"""
 set -eu
 export GNUPGHOME=$(mktemp -d)
