@@ -124,8 +124,7 @@ resource "aws_iam_role" "publish" {
 }
 
 resource "aws_iam_role_policy" "publishes" {
-  for_each = { release = aws_iam_role.release.id, publish = aws_iam_role.publish.id }
-  role     = each.value
+  role = aws_iam_role.publish.id
 
   policy = jsonencode({
     Version = "2012-10-17"

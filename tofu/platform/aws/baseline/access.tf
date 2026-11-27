@@ -66,31 +66,3 @@ resource "aws_iam_role_policy_attachment" "tofu_apply" {
   role       = aws_iam_role.tofu_apply[each.key].name
   policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
 }
-
-# The old release key, and the role that signs with it, are what every ymir machine still trusts
-# until C19 retires them: the release tier's, not the team's
-resource "aws_iam_role_policy" "not_the_old_release_key" {
-  provider = aws.account["artifact-distribution"]
-
-  role = aws_iam_role.tofu_apply["artifact-distribution"].id
-  name = "not-the-release-key"
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Sid       = "Key"
-        Effect    = "Deny"
-        NotAction = ["kms:Describe*", "kms:Get*", "kms:List*"]
-        Resource  = "*"
-        Condition = { "ForAnyValue:StringEquals" = { "kms:ResourceAliases" = "alias/images" } }
-      },
-      {
-        Sid       = "Signer"
-        Effect    = "Deny"
-        NotAction = ["iam:Get*", "iam:List*"]
-        Resource  = "arn:aws:iam::*:role/images-release"
-      },
-    ]
-  })
-}
