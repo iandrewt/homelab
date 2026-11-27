@@ -52,22 +52,25 @@
   ansible.builtin.command: pvesh get /cluster/status --output-format json
   register: proxmox_node_quorum
   until: >-
-    proxmox_node_quorum.stdout | from_json | selectattr('type', 'eq', 'cluster')
+    proxmox_node_quorum.rc == 0 and proxmox_node_quorum.stdout | from_json | selectattr('type', 'eq', 'cluster')
     | map(attribute='quorate') | first | default(0) == 1
   retries: 60
   delay: 10
   changed_when: false
+  check_mode: false
   when: proxmox_node_target | length > 0
 
-# Where nothing moved, what ran before has to run again, by its own on_boot, before the next node
+# Where nothing moved, what ran before has to run again, by its own on_boot, before the next node.
+# Read once pvesh answers: pve-cluster starts after the node does
 - name: Wait for its guests to run again
   ansible.builtin.command: pvesh get /cluster/resources --type vm --output-format json
   register: proxmox_node_after
   until: >-
-    proxmox_node_after.stdout | from_json | selectattr('type', 'in', ['qemu', 'lxc'])
+    proxmox_node_after.rc == 0 and proxmox_node_after.stdout | from_json | selectattr('type', 'in', ['qemu', 'lxc'])
     | selectattr('vmid', 'in', proxmox_node_running)
     | selectattr('status', 'eq', 'running') | list | length == proxmox_node_running | length
   retries: 60
   delay: 10
   changed_when: false
+  check_mode: false
   when: proxmox_node_target | length == 0
